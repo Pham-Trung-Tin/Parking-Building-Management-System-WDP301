@@ -103,7 +103,7 @@ node {
                         sh "ssh jenkins@172.31.5.52 'docker rm pbms-fe || true'"
                         sh "ssh jenkins@172.31.5.52 'echo $password | docker login -u $username --password-stdin'"
                         sh "ssh jenkins@172.31.5.52 'docker pull thichgaidep/pbms-fe:latest'"
-                        sh "ssh jenkins@172.31.5.52 'docker run -d --name pbms-fe --restart unless-stopped -p 80:80 thichgaidep/pbms:latest '"
+                        sh "ssh jenkins@172.31.5.52 'docker run -d --name pbms-fe --restart unless-stopped -p 80:80 thichgaidep/pbms-fe:latest '"
                         sh "ssh jenkins@172.31.5.52 docker image prune -a -f"
                     }
                 }
