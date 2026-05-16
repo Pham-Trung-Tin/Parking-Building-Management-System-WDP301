@@ -1,0 +1,139 @@
+node {
+    def nodeHome = tool(
+        name: 'NodeJS-22',
+        type: 'jenkins.plugins.nodejs.tools.NodeJSInstallation'
+    )
+
+    env.PATH = "${nodeHome}/bin:${env.PATH}"
+
+    try {
+
+        stage('Checkout scm'){
+            deleteDir()
+            checkout scm
+        }
+
+        stage('Detect changes') {
+
+            changedFiles = sh(
+                script: "git diff --name-only HEAD~1 HEAD",
+                returnStdout: true
+            ).trim()
+
+            echo "Changed files:"
+            echo changedFiles
+
+            if (!changedFiles.contains('fe/')) {
+
+                echo 'No frontend changes detected'
+
+                currentBuild.result = 'NOT_BUILT'
+
+                return
+            }
+        }
+
+        if(env.CHANGE_ID){
+
+            stage('Install dependencies') {
+                dir('fe') {
+                    sh 'npm ci'
+                }
+            }
+
+            // stage('Run tests') {
+            //     sh 'npm test'
+            // }
+
+            stage('Noti PR success') {
+              //Mail to success
+            }
+
+        } else if (env.BRANCH_NAME.startsWith('dev') || env.BRANCH_NAME.startsWith('feature') ){
+
+            stage('Install dependencies') {
+                dir('fe') {
+                    sh 'npm ci'
+                }
+            }
+
+            // stage('Run tests') {
+            //     sh 'npm test'
+            // }
+
+            stage('Noti success') {
+              //Mail to success
+            }
+
+        } else if (env.BRANCH_NAME == 'main' || env.BRANCH_NAME.startsWith('uat')){
+
+            stage('Install dependencies') {
+                dir('fe') {
+                    sh 'npm ci'
+                }
+            }
+
+            // stage('Run tests') {
+            //     sh 'npm test'
+            // }
+
+            stage('Build') {
+                dir('fe') {
+                    sh 'npm run build'
+                }
+            }
+            
+            stage('Docker Build') {
+                dir('fe') {
+                    sh 'docker build -t thichgaidep/pbms-fe:latest .'
+                }
+            }
+
+            stage('Docker push') {
+                withCredentials([usernamePassword(credentialsId: 'ttin_docker', usernameVariable: 'username', passwordVariable: 'password' )]){
+                    sh "echo $password | docker login -u $username --password-stdin"
+                    sh "docker push thichgaidep/pbms-fe:latest"
+                }
+            }
+
+            stage('Docker deploy'){
+                withCredentials([usernamePassword(credentialsId: 'ttin_docker', usernameVariable: 'username', passwordVariable: 'password')]){
+                    sshagent(['jenkins-user']){
+                        sh "ssh -o StrictHostKeyChecking=no jenkins@172.31.5.52 'docker stop pbms-fe || true'" 
+                        sh "ssh jenkins@172.31.5.52 'docker rm pbms-fe || true'"
+                        sh "ssh jenkins@172.31.5.52 'echo $password | docker login -u $username --password-stdin'"
+                        sh "ssh jenkins@172.31.5.52 'docker pull thichgaidep/pbms-fe:latest'"
+                        sh "ssh jenkins@172.31.5.52 'docker run -d --name pbms-fe --restart unless-stopped -p 80:80 thichgaidep/pbms:latest '"
+                        sh "ssh jenkins@172.31.5.52 docker image prune -a -f"
+                    }
+                }
+            }
+
+            stage('Health Check'){
+                sleep 60
+                retry(3) {
+                    def r = httpRequest(
+                        url: "http://172.31.5.52",
+                        validResponseCodes: '200:399',
+                        timeout: 10
+                    )
+                    echo "Health status: ${r.status}"
+                    sleep 5
+                }
+            }
+
+            stage('Noti success'){
+                //Mail to success
+            }
+        }
+        
+    } catch (err) {
+        echo "Error: ${err}"
+
+        stage('Noti fail'){
+            //Mail to fail
+        }
+
+        throw err
+    }
+}

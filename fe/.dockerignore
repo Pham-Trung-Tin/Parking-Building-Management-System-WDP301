@@ -1,0 +1,8 @@
+node_modules
+.git
+src
+public
+README.md
+Jenkinsfile
+
+vay pipelien 
