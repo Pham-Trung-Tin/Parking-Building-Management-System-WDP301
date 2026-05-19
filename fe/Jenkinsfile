@@ -42,7 +42,9 @@ node {
             }
 
             stage('Run tests') {
-                sh 'npm test'
+                dir('fe') {
+                    sh 'npm test'
+                }
             }
 
             stage('Noti PR success') {
@@ -58,7 +60,9 @@ node {
             }
 
             stage('Run tests') {
-                sh 'npm test'
+                dir('fe') {
+                    sh 'npm test'
+                }
             }
 
             stage('Noti success') {
@@ -74,7 +78,9 @@ node {
             }
 
             stage('Run tests') {
-                sh 'npm test'
+                dir('fe') {
+                    sh 'npm test'
+                }
             }
 
             stage('Build') {
