@@ -41,9 +41,9 @@ node {
                 }
             }
 
-            // stage('Run tests') {
-            //     sh 'npm test'
-            // }
+            stage('Run tests') {
+                sh 'npm test'
+            }
 
             stage('Noti PR success') {
               //Mail to success
@@ -57,9 +57,9 @@ node {
                 }
             }
 
-            // stage('Run tests') {
-            //     sh 'npm test'
-            // }
+            stage('Run tests') {
+                sh 'npm test'
+            }
 
             stage('Noti success') {
               //Mail to success
@@ -73,9 +73,9 @@ node {
                 }
             }
 
-            // stage('Run tests') {
-            //     sh 'npm test'
-            // }
+            stage('Run tests') {
+                sh 'npm test'
+            }
 
             stage('Build') {
                 dir('fe') {
