@@ -1,7 +1,6 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { expect, test } from 'vitest';
 import App from './App';
-import React from 'react';
 
 test('Kiểm tra nút count tăng số khi click', async () => {
   render(<App />);
