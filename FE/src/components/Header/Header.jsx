@@ -1,5 +1,5 @@
 import React from 'react';
-import './Header.css';
+import { Link } from 'react-router-dom';
 
 // SVG Icons
 const SmartphoneIcon = () => (
@@ -11,21 +11,22 @@ const SmartphoneIcon = () => (
 
 const Header = () => {
   return (
-    <header className="header animate-fade-in-down">
-      <div className="header-logo">Parking Building</div>
-      <nav className="header-nav">
-        <a href="#how-it-works" className="nav-link">How It Works</a>
-        <a href="#business" className="nav-link">Business</a>
-        <a href="#get-app" className="app-link">
+    <header className="flex justify-between items-center py-5 px-10 bg-white shadow-sm sticky top-0 z-50 animate-fade-in-down">
+      <Link to="/" className="text-2xl font-extrabold text-primary-500 cursor-pointer tracking-tight no-underline">Parking Building</Link>
+      <nav className="hidden md:flex gap-8 items-center">
+        <a href="#how-it-works" className="text-slate-800 font-semibold text-sm hover:text-primary-500 transition-colors">How It Works</a>
+        <a href="#business" className="text-slate-800 font-semibold text-sm hover:text-primary-500 transition-colors">Business</a>
+        <a href="#get-app" className="flex items-center gap-1 text-slate-800 font-semibold text-sm hover:text-primary-500 transition-colors">
           <SmartphoneIcon /> Get The App
         </a>
       </nav>
-      <div className="header-auth">
-        <a href="#login" className="login-link">Log In</a>
-        <a href="#signup" className="btn-signup">Sign Up</a>
+      <div className="flex gap-5 items-center">
+        <Link to="/login" className="text-slate-800 font-semibold text-sm hover:text-primary-500 no-underline">Log In</Link>
+        <Link to="/register" className="bg-primary-500 text-white px-6 py-2.5 rounded-md font-bold text-sm hover:bg-primary-600 transition-colors no-underline">Sign Up</Link>
       </div>
     </header>
   );
 };
 
 export default Header;
+
