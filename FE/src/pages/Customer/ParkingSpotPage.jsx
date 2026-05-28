@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Header from '../../components/Header/Header';
 
 // SVG Icons
@@ -56,6 +57,7 @@ const parkingSpots = [
 ];
 
 const ParkingSpotPage = () => {
+    const navigate = useNavigate();
     const [activeFilters, setActiveFilters] = useState(['garage']);
     const [showFees, setShowFees] = useState(false);
     
@@ -65,8 +67,8 @@ const ParkingSpotPage = () => {
         );
     };
 
-    const handleBookNow = (spotTitle) => {
-        alert(`Booking confirmed for: ${spotTitle}\nRedirecting to checkout...`);
+    const handleBookNow = (spot) => {
+        navigate('/booking', { state: { spot } });
     };
 
     const formatPrice = (price) => {
@@ -201,7 +203,7 @@ const ParkingSpotPage = () => {
                                             <span className="text-[10px] font-semibold text-slate-500 mb-0.5">Subtotal</span>
                                             <button 
                                                 className="bg-blue-600 text-white px-5 py-2 rounded-md font-bold text-sm hover:bg-blue-700 active:scale-95 transition-all shadow-sm"
-                                                onClick={(e) => { e.stopPropagation(); handleBookNow(spot.title); }}
+                                                onClick={(e) => { e.stopPropagation(); handleBookNow(spot); }}
                                             >
                                                 Book Now
                                             </button>

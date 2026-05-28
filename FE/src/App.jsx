@@ -4,6 +4,8 @@ import HomePage from './pages/HomePage/HomePage';
 import LoginPage from './pages/HomePage/LoginPage';
 import RegisterPage from './pages/HomePage/RegisterPage';
 import ParkingSpotPage from './pages/Customer/ParkingSpotPage';
+import BookingPage from './pages/Customer/BookingPage';
+import SessionPage from './pages/Customer/SessionPage';
 
 function App() {
     return (
@@ -13,6 +15,8 @@ function App() {
                 <Route path="/login" element={<LoginPage />} />
                 <Route path="/register" element={<RegisterPage />} />
                 <Route path="/find-parking" element={<ParkingSpotPage />} />
+                <Route path="/booking" element={<BookingPage />} />
+                <Route path="/session" element={<SessionPage />} />
             </Routes>
         </Router>
     );
