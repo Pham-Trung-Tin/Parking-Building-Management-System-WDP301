@@ -50,7 +50,7 @@ const HomePage = () => {
                             <input type="text" placeholder="Where are you going?" className="border-none outline-none w-full text-base ml-2.5 text-slate-900 placeholder:text-slate-400" />
                         </div>
 
-                        <div className="flex flex-col md:flex-row gap-4 mb-6">
+                        {/* <div className="flex flex-col md:flex-row gap-4 mb-6">
                             <div className="flex-1 border border-slate-300 rounded-lg py-3 px-4 flex items-center gap-3">
                                 <span className="text-slate-400 flex"><CalendarIcon /></span>
                                 <div className="flex flex-col">
@@ -65,7 +65,7 @@ const HomePage = () => {
                                     <div className="text-sm font-semibold text-slate-900">May 26, 1:30 AM</div>
                                 </div>
                             </div>
-                        </div>
+                        </div> */}
 
                         <Link to="/find-parking" className="block text-center w-full bg-blue-600 text-white border-none py-4 rounded-lg text-base font-bold cursor-pointer transition-all duration-200 hover:bg-blue-700 active:scale-[0.98] no-underline">Find Parking Spots</Link>
                     </div>
