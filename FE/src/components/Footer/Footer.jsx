@@ -6,7 +6,7 @@ const Footer = () => {
     <footer className="footer">
       <div className="footer-content">
         <div className="footer-column">
-          <h4 className="footer-title">SpotHero</h4>
+          <h4 className="footer-title">Parking Building</h4>
           <a href="#">Book Parking</a>
           <a href="#">Sell Parking</a>
         </div>
@@ -21,7 +21,7 @@ const Footer = () => {
           <a href="#">Terms of Service</a>
         </div>
         <div className="footer-copyright">
-          © 2024 SpotHero, Inc. All rights reserved.
+          © 2024 Parking Building , Inc. All rights reserved.
         </div>
       </div>
     </footer>
