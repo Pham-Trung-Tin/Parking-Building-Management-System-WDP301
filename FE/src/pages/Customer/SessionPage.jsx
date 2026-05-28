@@ -155,7 +155,17 @@ const SessionPage = () => {
     const qrValue = `${spot.title}-F${floor}S${slot}-${entryDate.getTime()}`;
 
     const handlePayCheckout = () => {
-        alert(`💳 Pay & Checkout\n\nTotal: ${currentFee.toLocaleString('vi-VN', { maximumFractionDigits: 0 })} ₫\n\nThank you for using Parking Building!`);
+        navigate('/checkout', {
+            state: {
+                spot,
+                vehicleType,
+                floor,
+                slot,
+                entryDate: entryDate.toISOString(),
+                elapsed,
+                totalAmount: currentFee,
+            }
+        });
     };
 
     return (

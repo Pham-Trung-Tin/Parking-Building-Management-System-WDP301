@@ -6,6 +6,8 @@ import RegisterPage from './pages/HomePage/RegisterPage';
 import ParkingSpotPage from './pages/Customer/ParkingSpotPage';
 import BookingPage from './pages/Customer/BookingPage';
 import SessionPage from './pages/Customer/SessionPage';
+import CheckoutPage from './pages/Customer/CheckoutPage';
+import CheckoutSuccessPage from './pages/Customer/CheckoutSuccessPage';
 
 function App() {
     return (
@@ -17,6 +19,8 @@ function App() {
                 <Route path="/find-parking" element={<ParkingSpotPage />} />
                 <Route path="/booking" element={<BookingPage />} />
                 <Route path="/session" element={<SessionPage />} />
+                <Route path="/checkout" element={<CheckoutPage />} />
+                <Route path="/checkoutsuccess" element={<CheckoutSuccessPage />} />
             </Routes>
         </Router>
     );
