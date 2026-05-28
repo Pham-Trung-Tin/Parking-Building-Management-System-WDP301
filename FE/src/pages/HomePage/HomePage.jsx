@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
-import Header from '../components/Header/Header';
-import Footer from '../components/Footer/Footer';
+import { Link } from 'react-router-dom';
+import Header from '../../components/Header/Header';
+import Footer from '../../components/Footer/Footer';
 
 // SVG Icons
 const SearchIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>;
@@ -66,7 +67,7 @@ const HomePage = () => {
                             </div>
                         </div>
 
-                        <button className="w-full bg-blue-600 text-white border-none py-4 rounded-lg text-base font-bold cursor-pointer transition-all duration-200 hover:bg-blue-700 active:scale-[0.98]">Find Parking Spots</button>
+                        <Link to="/find-parking" className="block text-center w-full bg-blue-600 text-white border-none py-4 rounded-lg text-base font-bold cursor-pointer transition-all duration-200 hover:bg-blue-700 active:scale-[0.98] no-underline">Find Parking Spots</Link>
                     </div>
                 </div>
             </section>
