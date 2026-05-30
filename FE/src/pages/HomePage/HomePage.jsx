@@ -20,9 +20,9 @@ const Reveal = ({ children, delay = 0, className = "" }) => {
     }, []);
 
     return (
-        <div 
-            ref={ref} 
-            className={`transition-all duration-1000 ease-out ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-12'} ${className}`} 
+        <div
+            ref={ref}
+            className={`transition-all duration-1000 ease-out ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-12'} ${className}`}
             style={{ transitionDelay: `${delay}ms` }}
         >
             {children}
@@ -63,32 +63,36 @@ const HomePage = () => {
         <div className="font-sans overflow-x-hidden bg-white">
             {/* HERO SECTION */}
             <section className="relative min-h-screen w-full bg-[#f4f5f7]">
-                {/* Background Image - Minimalist car in bright studio */}
-                <div
-                    className="absolute inset-0 z-0 bg-cover bg-center bg-no-repeat opacity-80 mix-blend-multiply"
-                    style={{
-                        backgroundImage: `url('https://images.unsplash.com/photo-1614200187524-dc4b892acf16?q=80&w=2560&auto=format&fit=crop')`,
-                        backgroundPosition: 'center 60%',
-                        filter: 'contrast(1.1) brightness(1.1)'
-                    }}
-                >
-                    {/* Additional gradient overlays for better text readability */}
-                    <div className="absolute inset-0 bg-gradient-to-r from-white via-white/40 to-white/80 opacity-80"></div>
+                {/* Background Video */}
+                <div className="absolute inset-0 z-0 overflow-hidden">
+                    <video
+                        autoPlay
+                        loop
+                        muted
+                        playsInline
+                        className="absolute inset-0 w-full h-full object-cover"
+                    >
+                        <source src="https://res.cloudinary.com/dgz3rhiv4/video/upload/v1780037325/Parking_lot_dashboard_simulation__202605291347_chy2on.mp4" type="video/mp4" />
+                    </video>
+                    {/* Dark overlay to make the text pop and give a cinematic feel */}
+                    <div className="absolute inset-0 bg-black/50 pointer-events-none"></div>
                 </div>
 
                 {/* Sticky Navigation Bar */}
-                <nav className={`fixed top-0 left-0 right-0 z-50 flex justify-between items-center px-[5%] transition-all duration-300 ${isScrolled ? 'py-4 bg-white/90 backdrop-blur-md shadow-md text-black' : 'py-8 bg-transparent text-black'}`}>
+                <nav className={`fixed top-0 left-0 right-0 z-50 flex justify-between items-center px-[5%] transition-all duration-300 ${isScrolled ? 'py-4 bg-white/90 backdrop-blur-md shadow-md text-black' : 'py-8 bg-transparent text-white'}`}>
                     <Link to="/" className="text-[18px] font-bold tracking-tight no-underline text-inherit">
                         PARKING<span className="text-blue-600">BUILDING</span>
                     </Link>
-                <div className="hidden md:flex gap-14 text-[15px] font-bold text-inherit opacity-90">
-                    <a href="#services" className="hover:text-blue-600 transition-colors no-underline text-inherit">Services</a>
-                    <a href="#gallery" className="hover:text-blue-600 transition-colors no-underline text-inherit">Gallery</a>
-                </div>
-                <div className="flex items-center gap-6 text-[15px] font-bold text-inherit">
-                    <Link to="/login" className="hover:text-blue-600 transition-colors no-underline text-inherit">Login</Link>
-                    <Link to="/register" className="bg-blue-600 text-white px-5 py-2.5 rounded-sm hover:bg-blue-700 transition-colors no-underline shadow-lg hover:shadow-blue-500/30">Sign Up</Link>
-                </div>
+                    <div className="hidden md:flex items-center gap-8 lg:gap-12 text-[15px] font-bold text-inherit opacity-90">
+                        <Link to="/find-parking" className="hover:text-blue-600 transition-colors no-underline text-inherit py-2">Find Parking</Link>
+                        <Link to="/booking" className="hover:text-blue-600 transition-colors no-underline text-inherit py-2">Book a Slot</Link>
+                        <Link to="/contact" className="hover:text-blue-600 transition-colors no-underline text-inherit py-2">Support & Feedback</Link>
+
+                    </div>
+                    <div className="flex items-center gap-6 text-[15px] font-bold text-inherit">
+                        <Link to="/login" className="hover:text-blue-600 transition-colors no-underline text-inherit">Login</Link>
+                        <Link to="/register" className="bg-blue-600 text-white px-5 py-2.5 rounded-sm hover:bg-blue-700 transition-colors no-underline shadow-lg hover:shadow-blue-500/30">Sign Up</Link>
+                    </div>
                 </nav>
 
                 {/* Main Content */}
@@ -96,21 +100,20 @@ const HomePage = () => {
 
                     {/* Left Side Typography */}
                     <Reveal className="w-full md:w-[50%] mb-10 md:mb-0 flex justify-start pointer-events-auto" delay={100}>
-                        <h1 className="text-[64px] md:text-[80px] lg:text-[96px] font-extrabold leading-[1.05] text-black tracking-tighter drop-shadow-sm">
+                        <h1 className="text-[64px] md:text-[80px] lg:text-[96px] font-extrabold leading-[1.05] text-white tracking-tighter drop-shadow-lg">
                             Parking<br />
-                            <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-cyan-500">Perfection</span>,<br />
-                            Redefined
+                            <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-300">Redefined</span>
                         </h1>
                     </Reveal>
 
                     {/* Right Side Text and Button */}
                     <Reveal className="w-full md:w-[45%] flex flex-col items-start md:items-start md:pl-[10%] text-left mt-10 md:mt-[30vh] pointer-events-auto" delay={300}>
-                        <p className="text-black text-[18px] leading-[1.6] mb-8 max-w-[400px] font-semibold drop-shadow-sm">
+                        <p className="text-white/90 text-[18px] leading-[1.6] mb-8 max-w-[400px] font-medium drop-shadow-md">
                             We provide an unrivaled standard of parking convenience, securing and protecting your automotive investment with absolute precision.
                         </p>
                         <Link
                             to="/find-parking"
-                            className="bg-black text-white px-10 py-[18px] text-[15px] font-bold hover:bg-blue-600 transition-all duration-300 no-underline rounded-none flex items-center justify-center tracking-wide shadow-2xl hover:shadow-blue-500/30 hover:-translate-y-1"
+                            className="bg-white text-black px-10 py-[18px] text-[15px] font-bold hover:bg-blue-600 hover:text-white transition-all duration-300 no-underline rounded-none flex items-center justify-center tracking-wide shadow-2xl hover:shadow-blue-500/40 hover:-translate-y-1"
                         >
                             Get a Spot
                         </Link>
