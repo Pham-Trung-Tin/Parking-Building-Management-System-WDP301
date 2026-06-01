@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useFormik } from 'formik';
+import * as Yup from 'yup';
 import { authService } from '../../services/api';
 
 // SVG Icons for Google and Apple
@@ -18,43 +20,75 @@ const AppleIcon = () => (
   </svg>
 );
 
+// Yup validation schema — khớp với backend validator
+const registerSchema = Yup.object({
+  fullName: Yup.string()
+    .trim()
+    .min(2, 'Tên phải có ít nhất 2 ký tự')
+    .max(100, 'Tên không được vượt quá 100 ký tự')
+    .required('Họ tên là bắt buộc'),
+
+  email: Yup.string()
+    .trim()
+    .email('Email không hợp lệ')
+    .required('Email là bắt buộc'),
+
+  password: Yup.string()
+    .min(8, 'Mật khẩu phải có ít nhất 8 ký tự')
+    .matches(
+      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/,
+      'Mật khẩu phải chứa ít nhất 1 chữ hoa, 1 chữ thường và 1 số'
+    )
+    .required('Mật khẩu là bắt buộc'),
+
+  phone: Yup.string()
+    .matches(/^[0-9]{10,15}$/, 'Số điện thoại phải có 10-15 chữ số')
+    .optional(),
+});
+
 const RegisterPage = () => {
   const navigate = useNavigate();
+  const [serverError, setServerError] = useState('');
 
-  // State lưu giá trị các input
-  const [formData, setFormData] = useState({
-    fullName: '',
-    email: '',
-    password: '',
-    phone: '',
+  const formik = useFormik({
+    initialValues: {
+      fullName: '',
+      email: '',
+      password: '',
+      phone: '',
+    },
+    validationSchema: registerSchema,
+    onSubmit: async (values, { setSubmitting }) => {
+      setServerError('');
+      try {
+        await authService.register(values);
+        // Đăng ký thành công → chuyển sang trang login
+        navigate('/login');
+      } catch (err) {
+        setServerError(err.message || 'Đăng ký thất bại, vui lòng thử lại.');
+      } finally {
+        setSubmitting(false);
+      }
+    },
   });
 
-  // State loading và lỗi
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-
-  // Hàm cập nhật formData khi người dùng gõ
-  const handleChange = (e) => {
-    const { id, value } = e.target;
-    setFormData((prev) => ({ ...prev, [id]: value }));
+  // Helper: trả về class border cho input theo trạng thái lỗi
+  const inputClass = (fieldName) => {
+    const hasError = formik.touched[fieldName] && formik.errors[fieldName];
+    return `peer w-full px-4 pt-4 pb-3 text-base border rounded-md outline-none transition-all duration-200 bg-white text-slate-900 placeholder-transparent ${
+      hasError
+        ? 'border-red-400 focus:border-red-400 focus:ring-1 focus:ring-red-400'
+        : 'border-slate-300 focus:border-primary-500 focus:ring-1 focus:ring-primary-500'
+    }`;
   };
 
-  // Hàm xử lý submit form → gọi API
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-
-    try {
-      await authService.register(formData);
-      // Đăng ký thành công → chuyển sang trang login
-      navigate('/login');
-    } catch (err) {
-      // Hiển thị lỗi từ backend
-      setError(err.message || 'Đăng ký thất bại, vui lòng thử lại.');
-    } finally {
-      setLoading(false);
-    }
+  const labelClass = (fieldName) => {
+    const hasError = formik.touched[fieldName] && formik.errors[fieldName];
+    return `absolute left-4 top-1/2 -translate-y-1/2 text-base transition-all duration-200 pointer-events-none bg-white px-1 peer-focus:top-0 peer-focus:text-xs peer-valid:top-0 peer-valid:text-xs ${
+      hasError
+        ? 'text-red-400 peer-focus:text-red-400 peer-valid:text-red-400'
+        : 'text-slate-500 peer-focus:top-0 peer-focus:text-xs peer-focus:text-primary-500 peer-valid:text-primary-500'
+    }`;
   };
 
   return (
@@ -70,90 +104,113 @@ const RegisterPage = () => {
         <h1 className="text-2xl font-bold text-slate-900 mb-[30px]">Sign up for Parking Building</h1>
 
         {/* Form */}
-        <form className="flex flex-col gap-5" onSubmit={handleSubmit}>
+        <form className="flex flex-col gap-5" onSubmit={formik.handleSubmit} noValidate>
 
-          {/* Hiển thị lỗi từ API */}
-          {error && (
+          {/* Lỗi từ server (backend) */}
+          {serverError && (
             <div className="bg-red-50 border border-red-300 text-red-600 text-sm rounded-md px-4 py-3 text-left">
-              {error}
+              {serverError}
             </div>
           )}
 
-          <div className="relative text-left group">
-            <input 
-              type="text" 
-              id="fullName"
-              required 
-              value={formData.fullName}
-              onChange={handleChange}
-              className="peer w-full px-4 pt-4 pb-3 text-base border border-slate-300 rounded-md outline-none transition-all duration-200 bg-white text-slate-900 focus:border-primary-500 focus:ring-1 focus:ring-primary-500 placeholder-transparent" 
-              placeholder="Full Name"
-            />
-            <label 
-              htmlFor="fullName" 
-              className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 text-base transition-all duration-200 pointer-events-none bg-white px-1 peer-focus:top-0 peer-focus:text-xs peer-focus:text-primary-500 peer-valid:top-0 peer-valid:text-xs peer-valid:text-primary-500"
-            >
-              Full Name *
-            </label>
+          {/* Full Name */}
+          <div className="flex flex-col gap-1 text-left">
+            <div className="relative group">
+              <input
+                type="text"
+                id="fullName"
+                name="fullName"
+                value={formik.values.fullName}
+                onChange={formik.handleChange}
+                onBlur={formik.handleBlur}
+                className={inputClass('fullName')}
+                placeholder="Full Name"
+                autoComplete="name"
+              />
+              <label htmlFor="fullName" className={labelClass('fullName')}>
+                Full Name *
+              </label>
+            </div>
+            {formik.touched.fullName && formik.errors.fullName && (
+              <p className="text-red-500 text-xs mt-0.5 pl-1">{formik.errors.fullName}</p>
+            )}
           </div>
-          <div className="relative text-left group">
-            <input 
-              type="email" 
-              id="email" 
-              required 
-              value={formData.email}
-              onChange={handleChange}
-              className="peer w-full px-4 pt-4 pb-3 text-base border border-slate-300 rounded-md outline-none transition-all duration-200 bg-white text-slate-900 focus:border-primary-500 focus:ring-1 focus:ring-primary-500 placeholder-transparent" 
-              placeholder="Email address"
-            />
-            <label 
-              htmlFor="email" 
-              className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 text-base transition-all duration-200 pointer-events-none bg-white px-1 peer-focus:top-0 peer-focus:text-xs peer-focus:text-primary-500 peer-valid:top-0 peer-valid:text-xs peer-valid:text-primary-500"
-            >
-              Email address *
-            </label>
+
+          {/* Email */}
+          <div className="flex flex-col gap-1 text-left">
+            <div className="relative group">
+              <input
+                type="email"
+                id="email"
+                name="email"
+                value={formik.values.email}
+                onChange={formik.handleChange}
+                onBlur={formik.handleBlur}
+                className={inputClass('email')}
+                placeholder="Email address"
+                autoComplete="email"
+              />
+              <label htmlFor="email" className={labelClass('email')}>
+                Email address *
+              </label>
+            </div>
+            {formik.touched.email && formik.errors.email && (
+              <p className="text-red-500 text-xs mt-0.5 pl-1">{formik.errors.email}</p>
+            )}
           </div>
-          <div className="relative text-left group">
-            <input 
-              type="password" 
-              id="password" 
-              required 
-              value={formData.password}
-              onChange={handleChange}
-              className="peer w-full px-4 pt-4 pb-3 text-base border border-slate-300 rounded-md outline-none transition-all duration-200 bg-white text-slate-900 focus:border-primary-500 focus:ring-1 focus:ring-primary-500 placeholder-transparent" 
-              placeholder="Password"
-            />
-            <label 
-              htmlFor="password" 
-              className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 text-base transition-all duration-200 pointer-events-none bg-white px-1 peer-focus:top-0 peer-focus:text-xs peer-focus:text-primary-500 peer-valid:top-0 peer-valid:text-xs peer-valid:text-primary-500"
-            >
-              Password *
-            </label>
+
+          {/* Password */}
+          <div className="flex flex-col gap-1 text-left">
+            <div className="relative group">
+              <input
+                type="password"
+                id="password"
+                name="password"
+                value={formik.values.password}
+                onChange={formik.handleChange}
+                onBlur={formik.handleBlur}
+                className={inputClass('password')}
+                placeholder="Password"
+                autoComplete="new-password"
+              />
+              <label htmlFor="password" className={labelClass('password')}>
+                Password *
+              </label>
+            </div>
+            {formik.touched.password && formik.errors.password && (
+              <p className="text-red-500 text-xs mt-0.5 pl-1">{formik.errors.password}</p>
+            )}
           </div>
-          <div className="relative text-left group">
-            <input 
-              type="tel" 
-              id="phone" 
-              required 
-              value={formData.phone}
-              onChange={handleChange}
-              className="peer w-full px-4 pt-4 pb-3 text-base border border-slate-300 rounded-md outline-none transition-all duration-200 bg-white text-slate-900 focus:border-primary-500 focus:ring-1 focus:ring-primary-500 placeholder-transparent" 
-              placeholder="Phone number"
-            />
-            <label 
-              htmlFor="phone" 
-              className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 text-base transition-all duration-200 pointer-events-none bg-white px-1 peer-focus:top-0 peer-focus:text-xs peer-focus:text-primary-500 peer-valid:top-0 peer-valid:text-xs peer-valid:text-primary-500"
-            >
-              Phone number *
-            </label>
+
+          {/* Phone */}
+          <div className="flex flex-col gap-1 text-left">
+            <div className="relative group">
+              <input
+                type="tel"
+                id="phone"
+                name="phone"
+                value={formik.values.phone}
+                onChange={formik.handleChange}
+                onBlur={formik.handleBlur}
+                className={inputClass('phone')}
+                placeholder="Phone number"
+                autoComplete="tel"
+              />
+              <label htmlFor="phone" className={labelClass('phone')}>
+                Phone number
+              </label>
+            </div>
+            {formik.touched.phone && formik.errors.phone && (
+              <p className="text-red-500 text-xs mt-0.5 pl-1">{formik.errors.phone}</p>
+            )}
           </div>
-          
-          <button 
-            type="submit" 
-            disabled={loading}
+
+          <button
+            type="submit"
+            disabled={formik.isSubmitting}
             className="bg-primary-500 text-white border-none py-4 text-base font-bold rounded-md cursor-pointer transition-colors duration-200 hover:bg-primary-600 mt-2 disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            {loading ? 'Đang đăng ký...' : 'Sign up'}
+            {formik.isSubmitting ? 'Đang đăng ký...' : 'Sign up'}
           </button>
         </form>
 
