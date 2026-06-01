@@ -1,5 +1,8 @@
-import React from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { useFormik } from 'formik';
+import * as Yup from 'yup';
+import { authService } from '../../services/api';
 
 // SVG Icons for Google and Apple
 const GoogleIcon = () => (
@@ -17,7 +20,77 @@ const AppleIcon = () => (
   </svg>
 );
 
+// Yup validation schema — khớp với backend loginValidator
+const loginSchema = Yup.object({
+  email: Yup.string()
+    .trim()
+    .email('Email không hợp lệ')
+    .required('Email là bắt buộc'),
+
+  password: Yup.string()
+    .required('Mật khẩu là bắt buộc'),
+});
+
 const LoginPage = () => {
+  const navigate = useNavigate();
+  const [serverError, setServerError] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+
+  const formik = useFormik({
+    initialValues: {
+      email: '',
+      password: '',
+    },
+    validationSchema: loginSchema,
+    onSubmit: async (values, { setSubmitting }) => {
+      setServerError('');
+      try {
+        const res = await authService.login(values);
+
+        // Lưu accessToken vào localStorage để axiosClient đính kèm vào request tiếp theo
+        if (res?.data?.accessToken) {
+          localStorage.setItem('accessToken', res.data.accessToken);
+        }
+
+        // Lưu thông tin user (tuỳ chọn — dùng cho hiển thị header, avatar, v.v.)
+        if (res?.data?.user) {
+          localStorage.setItem('user', JSON.stringify(res.data.user));
+        }
+
+        // Chuyển hướng tuỳ theo role
+        const role = res?.data?.user?.role;
+        if (role === 'admin' || role === 'parking_owner') {
+          navigate('/');
+        } else {
+          navigate('/');
+        }
+      } catch (err) {
+        setServerError(err.message || 'Email hoặc mật khẩu không đúng, vui lòng thử lại.');
+      } finally {
+        setSubmitting(false);
+      }
+    },
+  });
+
+  // Helper: class border cho input theo trạng thái lỗi
+  const inputClass = (fieldName) => {
+    const hasError = formik.touched[fieldName] && formik.errors[fieldName];
+    return `peer w-full px-4 pt-4 pb-3 text-base border rounded-md outline-none transition-all duration-200 bg-white text-slate-900 placeholder-transparent ${
+      hasError
+        ? 'border-red-400 focus:border-red-400 focus:ring-1 focus:ring-red-400'
+        : 'border-slate-300 focus:border-primary-500 focus:ring-1 focus:ring-primary-500'
+    }`;
+  };
+
+  const labelClass = (fieldName) => {
+    const hasError = formik.touched[fieldName] && formik.errors[fieldName];
+    return `absolute left-4 top-1/2 -translate-y-1/2 text-base transition-all duration-200 pointer-events-none bg-white px-1 peer-focus:top-0 peer-focus:text-xs peer-valid:top-0 peer-valid:text-xs ${
+      hasError
+        ? 'text-red-400 peer-focus:text-red-400 peer-valid:text-red-400'
+        : 'text-slate-500 peer-focus:top-0 peer-focus:text-xs peer-focus:text-primary-500 peer-valid:text-primary-500'
+    }`;
+  };
+
   return (
     <div className="min-h-screen flex justify-center items-center bg-white p-5 font-sans">
       <div className="w-full max-w-[420px] text-center animate-fade-in-up">
@@ -31,40 +104,97 @@ const LoginPage = () => {
         <h1 className="text-2xl font-bold text-slate-900 mb-[30px]">Log in to Parking Building</h1>
 
         {/* Form */}
-        <form className="flex flex-col gap-5" onSubmit={(e) => e.preventDefault()}>
-          <div className="relative text-left group">
-            <input 
-              type="text" 
-              id="username" 
-              required 
-              className="peer w-full px-4 pt-4 pb-3 text-base border border-slate-300 rounded-md outline-none transition-all duration-200 bg-white text-slate-900 focus:border-primary-500 focus:ring-1 focus:ring-primary-500 placeholder-transparent" 
-              placeholder="Username or email"
-            />
-            <label 
-              htmlFor="username" 
-              className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 text-base transition-all duration-200 pointer-events-none bg-white px-1 peer-focus:top-0 peer-focus:text-xs peer-focus:text-primary-500 peer-valid:top-0 peer-valid:text-xs peer-valid:text-primary-500"
-            >
-              Username or email *
-            </label>
+        <form className="flex flex-col gap-5" onSubmit={formik.handleSubmit} noValidate>
+
+          {/* Lỗi từ server */}
+          {serverError && (
+            <div className="bg-red-50 border border-red-300 text-red-600 text-sm rounded-md px-4 py-3 text-left">
+              {serverError}
+            </div>
+          )}
+
+          {/* Email */}
+          <div className="flex flex-col gap-1 text-left">
+            <div className="relative group">
+              <input
+                type="email"
+                id="email"
+                name="email"
+                value={formik.values.email}
+                onChange={formik.handleChange}
+                onBlur={formik.handleBlur}
+                className={inputClass('email')}
+                placeholder="Email address"
+                autoComplete="email"
+              />
+              <label htmlFor="email" className={labelClass('email')}>
+                Email address *
+              </label>
+            </div>
+            {formik.touched.email && formik.errors.email && (
+              <p className="text-red-500 text-xs mt-0.5 pl-1">{formik.errors.email}</p>
+            )}
           </div>
-          <div className="relative text-left group">
-            <input 
-              type="password" 
-              id="password" 
-              required 
-              className="peer w-full px-4 pt-4 pb-3 text-base border border-slate-300 rounded-md outline-none transition-all duration-200 bg-white text-slate-900 focus:border-primary-500 focus:ring-1 focus:ring-primary-500 placeholder-transparent" 
-              placeholder="Password"
-            />
-            <label 
-              htmlFor="password" 
-              className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 text-base transition-all duration-200 pointer-events-none bg-white px-1 peer-focus:top-0 peer-focus:text-xs peer-focus:text-primary-500 peer-valid:top-0 peer-valid:text-xs peer-valid:text-primary-500"
-            >
-              Password *
-            </label>
+
+          {/* Password */}
+          <div className="flex flex-col gap-1 text-left">
+            <div className="relative group">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                id="password"
+                name="password"
+                value={formik.values.password}
+                onChange={formik.handleChange}
+                onBlur={formik.handleBlur}
+                className={`${inputClass('password')} pr-12`}
+                placeholder="Password"
+                autoComplete="current-password"
+              />
+              <label htmlFor="password" className={labelClass('password')}>
+                Password *
+              </label>
+              {/* Toggle show/hide password */}
+              <button
+                type="button"
+                onClick={() => setShowPassword((prev) => !prev)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                tabIndex={-1}
+                aria-label={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+              >
+                {showPassword ? (
+                  // Eye-off icon
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+                    <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+                    <line x1="1" y1="1" x2="23" y2="23"/>
+                  </svg>
+                ) : (
+                  // Eye icon
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                    <circle cx="12" cy="12" r="3"/>
+                  </svg>
+                )}
+              </button>
+            </div>
+            {formik.touched.password && formik.errors.password && (
+              <p className="text-red-500 text-xs mt-0.5 pl-1">{formik.errors.password}</p>
+            )}
           </div>
-          
-          <button type="submit" className="bg-primary-500 text-white border-none py-4 text-base font-bold rounded-md cursor-pointer transition-colors duration-200 hover:bg-primary-600 mt-2">
-            Log in
+
+          {/* Forgot password */}
+          <div className="text-right -mt-2">
+            <Link to="/forgot-password" className="text-sm text-primary-500 hover:underline font-medium">
+              Forgot password?
+            </Link>
+          </div>
+
+          <button
+            type="submit"
+            disabled={formik.isSubmitting}
+            className="bg-primary-500 text-white border-none py-4 text-base font-bold rounded-md cursor-pointer transition-colors duration-200 hover:bg-primary-600 mt-2 disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {formik.isSubmitting ? 'Đang đăng nhập...' : 'Log in'}
           </button>
         </form>
 
