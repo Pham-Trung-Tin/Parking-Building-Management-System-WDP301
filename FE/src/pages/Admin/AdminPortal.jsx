@@ -4,7 +4,6 @@ import {
   Key,
   Settings,
   Search,
-  MoreVertical,
   Check,
   Eye,
   Copy,
@@ -14,8 +13,21 @@ import {
   X,
   UserPlus,
   Trash2,
-  Edit2,
   RefreshCw,
+  Crown,
+  Briefcase,
+  UserCheck,
+  Car,
+  Lock,
+  Unlock,
+  Info,
+  DollarSign,
+  BarChart2,
+  GitBranch,
+  Camera,
+  CalendarCheck,
+  Ticket,
+  ShieldAlert,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -24,6 +36,83 @@ const ROLE_COLORS = {
   Staff: "bg-sky-100 text-sky-700",
   Driver: "bg-emerald-100 text-emerald-700",
 };
+
+/* Role metadata for the permission matrix */
+const ROLE_META = {
+  admin: {
+    label: "Admin",
+    Icon: Crown,
+    color: "text-gray-900",
+    bg: "bg-white",
+    border: "border-gray-900",
+    ring: "ring-gray-900",
+    colBg: "bg-gray-50/60",
+    check: "bg-gray-900",
+    desc: "Full system access",
+  },
+  manager: {
+    label: "Manager",
+    Icon: Briefcase,
+    color: "text-gray-700",
+    bg: "bg-white",
+    border: "border-gray-300",
+    ring: "ring-gray-400",
+    colBg: "bg-gray-50/40",
+    check: "bg-gray-700",
+    desc: "Operational oversight",
+  },
+  staff: {
+    label: "Staff",
+    Icon: UserCheck,
+    color: "text-gray-600",
+    bg: "bg-white",
+    border: "border-gray-200",
+    ring: "ring-gray-300",
+    colBg: "bg-gray-50/30",
+    check: "bg-gray-500",
+    desc: "Day-to-day tasks",
+  },
+  driver: {
+    label: "Driver",
+    Icon: Car,
+    color: "text-gray-500",
+    bg: "bg-white",
+    border: "border-gray-200",
+    ring: "ring-gray-200",
+    colBg: "bg-gray-50/20",
+    check: "bg-gray-400",
+    desc: "Parking & booking",
+  },
+};
+
+const GROUP_META = {
+  "Administrative Level": {
+    Icon: ShieldAlert,
+    color: "text-slate-600",
+    bg: "bg-slate-50",
+    border: "border-slate-200",
+  },
+  "Financial & Tariff Operations": {
+    Icon: DollarSign,
+    color: "text-slate-600",
+    bg: "bg-slate-50",
+    border: "border-slate-200",
+  },
+  "Gate & Barrier Logistics": {
+    Icon: GitBranch,
+    color: "text-slate-600",
+    bg: "bg-slate-50",
+    border: "border-slate-200",
+  },
+  "End-User Parking Flows": {
+    Icon: CalendarCheck,
+    color: "text-slate-600",
+    bg: "bg-slate-50",
+    border: "border-slate-200",
+  },
+};
+
+const ROLES = ["admin", "manager", "staff", "driver"];
 
 const initialUsers = [
   {
@@ -290,23 +379,31 @@ function Toast({ message, onDone }) {
   );
 }
 
-/* ─────────────────── PermissionCheckbox ─────────────────── */
-function PermissionCheckbox({ checked, onChange }) {
+/* ─────────────────── RoleToggle (replaces PermissionCheckbox) ─────────────────── */
+function RoleToggle({ checked, onChange, role }) {
+  const meta = ROLE_META[role];
   return (
     <button
       onClick={onChange}
-      className={`w-5 h-5 rounded-md flex items-center justify-center transition-all duration-150 ${
+      title={checked ? `Remove from ${meta.label}` : `Grant to ${meta.label}`}
+      className={`group relative flex items-center justify-center w-9 h-9 rounded-xl transition-all duration-200 focus:outline-none ${
         checked
-          ? "bg-gray-900 shadow-sm"
-          : "border-2 border-gray-200 hover:border-gray-500"
+          ? `${meta.bg} ${meta.border} border-2 shadow-sm`
+          : "border-2 border-gray-100 hover:border-gray-300 bg-white"
       }`}
     >
-      {checked && (
-        <Check className="w-3 h-3 text-white" strokeWidth={3} />
+      {checked ? (
+        <Check
+          className={`w-4 h-4 ${meta.color} transition-transform duration-200 scale-100`}
+          strokeWidth={2.5}
+        />
+      ) : (
+        <span className="w-4 h-4 rounded-sm border-2 border-gray-300 group-hover:border-gray-400 transition-colors" />
       )}
     </button>
   );
 }
+
 
 /* ─────────────────── Toggle ─────────────────── */
 function Toggle({ checked, onChange }) {
@@ -668,7 +765,7 @@ export default function AdminPortal() {
             {activeNav === "permissions" && (
               <div>
                 {/* Header */}
-                <div className="flex items-end justify-between mb-10">
+                <div className="flex items-end justify-between mb-8">
                   <div>
                     <p className="text-xs font-medium text-gray-400 uppercase tracking-widest mb-2">
                       Access Control
@@ -677,105 +774,176 @@ export default function AdminPortal() {
                       Permission Matrix
                     </h1>
                     <p className="text-sm text-gray-400 mt-1">
-                      Define what each role can do across the
-                      system
+                      Define what each role can do across the system
                     </p>
                   </div>
-                  <button
-                    onClick={() => {
-                      setPermSaved(true);
-                      showToast("Permissions saved");
-                    }}
-                    className={`flex items-center gap-2 px-5 py-2.5 text-sm font-medium rounded-xl transition-colors shadow-sm ${
-                      permSaved
-                        ? "bg-emerald-600 text-white"
-                        : "bg-gray-900 text-white hover:bg-gray-700"
-                    }`}
-                  >
-                    <Check className="w-4 h-4" />
-                    {permSaved ? "Saved" : "Save Changes"}
-                  </button>
+                  <div className="flex items-center gap-3">
+                    {permSaved && (
+                      <span className="flex items-center gap-1.5 text-xs font-medium text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-full border border-emerald-200">
+                        <Check className="w-3 h-3" strokeWidth={3} />
+                        Changes saved
+                      </span>
+                    )}
+                    <button
+                      onClick={() => {
+                        setPermSaved(true);
+                        showToast("Permission matrix saved");
+                      }}
+                      className={`flex items-center gap-2 px-5 py-2.5 text-sm font-medium rounded-xl transition-all shadow-sm ${
+                        permSaved
+                          ? "bg-emerald-600 text-white hover:bg-emerald-700"
+                          : "bg-gray-900 text-white hover:bg-gray-700"
+                      }`}
+                    >
+                      <Check className="w-4 h-4" />
+                      {permSaved ? "Saved!" : "Save Changes"}
+                    </button>
+                  </div>
                 </div>
 
-                {/* Matrix */}
+                {/* Role summary cards */}
+                <div className="grid grid-cols-4 gap-3 mb-6">
+                  {ROLES.map((role) => {
+                    const meta = ROLE_META[role];
+                    const count = permissions.filter((p) => p[role]).length;
+                    const total = permissions.length;
+                    const pct = Math.round((count / total) * 100);
+                    return (
+                      <div
+                        key={role}
+                        className={`rounded-2xl border-2 ${meta.border} ${meta.bg} p-4`}
+                      >
+                        <div className="flex items-center justify-between mb-3">
+                          <div className={`w-8 h-8 rounded-xl ${meta.bg} border ${meta.border} flex items-center justify-center`}>
+                            <meta.Icon className={`w-4 h-4 ${meta.color}`} />
+                          </div>
+                          <span className={`text-xs font-bold ${meta.color}`}>
+                            {count}/{total}
+                          </span>
+                        </div>
+                        <p className={`text-sm font-semibold ${meta.color} mb-0.5`}>
+                          {meta.label}
+                        </p>
+                        <p className="text-[11px] text-gray-400 mb-2">{meta.desc}</p>
+                        {/* Progress bar */}
+                        <div className="h-1 bg-white/70 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full ${meta.check} rounded-full transition-all duration-500`}
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Matrix Table */}
                 <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
-                  {/* Header Row */}
-                  <div className="grid grid-cols-[1fr_repeat(4,100px)] px-6 py-4 border-b border-gray-100 bg-gray-50">
-                    <div className="text-xs font-medium text-gray-400 uppercase tracking-wider">
+                  {/* Sticky column headers */}
+                  <div className="grid grid-cols-[1fr_repeat(4,88px)] gap-0 border-b-2 border-gray-100 bg-gray-50/80 backdrop-blur-sm">
+                    <div className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-2">
+                      <Key className="w-3.5 h-3.5" />
                       Permission
                     </div>
-                    {["Admin", "Manager", "Staff", "Driver"].map(
-                      (r) => (
+                    {ROLES.map((role) => {
+                      const meta = ROLE_META[role];
+                      return (
                         <div
-                          key={r}
-                          className="text-xs font-medium text-gray-500 uppercase tracking-wider text-center"
+                          key={role}
+                          className={`py-4 flex flex-col items-center justify-center gap-1 border-l border-gray-100`}
                         >
-                          {r}
+                          <div className={`w-7 h-7 rounded-lg ${meta.bg} flex items-center justify-center`}>
+                            <meta.Icon className={`w-3.5 h-3.5 ${meta.color}`} />
+                          </div>
+                          <span className={`text-[11px] font-semibold ${meta.color}`}>
+                            {meta.label}
+                          </span>
                         </div>
-                      ),
-                    )}
+                      );
+                    })}
                   </div>
 
-                  {/* Groups */}
-                  {Object.entries(getGroupedPermissions()).map(
-                    ([group, perms], gi) => (
+                  {/* Permission groups */}
+                  {Object.entries(getGroupedPermissions()).map(([group, perms], gi, arr) => {
+                    const gm = GROUP_META[group] || {
+                      Icon: Key,
+                      color: "text-gray-600",
+                      bg: "bg-gray-50",
+                      border: "border-gray-200",
+                    };
+                    return (
                       <div
                         key={group}
-                        className={
-                          gi !==
-                          Object.keys(getGroupedPermissions())
-                            .length -
-                            1
-                            ? "border-b border-gray-100"
-                            : ""
-                        }
+                        className={gi !== arr.length - 1 ? "border-b-2 border-gray-100" : ""}
                       >
-                        {/* Group label */}
-                        <div className="px-6 pt-5 pb-2">
-                          <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest">
+                        {/* Group header pill */}
+                        <div className="px-6 pt-5 pb-3 flex items-center gap-2">
+                          <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full border ${gm.bg} ${gm.color} ${gm.border}`}>
+                            <gm.Icon className="w-3 h-3" />
                             {group}
+                          </span>
+                          <span className="text-[10px] text-gray-400">
+                            {perms.length} permission{perms.length !== 1 ? "s" : ""}
                           </span>
                         </div>
 
-                        {/* Rows */}
+                        {/* Permission rows */}
                         {perms.map((perm, pi) => (
                           <div
                             key={perm.id}
-                            className={`grid grid-cols-[1fr_repeat(4,100px)] px-6 py-3.5 items-center hover:bg-gray-50/60 transition-colors ${
-                              pi !== perms.length - 1
-                                ? "border-b border-gray-50"
-                                : ""
+                            className={`group grid grid-cols-[1fr_repeat(4,88px)] gap-0 items-center hover:bg-blue-50/20 transition-colors duration-150 ${
+                              pi !== perms.length - 1 ? "border-b border-gray-50" : ""
                             }`}
                           >
-                            <span className="text-sm text-gray-700 pl-2">
-                              {perm.label}
-                            </span>
-                            {["admin", "manager", "staff", "driver"].map(
-                              (role) => (
+                            {/* Permission label */}
+                            <div className="px-6 py-4 flex items-center gap-3">
+                              <span className="text-sm text-gray-700 font-medium group-hover:text-gray-900 transition-colors">
+                                {perm.label}
+                              </span>
+                            </div>
+
+                            {/* Role toggles */}
+                            {ROLES.map((role) => {
+                              const meta = ROLE_META[role];
+                              return (
                                 <div
                                   key={role}
-                                  className="flex justify-center"
+                                  className={`py-4 flex justify-center border-l border-gray-100 transition-colors ${
+                                    perm[role] ? meta.colBg : ""
+                                  }`}
                                 >
-                                  <PermissionCheckbox
+                                  <RoleToggle
                                     checked={perm[role]}
-                                    onChange={() =>
-                                      togglePermission(
-                                        perm.id,
-                                        role,
-                                      )
-                                    }
+                                    role={role}
+                                    onChange={() => togglePermission(perm.id, role)}
                                   />
                                 </div>
-                              ),
-                            )}
+                              );
+                            })}
                           </div>
                         ))}
                       </div>
-                    ),
-                  )}
+                    );
+                  })}
+                </div>
+
+                {/* Legend */}
+                <div className="mt-4 flex items-center gap-6 px-1">
+                  <span className="text-xs text-gray-400">Legend:</span>
+                  {ROLES.map((role) => {
+                    const meta = ROLE_META[role];
+                    return (
+                      <span key={role} className="flex items-center gap-1.5 text-xs text-gray-500">
+                        <span className={`w-3 h-3 rounded-sm ${meta.check}`} />
+                        {meta.label}
+                      </span>
+                    );
+                  })}
                 </div>
               </div>
             )}
+
+
 
             {/* ══════════ CONFIG ══════════ */}
             {activeNav === "config" && (
