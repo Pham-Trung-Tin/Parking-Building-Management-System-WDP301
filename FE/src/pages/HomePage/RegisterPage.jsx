@@ -1,5 +1,6 @@
-import React from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { authService } from '../../services/api';
 
 // SVG Icons for Google and Apple
 const GoogleIcon = () => (
@@ -18,6 +19,44 @@ const AppleIcon = () => (
 );
 
 const RegisterPage = () => {
+  const navigate = useNavigate();
+
+  // State lưu giá trị các input
+  const [formData, setFormData] = useState({
+    fullName: '',
+    email: '',
+    password: '',
+    phone: '',
+  });
+
+  // State loading và lỗi
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  // Hàm cập nhật formData khi người dùng gõ
+  const handleChange = (e) => {
+    const { id, value } = e.target;
+    setFormData((prev) => ({ ...prev, [id]: value }));
+  };
+
+  // Hàm xử lý submit form → gọi API
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+
+    try {
+      await authService.register(formData);
+      // Đăng ký thành công → chuyển sang trang login
+      navigate('/login');
+    } catch (err) {
+      // Hiển thị lỗi từ backend
+      setError(err.message || 'Đăng ký thất bại, vui lòng thử lại.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen flex justify-center items-center bg-white p-5 font-sans">
       <div className="w-full max-w-[420px] text-center animate-fade-in-up my-10">
@@ -31,17 +70,27 @@ const RegisterPage = () => {
         <h1 className="text-2xl font-bold text-slate-900 mb-[30px]">Sign up for Parking Building</h1>
 
         {/* Form */}
-        <form className="flex flex-col gap-5" onSubmit={(e) => e.preventDefault()}>
+        <form className="flex flex-col gap-5" onSubmit={handleSubmit}>
+
+          {/* Hiển thị lỗi từ API */}
+          {error && (
+            <div className="bg-red-50 border border-red-300 text-red-600 text-sm rounded-md px-4 py-3 text-left">
+              {error}
+            </div>
+          )}
+
           <div className="relative text-left group">
             <input 
               type="text" 
-              id="fullname" 
+              id="fullName"
               required 
+              value={formData.fullName}
+              onChange={handleChange}
               className="peer w-full px-4 pt-4 pb-3 text-base border border-slate-300 rounded-md outline-none transition-all duration-200 bg-white text-slate-900 focus:border-primary-500 focus:ring-1 focus:ring-primary-500 placeholder-transparent" 
               placeholder="Full Name"
             />
             <label 
-              htmlFor="fullname" 
+              htmlFor="fullName" 
               className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 text-base transition-all duration-200 pointer-events-none bg-white px-1 peer-focus:top-0 peer-focus:text-xs peer-focus:text-primary-500 peer-valid:top-0 peer-valid:text-xs peer-valid:text-primary-500"
             >
               Full Name *
@@ -52,6 +101,8 @@ const RegisterPage = () => {
               type="email" 
               id="email" 
               required 
+              value={formData.email}
+              onChange={handleChange}
               className="peer w-full px-4 pt-4 pb-3 text-base border border-slate-300 rounded-md outline-none transition-all duration-200 bg-white text-slate-900 focus:border-primary-500 focus:ring-1 focus:ring-primary-500 placeholder-transparent" 
               placeholder="Email address"
             />
@@ -67,6 +118,8 @@ const RegisterPage = () => {
               type="password" 
               id="password" 
               required 
+              value={formData.password}
+              onChange={handleChange}
               className="peer w-full px-4 pt-4 pb-3 text-base border border-slate-300 rounded-md outline-none transition-all duration-200 bg-white text-slate-900 focus:border-primary-500 focus:ring-1 focus:ring-primary-500 placeholder-transparent" 
               placeholder="Password"
             />
@@ -77,9 +130,30 @@ const RegisterPage = () => {
               Password *
             </label>
           </div>
+          <div className="relative text-left group">
+            <input 
+              type="tel" 
+              id="phone" 
+              required 
+              value={formData.phone}
+              onChange={handleChange}
+              className="peer w-full px-4 pt-4 pb-3 text-base border border-slate-300 rounded-md outline-none transition-all duration-200 bg-white text-slate-900 focus:border-primary-500 focus:ring-1 focus:ring-primary-500 placeholder-transparent" 
+              placeholder="Phone number"
+            />
+            <label 
+              htmlFor="phone" 
+              className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 text-base transition-all duration-200 pointer-events-none bg-white px-1 peer-focus:top-0 peer-focus:text-xs peer-focus:text-primary-500 peer-valid:top-0 peer-valid:text-xs peer-valid:text-primary-500"
+            >
+              Phone number *
+            </label>
+          </div>
           
-          <button type="submit" className="bg-primary-500 text-white border-none py-4 text-base font-bold rounded-md cursor-pointer transition-colors duration-200 hover:bg-primary-600 mt-2">
-            Sign up
+          <button 
+            type="submit" 
+            disabled={loading}
+            className="bg-primary-500 text-white border-none py-4 text-base font-bold rounded-md cursor-pointer transition-colors duration-200 hover:bg-primary-600 mt-2 disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {loading ? 'Đang đăng ký...' : 'Sign up'}
           </button>
         </form>
 
