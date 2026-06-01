@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useFormik } from 'formik';
 import * as Yup from 'yup';
 import { authService } from '../../services/api';
@@ -33,8 +33,10 @@ const loginSchema = Yup.object({
 
 const LoginPage = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [serverError, setServerError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const successMessage = location.state?.message || '';
 
   const formik = useFormik({
     initialValues: {
@@ -110,6 +112,13 @@ const LoginPage = () => {
           {serverError && (
             <div className="bg-red-50 border border-red-300 text-red-600 text-sm rounded-md px-4 py-3 text-left">
               {serverError}
+            </div>
+          )}
+
+          {/* Thông báo thành công từ redirect */}
+          {successMessage && !serverError && (
+            <div className="bg-emerald-50 border border-emerald-300 text-emerald-700 text-sm rounded-md px-4 py-3 text-left mb-4">
+              {successMessage}
             </div>
           )}
 

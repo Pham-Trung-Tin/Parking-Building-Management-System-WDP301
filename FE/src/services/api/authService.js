@@ -26,6 +26,15 @@ const authService = {
     logout: () => {
         return axiosClient.post('/auth/logout');
     },
+
+    /**
+     * Xác thực email
+     * GET /auth/verify-email/:token
+     * @param {string} token
+     */
+    verifyEmail: (token) => {
+        return axiosClient.get(`/auth/verify-email/${token}`);
+    },
 };
 
 export default authService;

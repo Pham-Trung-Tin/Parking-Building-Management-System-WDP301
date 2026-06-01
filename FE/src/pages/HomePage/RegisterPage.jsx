@@ -62,8 +62,8 @@ const RegisterPage = () => {
       setServerError('');
       try {
         await authService.register(values);
-        // Đăng ký thành công → chuyển sang trang login
-        navigate('/login');
+        // Đăng ký thành công → chuyển sang trang login với thông báo
+        navigate('/login', { state: { message: 'Đăng ký thành công! Vui lòng kiểm tra email để xác thực tài khoản trước khi đăng nhập.' } });
       } catch (err) {
         setServerError(err.message || 'Đăng ký thất bại, vui lòng thử lại.');
       } finally {
