@@ -8,6 +8,7 @@ import BookingPage from './pages/Customer/BookingPage';
 import SessionPage from './pages/Customer/SessionPage';
 import CheckoutPage from './pages/Customer/CheckoutPage';
 import CheckoutSuccessPage from './pages/Customer/CheckoutSuccessPage';
+import AdminPortal from './pages/Admin/AdminPortal';
 
 function App() {
     return (
@@ -21,6 +22,7 @@ function App() {
                 <Route path="/session" element={<SessionPage />} />
                 <Route path="/checkout" element={<CheckoutPage />} />
                 <Route path="/checkoutsuccess" element={<CheckoutSuccessPage />} />
+                <Route path="/admin" element={<AdminPortal />} />
             </Routes>
         </Router>
     );
