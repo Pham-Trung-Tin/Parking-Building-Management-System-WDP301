@@ -94,10 +94,10 @@ const CheckoutPage = () => {
     const [cvv, setCvv] = useState('');
     const [saveCard, setSaveCard] = useState(false);
     const [processing, setProcessing] = useState(false);
-    const [errors, setErrors] = useState({});
+    const [errors, setErrors] = useState<Record<string, string>>({});
 
     const validate = () => {
-        const e = {};
+        const e: Record<string, string> = {};
         if (payMethod === 'card') {
             if (cardNumber.replace(/\s/g, '').length < 16) e.cardNumber = 'Enter a valid 16-digit card number';
             if (!cardName.trim()) e.cardName = 'Cardholder name is required';

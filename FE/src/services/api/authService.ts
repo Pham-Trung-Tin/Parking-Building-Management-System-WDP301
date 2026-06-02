@@ -4,18 +4,18 @@ const authService = {
     /**
      * Đăng ký tài khoản mới
      * POST /auth/register
-     * @param {{ fullName: string, email: string, password: string, phone: string }} data
+     * @param {any} data
      */
-    register: (data) => {
+    register: (data: any): Promise<any> => {
         return axiosClient.post('/auth/register', data);
     },
 
     /**
      * Đăng nhập
      * POST /auth/login
-     * @param {{ email: string, password: string }} data
+     * @param {any} data
      */
-    login: (data) => {
+    login: (data: any): Promise<any> => {
         return axiosClient.post('/auth/login', data);
     },
 
@@ -23,7 +23,7 @@ const authService = {
      * Đăng xuất
      * POST /auth/logout
      */
-    logout: () => {
+    logout: (): Promise<any> => {
         return axiosClient.post('/auth/logout');
     },
 
@@ -32,7 +32,7 @@ const authService = {
      * GET /auth/verify-email/:token
      * @param {string} token
      */
-    verifyEmail: (token) => {
+    verifyEmail: (token: string): Promise<any> => {
         return axiosClient.get(`/auth/verify-email/${token}`);
     },
 
@@ -41,7 +41,7 @@ const authService = {
      * POST /auth/resend-verification
      * @param {string} email
      */
-    resendVerification: (email) => {
+    resendVerification: (email: string): Promise<any> => {
         return axiosClient.post('/auth/resend-verification', { email });
     },
 };

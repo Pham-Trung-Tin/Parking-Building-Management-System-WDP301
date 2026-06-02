@@ -458,7 +458,7 @@ export default function AdminPortal() {
   };
 
   const getGroupedPermissions = () => {
-    const groups = {};
+    const groups: { [key: string]: any[] } = {};
     permissions.forEach((p) => {
       if (!groups[p.group]) groups[p.group] = [];
       groups[p.group].push(p);
