@@ -35,6 +35,15 @@ const authService = {
     verifyEmail: (token) => {
         return axiosClient.get(`/auth/verify-email/${token}`);
     },
+
+    /**
+     * Gửi lại email xác thực
+     * POST /auth/resend-verification
+     * @param {string} email
+     */
+    resendVerification: (email) => {
+        return axiosClient.post('/auth/resend-verification', { email });
+    },
 };
 
 export default authService;
