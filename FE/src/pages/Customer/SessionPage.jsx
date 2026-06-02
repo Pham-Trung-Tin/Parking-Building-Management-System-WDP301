@@ -134,25 +134,29 @@ const SessionPage = () => {
     const vehicleType = data.vehicleType || 'car';
     const floor = data.floor || 3;
     const slot = data.slot || 5;
-    const entryDate = data.entryDate ? new Date(data.entryDate) : new Date();
-    const duration = data.duration || 2;
     const hourlyRate = spot.price || 20000;
 
-    // Live elapsed seconds since entry
-    const [elapsed, setElapsed] = useState(() => Math.floor((Date.now() - entryDate.getTime()) / 1000));
+    // Ghi nhận đúng thời điểm user vào trang SessionPage (luôn bắt đầu từ 0)
+    const sessionStart = useRef(Date.now());
+    const entryDate = new Date(sessionStart.current);
+
+    // Live elapsed seconds kể từ lúc vào trang (bắt đầu từ 00:00:00)
+    const [elapsed, setElapsed] = useState(0);
 
     useEffect(() => {
         const id = setInterval(() => {
-            setElapsed(Math.floor((Date.now() - entryDate.getTime()) / 1000));
+            setElapsed(Math.floor((Date.now() - sessionStart.current) / 1000));
         }, 1000);
         return () => clearInterval(id);
-    }, [entryDate]);
+    }, []);
 
-    const currentFee = ((elapsed / 3600) * hourlyRate);
+    const currentFee = vehicleType === 'motorcycle' 
+        ? ((elapsed / 3600) < 4 ? 2000 : 4000)
+        : ((elapsed / 3600) < 4 ? 8000 : 16000);
     const licensePlate = vehicleType === 'motorcycle' ? '59T1-23456' : '51A-12345';
     const zone = floor <= 2 ? 'Zone B - Standard' : 'Zone A - Premium';
     const slotCode = `${String.fromCharCode(64 + floor)}-${floor}0${String(slot).padStart(1, '0')}`;
-    const qrValue = `${spot.title}-F${floor}S${slot}-${entryDate.getTime()}`;
+    const qrValue = `${spot.title}-F${floor}S${slot}-${sessionStart.current}`;
 
     const handlePayCheckout = () => {
         navigate('/checkout', {
@@ -161,7 +165,7 @@ const SessionPage = () => {
                 vehicleType,
                 floor,
                 slot,
-                entryDate: entryDate.toISOString(),
+                entryDate: new Date(sessionStart.current).toISOString(),
                 elapsed,
                 totalAmount: currentFee,
             }
@@ -625,8 +629,10 @@ const SessionPage = () => {
                                 <div className="detail-item-value">{zone}</div>
                             </div>
                             <div>
-                                <div className="detail-item-label">Hourly Rate</div>
-                                <div className="detail-item-value">{hourlyRate.toLocaleString('vi-VN')} ₫</div>
+                                <div className="detail-item-label">Rate Policy</div>
+                                <div className="detail-item-value" style={{ fontSize: '13px' }}>
+                                    {vehicleType === 'motorcycle' ? '2k (<4h) / 4k (>=4h)' : '8k (<4h) / 16k (>=4h)'}
+                                </div>
                             </div>
                             <div>
                                 <div className="detail-item-label">Vehicle Type</div>

@@ -107,7 +107,11 @@ const CheckoutSuccessPage = () => {
     const entryDate = data.entryDate ? new Date(data.entryDate) : new Date(Date.now() - 7200000);
     const exitTime = data.exitTime ? new Date(data.exitTime) : new Date();
     const elapsed = data.elapsed || 7200;
-    const totalAmount = data.totalAmount || spot.price * (elapsed / 3600);
+    const totalAmount = data.totalAmount !== undefined 
+        ? data.totalAmount 
+        : (vehicleType === 'motorcycle'
+            ? ((elapsed / 3600) < 4 ? 2000 : 4000)
+            : ((elapsed / 3600) < 4 ? 8000 : 16000));
     const serviceFee = Math.round(totalAmount * 0.05);
     const grandTotal = Math.round(totalAmount) + serviceFee;
     const payMethod = data.payMethod || 'card';
