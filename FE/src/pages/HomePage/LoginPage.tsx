@@ -61,8 +61,8 @@ const LoginPage = () => {
 
         // Chuyển hướng tuỳ theo role
         const role = res?.data?.user?.role;
-        if (role === 'admin' || role === 'parking_owner') {
-          navigate('/');
+        if (role === 'system_admin' || role === 'parking_manager' || role === 'parking_staff') {
+          navigate('/admin');
         } else {
           navigate('/');
         }
