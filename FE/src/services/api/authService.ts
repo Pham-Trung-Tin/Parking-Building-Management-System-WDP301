@@ -44,6 +44,24 @@ const authService = {
     resendVerification: (email: string): Promise<any> => {
         return axiosClient.post('/auth/resend-verification', { email });
     },
+
+    /**
+     * Làm mới access token
+     * POST /auth/refresh-token
+     * @param {string} refreshToken
+     */
+    refreshToken: (refreshToken: string): Promise<any> => {
+        return axiosClient.post('/auth/refresh-token', { refreshToken });
+    },
+
+    /**
+     * Yêu cầu gửi email đặt lại mật khẩu
+     * POST /auth/forgot-password
+     * @param {string} email
+     */
+    forgotPassword: (email: string): Promise<any> => {
+        return axiosClient.post('/auth/forgot-password', { email });
+    },
 };
 
 export default authService;
