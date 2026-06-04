@@ -29,12 +29,20 @@ import {
   Ticket,
   ShieldAlert,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import useUsers from "../../hooks/useUsers";
+import { userService } from "../../services/api";
 
 const ROLE_COLORS = {
-  Manager: "bg-violet-100 text-violet-700",
-  Staff: "bg-sky-100 text-sky-700",
-  Driver: "bg-emerald-100 text-emerald-700",
+  admin: "bg-gray-100 text-gray-700",
+  manager: "bg-violet-100 text-violet-700",
+  staff: "bg-sky-100 text-sky-700",
+  driver: "bg-emerald-100 text-emerald-700",
+  system_admin: "bg-gray-100 text-gray-700",
+  parking_manager: "bg-violet-100 text-violet-700",
+  parking_staff: "bg-sky-100 text-sky-700",
+  parking_user: "bg-emerald-100 text-emerald-700",
 };
 
 /* Role metadata for the permission matrix */
@@ -114,54 +122,6 @@ const GROUP_META = {
 
 const ROLES = ["admin", "manager", "staff", "driver"];
 
-const initialUsers = [
-  {
-    id: "1",
-    name: "Nguyen Van An",
-    email: "nguyen.van.an@parksmart.vn",
-    role: "Manager",
-    status: "Active",
-    avatar: "NA",
-    joined: "Jan 12, 2024",
-  },
-  {
-    id: "2",
-    name: "Tran Thi Binh",
-    email: "tran.thi.binh@parksmart.vn",
-    role: "Staff",
-    status: "Active",
-    avatar: "TB",
-    joined: "Mar 5, 2024",
-  },
-  {
-    id: "3",
-    name: "Le Minh Chau",
-    email: "le.minh.chau@parksmart.vn",
-    role: "Staff",
-    status: "Active",
-    avatar: "LC",
-    joined: "Mar 22, 2024",
-  },
-  {
-    id: "4",
-    name: "Pham Trung Tin",
-    email: "pham.trung.tin@parksmart.vn",
-    role: "Driver",
-    status: "Active",
-    avatar: "PT",
-    joined: "Apr 1, 2024",
-  },
-  {
-    id: "5",
-    name: "Hoang Thu Ha",
-    email: "hoang.thu.ha@parksmart.vn",
-    role: "Driver",
-    status: "Suspended",
-    avatar: "HH",
-    joined: "May 14, 2024",
-  },
-];
-
 const initialPermissions = [
   {
     id: "p1",
@@ -237,37 +197,70 @@ const initialPermissions = [
   },
 ];
 
+// Helper functions for backend/frontend data mapping
+const mapRoleToUI = (role: string): string => {
+  if (role === 'system_admin') return 'admin';
+  if (role === 'parking_manager') return 'manager';
+  if (role === 'parking_staff') return 'staff';
+  if (role === 'parking_user') return 'driver';
+  return role;
+};
+
+const mapRoleToBackend = (role: string): string => {
+  if (role === 'admin' || role === 'Admin') return 'system_admin';
+  if (role === 'manager' || role === 'Manager') return 'parking_manager';
+  if (role === 'staff' || role === 'Staff') return 'parking_staff';
+  if (role === 'driver' || role === 'Driver') return 'parking_user';
+  return role;
+};
+
+const mapStatusToUI = (status: string): string => {
+  if (status === 'active') return 'Active';
+  if (status === 'blocked') return 'Suspended';
+  if (status === 'pending') return 'Pending';
+  if (status === 'inactive') return 'Inactive';
+  return status;
+};
+
+const getInitials = (name: string) => {
+  if (!name) return 'U';
+  return name
+    .split(' ')
+    .map((n) => n[0])
+    .join('')
+    .toUpperCase()
+    .substring(0, 2);
+};
+
 /* ─────────────────── Add User Modal ─────────────────── */
 function AddUserModal({ onClose, onAdd }) {
   const [form, setForm] = useState({
     name: "",
     email: "",
+    password: "",
     role: "Staff",
   });
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.name || !form.email) return;
-    const initials = form.name
-      .split(" ")
-      .map((w) => w[0])
-      .join("")
-      .slice(0, 2)
-      .toUpperCase();
-    onAdd({
-      id: Date.now().toString(),
-      name: form.name,
-      email: form.email,
-      role: form.role,
-      status: "Active",
-      avatar: initials,
-      joined: new Date().toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      }),
-    });
-    onClose();
+    if (!form.name || !form.email || !form.password) return;
+    setError(null);
+    setLoading(true);
+    try {
+      await onAdd({
+        fullName: form.name,
+        email: form.email,
+        password: form.password,
+        role: mapRoleToBackend(form.role),
+      });
+      onClose();
+    } catch (err: any) {
+      setError(err.message || 'Failed to create user.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -291,10 +284,18 @@ function AddUserModal({ onClose, onAdd }) {
           <button
             onClick={onClose}
             className="w-9 h-9 rounded-xl flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+            disabled={loading}
           >
             <X className="w-5 h-5" />
           </button>
         </div>
+        
+        {error && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-100 text-red-650 text-xs rounded-xl">
+            {error}
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
             <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">
@@ -307,8 +308,9 @@ function AddUserModal({ onClose, onAdd }) {
               onChange={(e) =>
                 setForm({ ...form, name: e.target.value })
               }
-              className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition"
+              className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition bg-white"
               required
+              disabled={loading}
             />
           </div>
           <div>
@@ -322,8 +324,26 @@ function AddUserModal({ onClose, onAdd }) {
               onChange={(e) =>
                 setForm({ ...form, email: e.target.value })
               }
-              className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition"
+              className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition bg-white"
               required
+              disabled={loading}
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">
+              Password
+            </label>
+            <input
+              type="password"
+              placeholder="Min 8 characters"
+              value={form.password}
+              onChange={(e) =>
+                setForm({ ...form, password: e.target.value })
+              }
+              className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition bg-white"
+              required
+              minLength={8}
+              disabled={loading}
             />
           </div>
           <div>
@@ -337,6 +357,7 @@ function AddUserModal({ onClose, onAdd }) {
                   setForm({ ...form, role: e.target.value })
                 }
                 className="w-full appearance-none border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition bg-white"
+                disabled={loading}
               >
                 <option>Manager</option>
                 <option>Staff</option>
@@ -350,17 +371,161 @@ function AddUserModal({ onClose, onAdd }) {
               type="button"
               onClick={onClose}
               className="flex-1 py-3 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+              disabled={loading}
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="flex-1 py-3 rounded-xl bg-gray-900 text-white text-sm font-medium hover:bg-gray-700 transition-colors"
+              className="flex-1 py-3 rounded-xl bg-gray-900 text-white text-sm font-medium hover:bg-gray-700 transition-colors disabled:opacity-50"
+              disabled={loading}
             >
-              Create User
+              {loading ? 'Creating...' : 'Create User'}
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────────── User Detail Modal ─────────────────── */
+function UserDetailModal({ user, onClose }) {
+  const [logs, setLogs] = useState<any[]>([]);
+  const [loadingLogs, setLoadingLogs] = useState(false);
+
+  useEffect(() => {
+    const fetchLogs = async () => {
+      setLoadingLogs(true);
+      try {
+        const res = await userService.getUserActivityLogs(user.id || user._id, { limit: 5 });
+        if (res.success) {
+          setLogs(res.data);
+        }
+      } catch (err) {
+        // ignore
+      } finally {
+        setLoadingLogs(false);
+      }
+    };
+    fetchLogs();
+  }, [user]);
+
+  const initials = getInitials(user.fullName || user.name);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      {/* Backdrop */}
+      <div
+        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+        onClick={onClose}
+      />
+      {/* Modal */}
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 p-8 animate-fade-in overflow-hidden max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between mb-6 shrink-0">
+          <div>
+            <h2 className="text-xl font-semibold text-gray-900">
+              User Details
+            </h2>
+            <p className="text-sm text-gray-400 mt-0.5">
+              Detailed account information & logs
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="w-9 h-9 rounded-xl flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="overflow-y-auto pr-1 flex-1 space-y-6">
+          {/* Header Info */}
+          <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-2xl border border-gray-100">
+            {user.avatar?.url || user.avatarUrl ? (
+              <img
+                src={user.avatar?.url || user.avatarUrl}
+                alt={user.fullName}
+                className="w-16 h-16 rounded-full object-cover bg-white shadow-sm border border-gray-200"
+              />
+            ) : (
+              <div className="w-16 h-16 rounded-full bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center text-lg font-bold text-gray-750 shadow-sm border border-gray-200">
+                {initials}
+              </div>
+            )}
+            <div>
+              <h3 className="text-base font-bold text-gray-800">{user.fullName}</h3>
+              <p className="text-sm text-gray-500">{user.email}</p>
+              <span className={`inline-block text-[11px] font-bold px-2 py-0.5 mt-1.5 rounded-md ${ROLE_COLORS[mapRoleToUI(user.role)] || "bg-gray-100 text-gray-700"}`}>
+                {ROLE_META[mapRoleToUI(user.role)]?.label || user.role}
+              </span>
+            </div>
+          </div>
+
+          {/* Account Fields */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="p-3 bg-gray-50/50 rounded-xl border border-gray-100">
+              <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider block">Phone Number</span>
+              <span className="text-sm font-semibold text-gray-800">{user.phone || 'Not provided'}</span>
+            </div>
+            <div className="p-3 bg-gray-50/50 rounded-xl border border-gray-100">
+              <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider block">Status</span>
+              <span className="text-sm font-semibold text-gray-800">{mapStatusToUI(user.status)}</span>
+            </div>
+            <div className="p-3 bg-gray-50/50 rounded-xl border border-gray-100">
+              <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider block">Registered On</span>
+              <span className="text-sm font-semibold text-gray-800">
+                {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'N/A'}
+              </span>
+            </div>
+            <div className="p-3 bg-gray-50/50 rounded-xl border border-gray-100">
+              <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider block">Last Updated</span>
+              <span className="text-sm font-semibold text-gray-800">
+                {user.updatedAt ? new Date(user.updatedAt).toLocaleDateString() : 'N/A'}
+              </span>
+            </div>
+          </div>
+
+          {/* Activity Logs Section */}
+          <div className="border-t border-gray-100 pt-5">
+            <h4 className="text-sm font-bold text-gray-800 mb-3 flex items-center gap-1.5">
+              <ShieldAlert className="w-4 h-4 text-gray-500" />
+              Recent Activity Logs
+            </h4>
+            
+            {loadingLogs ? (
+              <div className="py-8 text-center text-xs text-gray-400">
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-gray-900 mx-auto mb-2"></div>
+                Loading logs...
+              </div>
+            ) : logs.length === 0 ? (
+              <p className="text-xs text-gray-400 py-4 text-center">No recent activity logs found.</p>
+            ) : (
+              <div className="space-y-2 max-h-[180px] overflow-y-auto pr-1">
+                {logs.map((log) => (
+                  <div key={log.id || log._id} className="p-3 rounded-xl bg-gray-50 border border-gray-100 text-xs flex justify-between items-start gap-4">
+                    <div>
+                      <p className="font-semibold text-gray-850">{log.action}</p>
+                      <p className="text-gray-450 mt-0.5">{log.details}</p>
+                    </div>
+                    <span className="text-[10px] text-gray-400 shrink-0">
+                      {new Date(log.createdAt).toLocaleDateString()} {new Date(log.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="pt-4 border-t border-gray-100 shrink-0 flex justify-end">
+          <button
+            onClick={onClose}
+            className="px-5 py-2.5 bg-gray-900 text-white rounded-xl text-sm font-medium hover:bg-gray-700 transition-colors"
+          >
+            Close
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -425,9 +590,9 @@ function Toggle({ checked, onChange }) {
 
 /* ─────────────────── Main Component ─────────────────── */
 export default function AdminPortal() {
+  const navigate = useNavigate();
   const [activeNav, setActiveNav] = useState("users");
   const [searchQuery, setSearchQuery] = useState("");
-  const [users, setUsers] = useState(initialUsers);
   const [showAddModal, setShowAddModal] = useState(false);
   const [toast, setToast] = useState(null);
 
@@ -437,11 +602,39 @@ export default function AdminPortal() {
   const [showApiKey, setShowApiKey] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const [permissions, setPermissions] =
-    useState(initialPermissions);
+  const [permissions, setPermissions] = useState(initialPermissions);
   const [permSaved, setPermSaved] = useState(false);
 
   const API_KEY = "pk_live_51K7x9HG2kP3mN4qR8sT";
+
+  const handleLogout = () => {
+    localStorage.removeItem("accessToken");
+    localStorage.removeItem("user");
+    navigate("/login");
+  };
+
+  const [selectedUser, setSelectedUser] = useState<any | null>(null);
+
+  const {
+    users,
+    pagination,
+    loading,
+    error,
+    stats,
+    createUser,
+    deleteUser,
+    toggleBlockUser,
+    updateFilters,
+  } = useUsers(5);
+
+  // Debounced search query
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      updateFilters({ search: searchQuery });
+    }, 300);
+
+    return () => clearTimeout(handler);
+  }, [searchQuery, updateFilters]);
 
   const showToast = (msg) => {
     setToast(msg);
@@ -451,8 +644,8 @@ export default function AdminPortal() {
   const togglePermission = (id, role) => {
     setPermissions(
       permissions.map((p) =>
-        p.id === id ? { ...p, [role]: !p[role] } : p,
-      ),
+        p.id === id ? { ...p, [role]: !p[role] } : p
+      )
     );
     setPermSaved(false);
   };
@@ -466,32 +659,30 @@ export default function AdminPortal() {
     return groups;
   };
 
-  const filteredUsers = users.filter(
-    (u) =>
-      u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      u.email
-        .toLowerCase()
-        .includes(searchQuery.toLowerCase()) ||
-      u.role.toLowerCase().includes(searchQuery.toLowerCase()),
-  );
-
-  const toggleUserStatus = (id) => {
-    setUsers(
-      users.map((u) =>
-        u.id === id
-          ? {
-              ...u,
-              status:
-                u.status === "Active" ? "Suspended" : "Active",
-            }
-          : u,
-      ),
-    );
+  const handleToggleUserStatus = async (id: string, currentStatus: string) => {
+    try {
+      const isCurrentlyBlocked = currentStatus === 'blocked';
+      await toggleBlockUser(id, isCurrentlyBlocked);
+      showToast(isCurrentlyBlocked ? "User unblocked" : "User blocked");
+    } catch (err: any) {
+      showToast(err.message || "Failed to update user status");
+    }
   };
 
-  const deleteUser = (id) => {
-    setUsers(users.filter((u) => u.id !== id));
-    showToast("User removed");
+  const handleDeleteUser = async (id: string) => {
+    if (window.confirm("Are you sure you want to delete this user?")) {
+      try {
+        await deleteUser(id);
+        showToast("User removed");
+      } catch (err: any) {
+        showToast(err.message || "Failed to delete user");
+      }
+    }
+  };
+
+  const handleCreateUser = async (userData) => {
+    await createUser(userData);
+    showToast("User created successfully");
   };
 
   const handleCopyKey = () => {
@@ -566,6 +757,7 @@ export default function AdminPortal() {
               PT
             </button>
             <button
+              onClick={handleLogout}
               className="w-9 h-9 rounded-xl flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
               title="Logout"
             >
@@ -591,7 +783,7 @@ export default function AdminPortal() {
                       User Management
                     </h1>
                     <p className="text-sm text-gray-400 mt-1">
-                      {users.length} accounts registered
+                      {pagination?.totalDocs || users.length} accounts registered
                     </p>
                   </div>
                   <button
@@ -608,25 +800,19 @@ export default function AdminPortal() {
                   {[
                     {
                       label: "Active",
-                      val: users.filter(
-                        (u) => u.status === "Active",
-                      ).length,
+                      val: stats.activeCount,
                       color: "text-emerald-600",
                       bg: "bg-emerald-50",
                     },
                     {
                       label: "Suspended",
-                      val: users.filter(
-                        (u) => u.status === "Suspended",
-                      ).length,
+                      val: stats.suspendedCount,
                       color: "text-rose-600",
                       bg: "bg-rose-50",
                     },
                     {
                       label: "Total Roles",
-                      val: [
-                        ...new Set(users.map((u) => u.role)),
-                      ].length,
+                      val: stats.totalRoles,
                       color: "text-violet-600",
                       bg: "bg-violet-50",
                     },
@@ -645,23 +831,53 @@ export default function AdminPortal() {
                   ))}
                 </div>
 
-                {/* Search */}
-                <div className="relative mb-6">
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  <input
-                    type="text"
-                    placeholder="Search by name, email or role…"
-                    value={searchQuery}
-                    onChange={(e) =>
-                      setSearchQuery(e.target.value)
-                    }
-                    className="w-full pl-11 pr-4 py-3 bg-white border border-gray-100 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition shadow-sm"
-                  />
+                {/* Search and Filters */}
+                <div className="flex gap-4 mb-6">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <input
+                      type="text"
+                      placeholder="Search by name, email or role…"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full pl-11 pr-4 py-3 bg-white border border-gray-100 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition shadow-sm"
+                    />
+                  </div>
+                  
+                  {/* Role Selector */}
+                  <select
+                    onChange={(e) => updateFilters({ role: e.target.value })}
+                    className="px-4 py-3 bg-white border border-gray-100 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 transition shadow-sm"
+                  >
+                    <option value="">All Roles</option>
+                    <option value="system_admin">System Admin</option>
+                    <option value="parking_manager">Manager</option>
+                    <option value="parking_staff">Staff</option>
+                    <option value="parking_user">Driver</option>
+                  </select>
+
+                  {/* Status Selector */}
+                  <select
+                    onChange={(e) => updateFilters({ status: e.target.value })}
+                    className="px-4 py-3 bg-white border border-gray-100 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 transition shadow-sm"
+                  >
+                    <option value="">All Statuses</option>
+                    <option value="active">Active</option>
+                    <option value="blocked">Suspended</option>
+                    <option value="pending">Pending</option>
+                    <option value="inactive">Inactive</option>
+                  </select>
                 </div>
+
+                {error && (
+                  <div className="mb-6 p-4 bg-red-50 border border-red-100 text-red-600 rounded-xl text-sm">
+                    {error}
+                  </div>
+                )}
 
                 {/* Table */}
                 <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
-                  <div className="grid grid-cols-[1fr_140px_110px_96px] px-6 py-3 border-b border-gray-100 bg-gray-50">
+                  <div className="grid grid-cols-[1fr_140px_110px_130px] px-6 py-3 border-b border-gray-100 bg-gray-50">
                     {["Account", "Role", "Status", ""].map(
                       (h) => (
                         <div
@@ -670,32 +886,45 @@ export default function AdminPortal() {
                         >
                           {h}
                         </div>
-                      ),
+                      )
                     )}
                   </div>
 
-                  {filteredUsers.length === 0 ? (
+                  {loading && users.length === 0 ? (
                     <div className="py-16 text-center text-sm text-gray-400">
-                      No users match your search.
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto mb-2"></div>
+                      Loading users...
+                    </div>
+                  ) : users.length === 0 ? (
+                    <div className="py-16 text-center text-sm text-gray-400">
+                      No users found.
                     </div>
                   ) : (
-                    filteredUsers.map((user, i) => (
+                    users.map((user, i) => (
                       <div
-                        key={user.id}
-                        className={`grid grid-cols-[1fr_140px_110px_96px] px-6 py-4 items-center hover:bg-gray-50/60 transition-colors ${
-                          i !== filteredUsers.length - 1
+                        key={user.id || user._id}
+                        className={`grid grid-cols-[1fr_140px_110px_130px] px-6 py-4 items-center hover:bg-gray-50/60 transition-colors ${
+                          i !== users.length - 1
                             ? "border-b border-gray-100"
                             : ""
                         }`}
                       >
                         {/* Account */}
                         <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center text-xs font-bold text-gray-700 shrink-0">
-                            {user.avatar}
-                          </div>
+                          {user.avatar?.url || user.avatarUrl ? (
+                            <img
+                              src={user.avatar?.url || user.avatarUrl}
+                              alt={user.fullName}
+                              className="w-9 h-9 rounded-full object-cover bg-white shadow-sm"
+                            />
+                          ) : (
+                            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center text-xs font-bold text-gray-700 shrink-0 shadow-sm">
+                              {getInitials(user.fullName)}
+                            </div>
+                          )}
                           <div>
                             <p className="text-sm font-semibold text-gray-800">
-                              {user.name}
+                              {user.fullName}
                             </p>
                             <p className="text-xs text-gray-400">
                               {user.email}
@@ -706,9 +935,11 @@ export default function AdminPortal() {
                         {/* Role */}
                         <div>
                           <span
-                            className={`inline-block text-xs font-medium px-2.5 py-1 rounded-lg ${ROLE_COLORS[user.role]}`}
+                            className={`inline-block text-xs font-medium px-2.5 py-1 rounded-lg ${
+                              ROLE_COLORS[mapRoleToUI(user.role)] || "bg-gray-100 text-gray-700"
+                            }`}
                           >
-                            {user.role}
+                            {ROLE_META[mapRoleToUI(user.role)]?.label || user.role}
                           </span>
                         </div>
 
@@ -716,30 +947,37 @@ export default function AdminPortal() {
                         <div>
                           <button
                             onClick={() =>
-                              toggleUserStatus(user.id)
+                              handleToggleUserStatus(user.id || user._id, user.status)
                             }
                             className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-lg transition-colors ${
-                              user.status === "Active"
+                              user.status === "active"
                                 ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
                                 : "bg-rose-50 text-rose-600 hover:bg-rose-100"
                             }`}
                           >
                             <span
                               className={`w-1.5 h-1.5 rounded-full ${
-                                user.status === "Active"
+                                user.status === "active"
                                   ? "bg-emerald-500"
                                   : "bg-rose-400"
                               }`}
                             />
-                            {user.status}
+                            {mapStatusToUI(user.status)}
                           </button>
                         </div>
 
                         {/* Actions */}
                         <div className="flex items-center gap-1">
                           <button
+                            onClick={() => setSelectedUser(user)}
+                            className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-blue-500 hover:bg-blue-50 transition-colors"
+                            title="View details"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                          </button>
+                          <button
                             onClick={() =>
-                              toggleUserStatus(user.id)
+                              handleToggleUserStatus(user.id || user._id, user.status)
                             }
                             className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
                             title="Toggle status"
@@ -747,7 +985,7 @@ export default function AdminPortal() {
                             <RefreshCw className="w-3.5 h-3.5" />
                           </button>
                           <button
-                            onClick={() => deleteUser(user.id)}
+                            onClick={() => handleDeleteUser(user.id || user._id)}
                             className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-rose-500 hover:bg-rose-50 transition-colors"
                             title="Delete user"
                           >
@@ -758,6 +996,30 @@ export default function AdminPortal() {
                     ))
                   )}
                 </div>
+
+                {/* Pagination Controls */}
+                {pagination && pagination.totalPages > 1 && (
+                  <div className="flex justify-between items-center mt-6">
+                    <p className="text-xs text-gray-450">
+                      Showing Page {pagination.page} of {pagination.totalPages}
+                    </p>
+                    <div className="flex gap-2">
+                      {Array.from({ length: pagination.totalPages }, (_, i) => i + 1).map((pageNo) => (
+                        <button
+                          key={pageNo}
+                          onClick={() => updateFilters({ page: pageNo })}
+                          className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors cursor-pointer ${
+                            pageNo === pagination.page
+                              ? "bg-gray-900 text-white border-gray-900"
+                              : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
+                          }`}
+                        >
+                          {pageNo}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -1192,17 +1454,20 @@ export default function AdminPortal() {
       {showAddModal && (
         <AddUserModal
           onClose={() => setShowAddModal(false)}
-          onAdd={(newUser) => {
-            setUsers([...users, newUser]);
-            showToast("User created successfully");
-          }}
+          onAdd={handleCreateUser}
+        />
+      )}
+
+      {/* ── User Detail Modal ── */}
+      {selectedUser && (
+        <UserDetailModal
+          user={selectedUser}
+          onClose={() => setSelectedUser(null)}
         />
       )}
 
       {/* ── Toast ── */}
-      {toast && (
-        <Toast message={toast} onDone={() => setToast(null)} />
-      )}
+      {toast && <Toast message={toast} onDone={() => setToast(null)} />}
     </>
   );
 }
