@@ -4,6 +4,8 @@ import HomePage from './pages/HomePage/HomePage';
 import LoginPage from './pages/HomePage/LoginPage';
 import RegisterPage from './pages/HomePage/RegisterPage';
 import VerifyEmailPage from './pages/HomePage/VerifyEmailPage';
+import ForgotPasswordPage from './pages/HomePage/ForgotPasswordPage';
+import ResetPasswordPage from './pages/HomePage/ResetPasswordPage';
 import ProfilePage from './pages/HomePage/ProfilePage';
 import ParkingSpotPage from './pages/Customer/ParkingSpotPage';
 import BookingPage from './pages/Customer/BookingPage';
@@ -22,6 +24,8 @@ function App() {
                     <Route path="/login" element={<LoginPage />} />
                     <Route path="/register" element={<RegisterPage />} />
                     <Route path="/verify-email" element={<VerifyEmailPage />} />
+                    <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+                    <Route path="/reset-password" element={<ResetPasswordPage />} />
                 </Route>
 
                 {/* 2. Customer-facing Routes (Blocks Admin/Staff/Manager from visiting) */}
