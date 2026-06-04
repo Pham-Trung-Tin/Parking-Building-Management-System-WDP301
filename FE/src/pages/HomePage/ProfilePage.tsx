@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import Header from '../../components/Header/Header';
 import Footer from '../../components/Footer/Footer';
 import useProfile from '../../hooks/useProfile';
+import { authService } from '../../services/api';
 
 const ProfilePage = () => {
   const navigate = useNavigate();
@@ -21,6 +22,18 @@ const ProfilePage = () => {
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [updateSuccess, setUpdateSuccess] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Change password state
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [cpCurrentPassword, setCpCurrentPassword] = useState('');
+  const [cpNewPassword, setCpNewPassword] = useState('');
+  const [cpConfirmPassword, setCpConfirmPassword] = useState('');
+  const [cpError, setCpError] = useState<string | null>(null);
+  const [cpSuccess, setCpSuccess] = useState<string | null>(null);
+  const [cpLoading, setCpLoading] = useState(false);
+  const [showCpCurrent, setShowCpCurrent] = useState(false);
+  const [showCpNew, setShowCpNew] = useState(false);
+  const [showCpConfirm, setShowCpConfirm] = useState(false);
 
   // Sync state when user profile is loaded
   useEffect(() => {
@@ -50,6 +63,39 @@ const ProfilePage = () => {
       setIsEditing(false);
     } catch (err: any) {
       setUpdateError(err.message || 'Failed to update profile.');
+    }
+  };
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCpError(null);
+    setCpSuccess(null);
+
+    if (cpNewPassword !== cpConfirmPassword) {
+      setCpError('Mật khẩu mới và xác nhận không khớp.');
+      return;
+    }
+    if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/.test(cpNewPassword)) {
+      setCpError('Mật khẩu mới phải có ít nhất 8 ký tự, bao gồm chữ hoa, chữ thường và số.');
+      return;
+    }
+
+    setCpLoading(true);
+    try {
+      await authService.changePassword(cpCurrentPassword, cpNewPassword);
+      setCpSuccess('Đổi mật khẩu thành công!');
+      setCpCurrentPassword('');
+      setCpNewPassword('');
+      setCpConfirmPassword('');
+      setIsChangingPassword(false);
+    } catch (err: any) {
+      if (err.status === 400) {
+        setCpError('Mật khẩu hiện tại không đúng.');
+      } else {
+        setCpError(err.message || 'Đã xảy ra lỗi, vui lòng thử lại.');
+      }
+    } finally {
+      setCpLoading(false);
     }
   };
 
@@ -257,6 +303,141 @@ const ProfilePage = () => {
                     </span>
                   </div>
 
+                </div>
+              )}
+            </div>
+
+            {/* Change Password Section */}
+            <div className="mt-8 border-t border-slate-100 pt-8">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-lg font-bold text-slate-900">Security</h2>
+                <button
+                  onClick={() => {
+                    setIsChangingPassword(!isChangingPassword);
+                    setCpError(null);
+                    setCpSuccess(null);
+                    setCpCurrentPassword('');
+                    setCpNewPassword('');
+                    setCpConfirmPassword('');
+                  }}
+                  className="px-4 py-2 border border-slate-200 text-slate-700 rounded-xl font-bold text-sm hover:bg-slate-50 transition-all cursor-pointer"
+                >
+                  {isChangingPassword ? 'Cancel' : 'Change Password'}
+                </button>
+              </div>
+
+              {/* Change password success */}
+              {cpSuccess && !isChangingPassword && (
+                <div className="p-4 bg-emerald-50 border border-emerald-100 text-emerald-600 rounded-xl text-sm font-medium">
+                  {cpSuccess}
+                </div>
+              )}
+
+              {isChangingPassword ? (
+                <form onSubmit={handleChangePassword} className="space-y-4 max-w-md">
+                  {cpError && (
+                    <div className="p-3 bg-red-50 border border-red-100 text-red-600 rounded-xl text-sm font-medium">
+                      {cpError}
+                    </div>
+                  )}
+
+                  {/* Current Password */}
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
+                      Mật khẩu hiện tại
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showCpCurrent ? 'text' : 'password'}
+                        id="cp-current"
+                        value={cpCurrentPassword}
+                        onChange={(e) => setCpCurrentPassword(e.target.value)}
+                        className="w-full border border-slate-200 rounded-xl px-4 py-3 pr-12 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition bg-white text-slate-800 font-medium"
+                        placeholder="Nhập mật khẩu hiện tại"
+                        required
+                        autoComplete="current-password"
+                      />
+                      <button type="button" onClick={() => setShowCpCurrent(p => !p)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600" tabIndex={-1}>
+                        {showCpCurrent
+                          ? <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                          : <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                        }
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* New Password */}
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
+                      Mật khẩu mới
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showCpNew ? 'text' : 'password'}
+                        id="cp-new"
+                        value={cpNewPassword}
+                        onChange={(e) => setCpNewPassword(e.target.value)}
+                        className="w-full border border-slate-200 rounded-xl px-4 py-3 pr-12 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition bg-white text-slate-800 font-medium"
+                        placeholder="Ít nhất 8 ký tự, chữ hoa, chữ thường, số"
+                        required
+                        autoComplete="new-password"
+                      />
+                      <button type="button" onClick={() => setShowCpNew(p => !p)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600" tabIndex={-1}>
+                        {showCpNew
+                          ? <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                          : <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                        }
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Confirm New Password */}
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
+                      Xác nhận mật khẩu mới
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showCpConfirm ? 'text' : 'password'}
+                        id="cp-confirm"
+                        value={cpConfirmPassword}
+                        onChange={(e) => setCpConfirmPassword(e.target.value)}
+                        className="w-full border border-slate-200 rounded-xl px-4 py-3 pr-12 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition bg-white text-slate-800 font-medium"
+                        placeholder="Nhập lại mật khẩu mới"
+                        required
+                        autoComplete="new-password"
+                      />
+                      <button type="button" onClick={() => setShowCpConfirm(p => !p)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600" tabIndex={-1}>
+                        {showCpConfirm
+                          ? <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                          : <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                        }
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end pt-2">
+                    <button
+                      type="submit"
+                      id="btn-change-password"
+                      disabled={cpLoading}
+                      className="px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-bold text-sm hover:from-blue-700 hover:to-indigo-700 transition-all cursor-pointer shadow-sm disabled:opacity-70"
+                    >
+                      {cpLoading ? 'Đang xử lý...' : 'Xác nhận đổi mật khẩu'}
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <div className="p-4 bg-slate-50/50 border border-slate-100 rounded-xl flex items-center gap-3">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
+                    fill="none" stroke="#64748b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                  </svg>
+                  <span className="text-sm text-slate-600">Mật khẩu được bảo mật. Click <strong>Change Password</strong> để đổi mật khẩu.</span>
                 </div>
               )}
             </div>
