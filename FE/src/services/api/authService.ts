@@ -62,6 +62,17 @@ const authService = {
     forgotPassword: (email: string): Promise<any> => {
         return axiosClient.post('/auth/forgot-password', { email });
     },
+
+    /**
+     * Đặt lại mật khẩu
+     * POST /auth/reset-password/:token
+     * @param {string} token - token từ URL
+     * @param {string} password - mật khẩu mới
+     * @param {string} confirmPassword - xác nhận mật khẩu mới
+     */
+    resetPassword: (token: string, password: string, confirmPassword: string): Promise<any> => {
+        return axiosClient.post(`/auth/reset-password/${token}`, { password, confirmPassword });
+    },
 };
 
 export default authService;
