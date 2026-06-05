@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import Header from '../../components/Header/Header';
+import floorService, { Floor } from '../../services/api/floorService';
 
 // ── Icons ──────────────────────────────────────────────────────────────────────
 const MotorcycleIcon = () => (
@@ -43,48 +44,53 @@ const CheckIcon = () => (
 );
 
 // ── Slot statuses ──────────────────────────────────────────────────────────────
-const generateSlots = (floor) => {
-    // Simulate some occupied slots deterministically per floor
-    const occupied = {
-        1: [2, 5, 8, 12, 17],
-        2: [1, 4, 9, 11, 15, 19],
-        3: [3, 6, 10, 13, 16],
-        4: [2, 7, 8, 14, 18, 20],
-    }[floor] || [];
-    return Array.from({ length: 20 }, (_, i) => ({
+const generateSlots = (totalSlots: number, floorIndex: number) => {
+    // Simulate some occupied slots deterministically per floor index
+    const occupiedSets: number[][] = [
+        [2, 5, 8, 12, 17],
+        [1, 4, 9, 11, 15, 19],
+        [3, 6, 10, 13, 16],
+        [2, 7, 8, 14, 18, 20],
+    ];
+    const occupied = occupiedSets[floorIndex % occupiedSets.length] || [];
+    return Array.from({ length: totalSlots }, (_, i) => ({
         id: i + 1,
         status: occupied.includes(i + 1) ? 'occupied' : 'available',
     }));
 };
 
 // ── 3-D Building SVG ──────────────────────────────────────────────────────────
-const BuildingVisual = ({ selectedFloor, vehicleType, onSelectFloor }) => {
-    const floors = [4, 3, 2, 1]; // top → bottom render order
-    const floorLabels = { 1: 'Floor 1', 2: 'Floor 2', 3: 'Floor 3', 4: 'Floor 4' };
-    const floorTypes = { 1: 'motorcycle', 2: 'motorcycle', 3: 'car', 4: 'car' };
+const BuildingVisual = ({ selectedFloor, vehicleType, onSelectFloor, floors: floorList }: {
+    selectedFloor: Floor | null;
+    vehicleType: string | null;
+    onSelectFloor: (floor: Floor) => void;
+    floors: Floor[];
+}) => {
+    // Render order: top → bottom (reverse floorNumber)
+    const floors = [...floorList].sort((a, b) => b.floorNumber - a.floorNumber);
 
-    const isSelectable = (f) => {
+    const isSelectable = (f: Floor) => {
         if (!vehicleType) return false;
-        return floorTypes[f] === vehicleType;
+        return f.vehicleType === vehicleType || f.vehicleType === 'both';
     };
 
     // Isometric-ish colours
-    const faceColor = (f) => {
-        if (selectedFloor === f) return '#3b82f6';
+    const faceColor = (f: Floor) => {
+        if (selectedFloor?._id === f._id) return '#3b82f6';
         if (!vehicleType) return '#94a3b8';
-        if (floorTypes[f] === vehicleType) return '#e0f2fe';
+        if (f.vehicleType === vehicleType || f.vehicleType === 'both') return '#e0f2fe';
         return '#f1f5f9';
     };
-    const sideColor = (f) => {
-        if (selectedFloor === f) return '#1d4ed8';
+    const sideColor = (f: Floor) => {
+        if (selectedFloor?._id === f._id) return '#1d4ed8';
         if (!vehicleType) return '#64748b';
-        if (floorTypes[f] === vehicleType) return '#bae6fd';
+        if (f.vehicleType === vehicleType || f.vehicleType === 'both') return '#bae6fd';
         return '#e2e8f0';
     };
-    const topColor = (f) => {
-        if (selectedFloor === f) return '#60a5fa';
+    const topColor = (f: Floor) => {
+        if (selectedFloor?._id === f._id) return '#60a5fa';
         if (!vehicleType) return '#94a3b8';
-        if (floorTypes[f] === vehicleType) return '#7dd3fc';
+        if (f.vehicleType === vehicleType || f.vehicleType === 'both') return '#7dd3fc';
         return '#cbd5e1';
     };
 
@@ -92,12 +98,14 @@ const BuildingVisual = ({ selectedFloor, vehicleType, onSelectFloor }) => {
     const startX = 80, startY = 30;
     const gap = 6;
 
+    if (floors.length === 0) return null;
+
     return (
         <svg viewBox="0 0 400 320" xmlns="http://www.w3.org/2000/svg" className="w-full max-w-sm mx-auto drop-shadow-xl select-none">
             {floors.map((f, idx) => {
                 const baseY = startY + idx * (H + gap);
                 const selectable = isSelectable(f);
-                const isSelected = selectedFloor === f;
+                const isSelected = selectedFloor?._id === f._id;
 
                 // Front face polygon
                 const frontPts = `${startX},${baseY + D} ${startX + W},${baseY + D} ${startX + W},${baseY + D + H} ${startX},${baseY + D + H}`;
@@ -108,7 +116,7 @@ const BuildingVisual = ({ selectedFloor, vehicleType, onSelectFloor }) => {
 
                 return (
                     <g
-                        key={f}
+                        key={f._id}
                         onClick={() => selectable && onSelectFloor(f)}
                         style={{ cursor: selectable ? 'pointer' : 'not-allowed', transition: 'all 0.2s' }}
                         className={isSelected ? 'building-floor-selected' : ''}
@@ -144,7 +152,7 @@ const BuildingVisual = ({ selectedFloor, vehicleType, onSelectFloor }) => {
                             fontWeight="700"
                             fill={isSelected ? '#fff' : selectable ? '#1e40af' : '#94a3b8'}
                         >
-                            {floorLabels[f]}
+                            {f.name || `Floor ${f.floorNumber}`}
                         </text>
 
                         {/* Vehicle type badge on right side */}
@@ -157,7 +165,7 @@ const BuildingVisual = ({ selectedFloor, vehicleType, onSelectFloor }) => {
                             fill={isSelected ? '#bfdbfe' : '#64748b'}
                             transform={`rotate(-28, ${startX + W + D / 2 + 2}, ${baseY + H / 2 + 5})`}
                         >
-                            {floorTypes[f] === 'motorcycle' ? '🏍' : '🚗'}
+                            {f.vehicleType === 'motorcycle' ? '🏍' : f.vehicleType === 'car' ? '🚗' : '🏍🚗'}
                         </text>
 
                         {/* Selected highlight ring */}
@@ -241,22 +249,61 @@ const SlotGrid = ({ slots, selectedSlot, onSelect, vehicleType }) => {
     );
 };
 
+// ── Loading Spinner ────────────────────────────────────────────────────────────
+const LoadingSpinner = () => (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '32px', gap: '12px' }}>
+        <div style={{
+            width: '36px', height: '36px',
+            border: '3px solid #e2e8f0',
+            borderTop: '3px solid #3b82f6',
+            borderRadius: '50%',
+            animation: 'spin 0.8s linear infinite',
+        }} />
+        <span style={{ fontSize: '13px', color: '#64748b', fontWeight: 600 }}>Loading floors...</span>
+    </div>
+);
+
 // ── Main Page ──────────────────────────────────────────────────────────────────
 const BookingPage = () => {
     const navigate = useNavigate();
     const location = useLocation();
     const parkingSpot = location.state?.spot || { title: 'Bitexco Financial Tower Parking', price: 50000 };
 
-    const [vehicleType, setVehicleType] = useState(null); // 'motorcycle' | 'car'
-    const [selectedFloor, setSelectedFloor] = useState(null);
-    const [slots, setSlots] = useState([]);
-    const [selectedSlot, setSelectedSlot] = useState(null);
+    const [vehicleType, setVehicleType] = useState<string | null>(null); // 'motorcycle' | 'car'
+    const [selectedFloor, setSelectedFloor] = useState<Floor | null>(null);
+    const [slots, setSlots] = useState<{ id: number; status: string }[]>([]);
+    const [selectedSlot, setSelectedSlot] = useState<number | null>(null);
     const [entryDate, setEntryDate] = useState(() => {
         const d = new Date();
         return d.toISOString().slice(0, 16);
     });
     const [duration, setDuration] = useState(2);
     const [step, setStep] = useState(1); // 1: vehicle, 2: time, 3: floor, 4: slot
+
+    // API floor state
+    const [floors, setFloors] = useState<Floor[]>([]);
+    const [floorsLoading, setFloorsLoading] = useState(false);
+    const [floorsError, setFloorsError] = useState<string | null>(null);
+
+    // Fetch floors from API on mount (filter by parkingLot if available)
+    useEffect(() => {
+        const fetchFloors = async () => {
+            setFloorsLoading(true);
+            setFloorsError(null);
+            try {
+                const params = parkingSpot._id ? { parkingLot: parkingSpot._id, status: 'active' as const } : { status: 'active' as const };
+                const data = await floorService.getFloors(params);
+                // Support both array response and { data: [] } wrapper
+                const list: Floor[] = Array.isArray(data) ? data : (data as any)?.data ?? [];
+                setFloors(list);
+            } catch (err: any) {
+                setFloorsError(err?.message || 'Failed to load floors. Please try again.');
+            } finally {
+                setFloorsLoading(false);
+            }
+        };
+        fetchFloors();
+    }, [parkingSpot._id]);
 
     // Reset floor & slot when vehicle changes
     useEffect(() => {
@@ -269,13 +316,14 @@ const BookingPage = () => {
     // Load slots when floor selected
     useEffect(() => {
         if (selectedFloor) {
-            setSlots(generateSlots(selectedFloor));
+            const floorIndex = floors.findIndex(f => f._id === selectedFloor._id);
+            setSlots(generateSlots(selectedFloor.totalSlots || 20, floorIndex));
             setSelectedSlot(null);
             setStep(4);
         }
     }, [selectedFloor]);
 
-    const handleFloorSelect = (f) => {
+    const handleFloorSelect = (f: Floor) => {
         setSelectedFloor(f);
     };
 
@@ -293,10 +341,17 @@ const BookingPage = () => {
         });
     };
 
-    const floorLabel = (f) => ({ 1: 'Floor 1 (Motorcycle)', 2: 'Floor 2 (Motorcycle)', 3: 'Floor 3 (Car)', 4: 'Floor 4 (Car)' }[f]);
+    const floorLabel = (f: Floor | null) => f ? `${f.name || 'Floor ' + f.floorNumber} (${f.vehicleType === 'motorcycle' ? 'Motorcycle' : f.vehicleType === 'car' ? 'Car' : 'All vehicles'})` : '';
     const availableCount = slots.filter(s => s.status === 'available').length;
     const exitTime = new Date(new Date(entryDate).getTime() + duration * 3600000);
     const totalPrice = parkingSpot.price * duration;
+
+    // Floors available for selected vehicle type
+    const availableFloors = floors.filter(f =>
+        vehicleType ? (f.vehicleType === vehicleType || f.vehicleType === 'both') : true
+    );
+    const motorcycleFloorNums = floors.filter(f => f.vehicleType === 'motorcycle' || f.vehicleType === 'both').length;
+    const carFloorNums = floors.filter(f => f.vehicleType === 'car' || f.vehicleType === 'both').length;
 
     return (
         <>
@@ -760,6 +815,36 @@ const BookingPage = () => {
                     to { opacity: 1; transform: translateY(0); }
                 }
                 .animate-in { animation: fadeSlideIn 0.35s ease-out forwards; }
+
+                /* ── Spinner ── */
+                @keyframes spin {
+                    to { transform: rotate(360deg); }
+                }
+
+                /* ── Error state ── */
+                .error-state {
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    padding: 24px;
+                    gap: 10px;
+                    color: #ef4444;
+                    font-size: 13px;
+                    font-weight: 600;
+                    text-align: center;
+                }
+                .error-state button {
+                    margin-top: 8px;
+                    padding: 8px 20px;
+                    border: 1.5px solid #ef4444;
+                    border-radius: 8px;
+                    background: white;
+                    color: #ef4444;
+                    font-weight: 700;
+                    cursor: pointer;
+                    transition: all 0.2s;
+                }
+                .error-state button:hover { background: #fef2f2; }
             `}</style>
 
             <div className="booking-page">
@@ -792,7 +877,9 @@ const BookingPage = () => {
                                     {vehicleType === 'motorcycle' && <span className="vehicle-selected-badge"><CheckIcon /></span>}
                                     <MotorcycleIcon />
                                     <span className="vehicle-name">Motorcycle</span>
-                                    <span className="vehicle-floors">Floors 1 – 2</span>
+                                    <span className="vehicle-floors">
+                                    {motorcycleFloorNums > 0 ? `${motorcycleFloorNums} floor${motorcycleFloorNums > 1 ? 's' : ''}` : 'No floors'}
+                                </span>
                                 </div>
                                 <div
                                     className={`vehicle-card ${vehicleType === 'car' ? 'selected' : ''}`}
@@ -801,7 +888,9 @@ const BookingPage = () => {
                                     {vehicleType === 'car' && <span className="vehicle-selected-badge"><CheckIcon /></span>}
                                     <CarIcon />
                                     <span className="vehicle-name">Car</span>
-                                    <span className="vehicle-floors">Floors 3 – 4</span>
+                                    <span className="vehicle-floors">
+                                    {carFloorNums > 0 ? `${carFloorNums} floor${carFloorNums > 1 ? 's' : ''}` : 'No floors'}
+                                </span>
                                 </div>
                             </div>
                         </div>
@@ -854,35 +943,51 @@ const BookingPage = () => {
                             </div>
 
                             {/* 3D building */}
-                            <BuildingVisual
-                                selectedFloor={selectedFloor}
-                                vehicleType={vehicleType}
-                                onSelectFloor={handleFloorSelect}
-                            />
+                            {floorsLoading ? (
+                                <LoadingSpinner />
+                            ) : floorsError ? (
+                                <div className="error-state">
+                                    <span>⚠️ {floorsError}</span>
+                                    <button onClick={() => window.location.reload()}>Retry</button>
+                                </div>
+                            ) : (
+                                <BuildingVisual
+                                    selectedFloor={selectedFloor}
+                                    vehicleType={vehicleType}
+                                    onSelectFloor={handleFloorSelect}
+                                    floors={floors}
+                                />
+                            )}
 
                             {/* Floor list tabs */}
                             <div className="floor-tabs">
-                                {[1, 2, 3, 4].map(f => {
-                                    const type = f <= 2 ? 'motorcycle' : 'car';
-                                    const isSelectable = vehicleType === type;
-                                    const isSelected = selectedFloor === f;
-                                    return (
-                                        <div
-                                            key={f}
-                                            className={`floor-tab ${!vehicleType || !isSelectable ? 'disabled' : 'selectable'} ${isSelected ? 'selected' : ''}`}
-                                            onClick={() => isSelectable && handleFloorSelect(f)}
-                                        >
-                                            <span className={`floor-dot ${type}`}></span>
-                                            <span>Floor {f}</span>
-                                            <span style={{ fontSize: '12px', color: '#94a3b8', fontWeight: 500 }}>
-                                                {type === 'motorcycle' ? '🏍 Motorcycle' : '🚗 Car'}
-                                            </span>
-                                            <span className="floor-tab-slots">
-                                                {isSelected ? `${availableCount} avail.` : '20 slots'}
-                                            </span>
-                                        </div>
-                                    );
-                                })}
+                                {floorsLoading ? (
+                                    <div style={{ textAlign: 'center', padding: '16px', color: '#94a3b8', fontSize: '13px' }}>Loading floors...</div>
+                                ) : floorsError ? null : floors.length === 0 ? (
+                                    <div style={{ textAlign: 'center', padding: '16px', color: '#94a3b8', fontSize: '13px' }}>No floors available.</div>
+                                ) : (
+                                    floors.map((f) => {
+                                        const selectable = vehicleType ? (f.vehicleType === vehicleType || f.vehicleType === 'both') : false;
+                                        const isSelected = selectedFloor?._id === f._id;
+                                        const dotClass = f.vehicleType === 'car' ? 'car' : 'motorcycle';
+                                        return (
+                                            <div
+                                                key={f._id}
+                                                className={`floor-tab ${!vehicleType || !selectable ? 'disabled' : 'selectable'} ${isSelected ? 'selected' : ''}`}
+                                                onClick={() => selectable && handleFloorSelect(f)}
+                                            >
+                                                <span className={`floor-dot ${dotClass}`}></span>
+                                                <span>{f.name || `Floor ${f.floorNumber}`}</span>
+                                                <span style={{ fontSize: '12px', color: '#94a3b8', fontWeight: 500 }}>
+                                                    {f.vehicleType === 'motorcycle' ? '🏍 Motorcycle' : f.vehicleType === 'car' ? '🚗 Car' : '🏍🚗 All'}
+                                                </span>
+                                                <span className="floor-tab-slots">
+                                                    {isSelected ? `${availableCount} avail.` : `${f.totalSlots ?? '?'} slots`}
+                                                </span>
+                                            </div>
+                                        );
+                                    })
+                                )}
                             </div>
                         </div>
 
@@ -899,7 +1004,7 @@ const BookingPage = () => {
                                 {/* Legend */}
                                 <div className="slot-section-title">
                                     <span style={{ fontSize: '13px', color: '#64748b', fontWeight: 600 }}>
-                                        {availableCount} of 20 slots available
+                                        {availableCount} of {selectedFloor?.totalSlots ?? slots.length} slots available
                                     </span>
                                     <div className="slot-legend">
                                         <div className="slot-legend-item"><span className="legend-dot ld-available"></span>Available</div>
