@@ -3,647 +3,492 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import Header from '../../components/Header/Header';
 import floorService, { Floor } from '../../services/api/floorService';
 
-// ── Icons ──────────────────────────────────────────────────────────────────────
-const MotorcycleIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" width="36" height="36">
-        <circle cx="12" cy="46" r="8" />
-        <circle cx="52" cy="46" r="8" />
-        <path d="M20 46h24M32 22l6 14H20l4-8h14" />
-        <path d="M38 22h8l6 10" />
-        <circle cx="48" cy="20" r="3" />
-    </svg>
-);
-
-const CarIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" width="36" height="36">
-        <rect x="6" y="28" width="52" height="18" rx="4" />
-        <path d="M14 28l6-12h24l6 12" />
-        <circle cx="18" cy="46" r="5" />
-        <circle cx="46" cy="46" r="5" />
-        <rect x="24" y="18" width="16" height="10" rx="2" />
-        <path d="M6 36h4M54 36h4" />
-    </svg>
-);
-
-const ClockIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
-    </svg>
-);
-
-const ArrowLeftIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-        <path d="m15 18-6-6 6-6" />
-    </svg>
-);
-
-const CheckIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-        <polyline points="20 6 9 17 4 12" />
-    </svg>
-);
-
-// ── Slot statuses ──────────────────────────────────────────────────────────────
+// ── Helpers ────────────────────────────────────────────────────────────────────
 const generateSlots = (totalSlots: number, floorIndex: number) => {
-    // Simulate some occupied slots deterministically per floor index
+    const rows = ['A', 'B', 'C', 'D', 'E'];
     const occupiedSets: number[][] = [
-        [2, 5, 8, 12, 17],
-        [1, 4, 9, 11, 15, 19],
-        [3, 6, 10, 13, 16],
-        [2, 7, 8, 14, 18, 20],
+        [2, 5, 8, 12, 17, 23, 30, 35],
+        [1, 4, 9, 11, 15, 19, 25, 28, 33],
+        [3, 6, 10, 13, 16, 22, 27, 32],
+        [2, 7, 8, 14, 18, 20, 26, 31],
     ];
     const occupied = occupiedSets[floorIndex % occupiedSets.length] || [];
-    return Array.from({ length: totalSlots }, (_, i) => ({
-        id: i + 1,
-        status: occupied.includes(i + 1) ? 'occupied' : 'available',
-    }));
+    return Array.from({ length: totalSlots }, (_, i) => {
+        const rowIdx = Math.floor(i / 10);
+        const colNum = (i % 10) + 1;
+        const rowLabel = rows[rowIdx] || String.fromCharCode(65 + rowIdx);
+        return {
+            id: i + 1,
+            label: `${rowLabel}${String(colNum).padStart(2, '0')}`,
+            row: rowLabel,
+            col: colNum,
+            status: occupied.includes(i + 1) ? 'occupied' : 'available',
+        };
+    });
 };
 
-// ── 3-D Building SVG ──────────────────────────────────────────────────────────
-const BuildingVisual = ({ selectedFloor, vehicleType, onSelectFloor, floors: floorList }: {
-    selectedFloor: Floor | null;
-    vehicleType: string | null;
-    onSelectFloor: (floor: Floor) => void;
+// ── Isometric Building ─────────────────────────────────────────────────────────
+const IsoBuilding = ({ floors, selectedFloor, onSelect }: {
     floors: Floor[];
+    selectedFloor: Floor | null;
+    onSelect: (f: Floor) => void;
 }) => {
-    // Render order: top → bottom (reverse floorNumber)
-    const floors = [...floorList].sort((a, b) => b.floorNumber - a.floorNumber);
+    const sorted = [...floors].sort((a, b) => b.floorNumber - a.floorNumber);
+    const W = 180, H = 44, D = 26, startX = 70, startY = 20, gap = 4;
 
-    const isSelectable = (f: Floor) => {
-        if (!vehicleType) return false;
-        return f.vehicleType === vehicleType || f.vehicleType === 'both';
-    };
+    // Tất cả tầng đều có thể chọn — không lọc theo loại xe
+    const isSelectable = (_f: Floor) => true;
 
-    // Isometric-ish colours
-    const faceColor = (f: Floor) => {
-        if (selectedFloor?._id === f._id) return '#3b82f6';
-        if (!vehicleType) return '#94a3b8';
-        if (f.vehicleType === vehicleType || f.vehicleType === 'both') return '#e0f2fe';
-        return '#f1f5f9';
-    };
-    const sideColor = (f: Floor) => {
-        if (selectedFloor?._id === f._id) return '#1d4ed8';
-        if (!vehicleType) return '#64748b';
-        if (f.vehicleType === vehicleType || f.vehicleType === 'both') return '#bae6fd';
-        return '#e2e8f0';
-    };
-    const topColor = (f: Floor) => {
-        if (selectedFloor?._id === f._id) return '#60a5fa';
-        if (!vehicleType) return '#94a3b8';
-        if (f.vehicleType === vehicleType || f.vehicleType === 'both') return '#7dd3fc';
-        return '#cbd5e1';
-    };
+    const face = (f: Floor) => selectedFloor?._id === f._id ? '#2563eb' : '#dbeafe';
+    const side = (f: Floor) => selectedFloor?._id === f._id ? '#1d4ed8' : '#bfdbfe';
+    const top  = (f: Floor) => selectedFloor?._id === f._id ? '#93c5fd' : '#e0f2fe';
 
-    const W = 200, H = 48, D = 28; // width, height, depth
-    const startX = 80, startY = 30;
-    const gap = 6;
+    if (sorted.length === 0) return (
+        <div style={{ height: 180, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: 13 }}>
+            Không có tầng
+        </div>
+    );
 
-    if (floors.length === 0) return null;
+    const totalH = sorted.length * (H + gap) + D + 30;
 
     return (
-        <svg viewBox="0 0 400 320" xmlns="http://www.w3.org/2000/svg" className="w-full max-w-sm mx-auto drop-shadow-xl select-none">
-            {floors.map((f, idx) => {
+        <svg viewBox={`0 0 ${startX + W + D + 20} ${totalH}`} width="100%" style={{ maxWidth: 280 }}>
+            {sorted.map((f, idx) => {
                 const baseY = startY + idx * (H + gap);
-                const selectable = isSelectable(f);
-                const isSelected = selectedFloor?._id === f._id;
-
-                // Front face polygon
+                const sel = selectedFloor?._id === f._id;
                 const frontPts = `${startX},${baseY + D} ${startX + W},${baseY + D} ${startX + W},${baseY + D + H} ${startX},${baseY + D + H}`;
-                // Top face polygon (parallelogram shifted up-right)
                 const topPts = `${startX},${baseY + D} ${startX + W},${baseY + D} ${startX + W + D},${baseY} ${startX + D},${baseY}`;
-                // Right side face polygon
                 const sidePts = `${startX + W},${baseY + D} ${startX + W + D},${baseY} ${startX + W + D},${baseY + H} ${startX + W},${baseY + D + H}`;
-
                 return (
-                    <g
-                        key={f._id}
-                        onClick={() => selectable && onSelectFloor(f)}
-                        style={{ cursor: selectable ? 'pointer' : 'not-allowed', transition: 'all 0.2s' }}
-                        className={isSelected ? 'building-floor-selected' : ''}
-                    >
-                        {/* Top face */}
-                        <polygon points={topPts} fill={topColor(f)} stroke="#475569" strokeWidth="1" opacity={selectable || isSelected ? 1 : 0.5} />
-                        {/* Front face */}
-                        <polygon points={frontPts} fill={faceColor(f)} stroke="#475569" strokeWidth="1" opacity={selectable || isSelected ? 1 : 0.5} />
-                        {/* Right side face */}
-                        <polygon points={sidePts} fill={sideColor(f)} stroke="#475569" strokeWidth="1" opacity={selectable || isSelected ? 1 : 0.5} />
-
-                        {/* Windows on front face */}
-                        {[0, 1, 2, 3].map((w) => (
-                            <rect
-                                key={w}
-                                x={startX + 20 + w * 46}
-                                y={baseY + D + 12}
-                                width={26}
-                                height={20}
-                                rx="3"
-                                fill={isSelected ? 'rgba(255,255,255,0.35)' : selectable ? 'rgba(96,165,250,0.25)' : 'rgba(148,163,184,0.2)'}
-                                stroke={isSelected ? 'rgba(255,255,255,0.6)' : 'rgba(148,163,184,0.4)'}
-                                strokeWidth="1"
-                            />
+                    <g key={f._id} onClick={() => onSelect(f)} style={{ cursor: 'pointer' }}>
+                        <polygon points={topPts} fill={top(f)} stroke="#94a3b8" strokeWidth="0.8" />
+                        <polygon points={frontPts} fill={face(f)} stroke="#94a3b8" strokeWidth="0.8" />
+                        <polygon points={sidePts} fill={side(f)} stroke="#94a3b8" strokeWidth="0.8" />
+                        {/* windows */}
+                        {[0, 1, 2].map(w => (
+                            <rect key={w} x={startX + 18 + w * 52} y={baseY + D + 12} width={32} height={18} rx="2"
+                                fill={sel ? 'rgba(255,255,255,0.25)' : 'rgba(219,234,254,0.6)'}
+                                stroke={sel ? 'rgba(255,255,255,0.5)' : '#cbd5e1'} strokeWidth="0.5" />
                         ))}
-
-                        {/* Floor label */}
-                        <text
-                            x={startX + W / 2}
-                            y={baseY + D + H / 2 + 5}
-                            textAnchor="middle"
-                            fontSize="13"
-                            fontWeight="700"
-                            fill={isSelected ? '#fff' : selectable ? '#1e40af' : '#94a3b8'}
-                        >
-                            {f.name || `Floor ${f.floorNumber}`}
+                        {/* label */}
+                        <text x={startX + W / 2} y={baseY + D + H / 2 + 5} textAnchor="middle"
+                            fontSize="11" fontWeight="700"
+                            fill={sel ? '#fff' : '#1e40af'}>
+                            {f.name || `Tầng ${f.floorNumber}`}
                         </text>
-
-                        {/* Vehicle type badge on right side */}
-                        <text
-                            x={startX + W + D / 2 + 2}
-                            y={baseY + H / 2 + 5}
-                            textAnchor="middle"
-                            fontSize="9"
-                            fontWeight="600"
-                            fill={isSelected ? '#bfdbfe' : '#64748b'}
-                            transform={`rotate(-28, ${startX + W + D / 2 + 2}, ${baseY + H / 2 + 5})`}
-                        >
-                            {f.vehicleType === 'motorcycle' ? '🏍' : f.vehicleType === 'car' ? '🚗' : '🏍🚗'}
-                        </text>
-
-                        {/* Selected highlight ring */}
-                        {isSelected && (
-                            <polygon
-                                points={frontPts}
-                                fill="none"
-                                stroke="#60a5fa"
-                                strokeWidth="3"
-                                strokeDasharray="6 3"
-                                opacity="0.8"
-                            >
-                                <animate attributeName="stroke-dashoffset" from="0" to="18" dur="1s" repeatCount="indefinite" />
-                            </polygon>
+                        {/* check on selected */}
+                        {sel && (
+                            <text x={startX + W - 12} y={baseY + D + H / 2 + 5} textAnchor="middle" fontSize="13" fill="#fff">✓</text>
                         )}
                     </g>
                 );
             })}
-
-            {/* Ground shadow */}
-            <ellipse cx={startX + W / 2 + D / 2} cy={startY + 4 * (H + gap) + D + 8} rx={W / 2 + 20} ry="12" fill="rgba(0,0,0,0.08)" />
-
-            {/* Legend */}
-            <g transform={`translate(10, 250)`}>
-                <rect x="0" y="0" width="14" height="14" rx="3" fill="#e0f2fe" stroke="#475569" strokeWidth="1" />
-                <text x="18" y="11" fontSize="10" fill="#475569">Available for your vehicle</text>
-
-                <rect x="0" y="20" width="14" height="14" rx="3" fill="#3b82f6" stroke="#475569" strokeWidth="1" />
-                <text x="18" y="31" fontSize="10" fill="#475569">Selected floor</text>
-
-                <rect x="0" y="40" width="14" height="14" rx="3" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1" />
-                <text x="18" y="51" fontSize="10" fill="#94a3b8">Not available for your vehicle</text>
-            </g>
+            {/* ground shadow */}
+            <ellipse cx={startX + W / 2 + D / 2} cy={startY + sorted.length * (H + gap) + D + 10}
+                rx={W / 2 + 16} ry="8" fill="rgba(0,0,0,0.07)" />
         </svg>
     );
 };
 
-// ── Slot Grid ──────────────────────────────────────────────────────────────────
-const SlotGrid = ({ slots, selectedSlot, onSelect, vehicleType }) => {
+// ── Parking Map ────────────────────────────────────────────────────────────────
+const ParkingMap = ({ slots, selectedSlot, onSelect }: {
+    slots: { id: number; label: string; row: string; col: number; status: string }[];
+    selectedSlot: number | null;
+    onSelect: (id: number) => void;
+}) => {
+    const rows = [...new Set(slots.map(s => s.row))];
+    const maxCol = Math.max(...slots.map(s => s.col));
+    const midCol = Math.ceil(maxCol / 2);
+
     return (
-        <div className="slot-grid">
-            {slots.map((slot) => {
-                const isOccupied = slot.status === 'occupied';
-                const isSelected = selectedSlot === slot.id;
-                return (
-                    <button
-                        key={slot.id}
-                        disabled={isOccupied}
-                        onClick={() => !isOccupied && onSelect(slot.id)}
-                        className={[
-                            'slot-cell',
-                            isOccupied ? 'slot-occupied' : 'slot-available',
-                            isSelected ? 'slot-selected' : '',
-                        ].join(' ')}
-                        title={isOccupied ? `Slot ${slot.id} — Occupied` : `Slot ${slot.id} — Available`}
-                    >
-                        <span className="slot-number">{String(slot.id).padStart(2, '0')}</span>
-                        {vehicleType === 'motorcycle' ? (
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="slot-icon">
-                                <circle cx="5" cy="17" r="3" /><circle cx="19" cy="17" r="3" />
-                                <path d="M8 17h8M12 8l2 5H8l1.5-3H14" /><path d="M14 8h3l2 4" />
-                                <circle cx="18" cy="7" r="1.5" />
-                            </svg>
-                        ) : (
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="slot-icon">
-                                <rect x="2" y="10" width="20" height="8" rx="2" />
-                                <path d="M5 10l2.5-5h9L19 10" />
-                                <circle cx="7" cy="18" r="2" /><circle cx="17" cy="18" r="2" />
-                            </svg>
-                        )}
-                        {isSelected && (
-                            <span className="slot-check"><CheckIcon /></span>
-                        )}
-                        {isOccupied && (
-                            <span className="slot-x">✕</span>
-                        )}
-                    </button>
-                );
-            })}
+        <div style={{ overflowX: 'auto', padding: '0 4px' }}>
+            <div style={{ display: 'flex', gap: 8, minWidth: 'max-content' }}>
+                {/* Row labels */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingTop: 28 }}>
+                    {rows.map(row => (
+                        <div key={row} style={{
+                            width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontSize: 11, fontWeight: 700, color: '#475569'
+                        }}>{row}</div>
+                    ))}
+                </div>
+                {/* Slot columns split by aisle */}
+                <div style={{ display: 'flex', gap: 12 }}>
+                    {[Array.from({ length: midCol }, (_, i) => i + 1), Array.from({ length: maxCol - midCol }, (_, i) => i + midCol + 1)].map((colGroup, gi) => (
+                        <div key={gi}>
+                            {/* Column headers */}
+                            <div style={{ display: 'flex', gap: 4, marginBottom: 4 }}>
+                                {colGroup.map(col => (
+                                    <div key={col} style={{
+                                        width: 28, fontSize: 9, textAlign: 'center', color: '#94a3b8', fontWeight: 600
+                                    }}>
+                                        {String(col).padStart(2, '0')}
+                                    </div>
+                                ))}
+                            </div>
+                            {/* Rows */}
+                            {rows.map(row => (
+                                <div key={row} style={{ display: 'flex', gap: 4, marginBottom: 6 }}>
+                                    {colGroup.map(col => {
+                                        const slot = slots.find(s => s.row === row && s.col === col);
+                                        if (!slot) return <div key={col} style={{ width: 28 }} />;
+                                        const isSel = selectedSlot === slot.id;
+                                        const isOcc = slot.status === 'occupied';
+                                        return (
+                                            <button
+                                                key={slot.id}
+                                                disabled={isOcc}
+                                                onClick={() => !isOcc && onSelect(slot.id)}
+                                                title={slot.label}
+                                                style={{
+                                                    width: 28, height: 28,
+                                                    border: isSel ? '2px solid #2563eb' : isOcc ? '1.5px solid #e2e8f0' : '1.5px solid #cbd5e1',
+                                                    borderRadius: 4,
+                                                    background: isSel ? '#2563eb' : isOcc ? '#f1f5f9' : '#fff',
+                                                    color: isSel ? '#fff' : isOcc ? '#cbd5e1' : '#475569',
+                                                    fontSize: 8,
+                                                    fontWeight: 700,
+                                                    cursor: isOcc ? 'not-allowed' : 'pointer',
+                                                    padding: 0,
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    transition: 'all 0.15s',
+                                                    flexShrink: 0,
+                                                }}
+                                            >
+                                                {isSel ? '✓' : isOcc ? '' : slot.label}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            ))}
+                        </div>
+                    ))}
+                </div>
+            </div>
         </div>
     );
 };
 
-// ── Loading Spinner ────────────────────────────────────────────────────────────
-const LoadingSpinner = () => (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '32px', gap: '12px' }}>
-        <div style={{
-            width: '36px', height: '36px',
-            border: '3px solid #e2e8f0',
-            borderTop: '3px solid #3b82f6',
-            borderRadius: '50%',
-            animation: 'spin 0.8s linear infinite',
-        }} />
-        <span style={{ fontSize: '13px', color: '#64748b', fontWeight: 600 }}>Loading floors...</span>
-    </div>
-);
-
-// ── Main Page ──────────────────────────────────────────────────────────────────
+// ── Main ───────────────────────────────────────────────────────────────────────
 const BookingPage = () => {
     const navigate = useNavigate();
     const location = useLocation();
     const parkingSpot = location.state?.spot || { title: 'Bitexco Financial Tower Parking', price: 50000 };
 
-    const [vehicleType, setVehicleType] = useState<string | null>(null); // 'motorcycle' | 'car'
+    const [vehicleType, setVehicleType] = useState<string | null>(null);
     const [selectedFloor, setSelectedFloor] = useState<Floor | null>(null);
-    const [slots, setSlots] = useState<{ id: number; status: string }[]>([]);
+    const [slots, setSlots] = useState<{ id: number; label: string; row: string; col: number; status: string }[]>([]);
     const [selectedSlot, setSelectedSlot] = useState<number | null>(null);
-    const [entryDate, setEntryDate] = useState(() => {
-        const d = new Date();
-        return d.toISOString().slice(0, 16);
-    });
+    const [entryDate, setEntryDate] = useState(() => new Date().toISOString().slice(0, 16));
     const [duration, setDuration] = useState(2);
-    const [step, setStep] = useState(1); // 1: vehicle, 2: time, 3: floor, 4: slot
 
-    // API floor state
     const [floors, setFloors] = useState<Floor[]>([]);
     const [floorsLoading, setFloorsLoading] = useState(false);
     const [floorsError, setFloorsError] = useState<string | null>(null);
 
-    // Fetch floors from API on mount (filter by parkingLot if available)
     useEffect(() => {
-        const fetchFloors = async () => {
+        const fetch = async () => {
             setFloorsLoading(true);
             setFloorsError(null);
             try {
-                const params = parkingSpot._id ? { parkingLot: parkingSpot._id, status: 'active' as const } : { status: 'active' as const };
+                const params: any = { status: 'active' };
+                if (parkingSpot._id) params.parkingLot = parkingSpot._id;
                 const data = await floorService.getFloors(params);
-                // Support both array response and { data: [] } wrapper
                 const list: Floor[] = Array.isArray(data) ? data : (data as any)?.data ?? [];
                 setFloors(list);
             } catch (err: any) {
-                setFloorsError(err?.message || 'Failed to load floors. Please try again.');
+                setFloorsError(err?.message || 'Không thể tải dữ liệu tầng.');
             } finally {
                 setFloorsLoading(false);
             }
         };
-        fetchFloors();
+        fetch();
     }, [parkingSpot._id]);
 
-    // Reset floor & slot when vehicle changes
     useEffect(() => {
         setSelectedFloor(null);
         setSelectedSlot(null);
         setSlots([]);
-        if (vehicleType) setStep(2);
     }, [vehicleType]);
 
-    // Load slots when floor selected
     useEffect(() => {
         if (selectedFloor) {
-            const floorIndex = floors.findIndex(f => f._id === selectedFloor._id);
-            setSlots(generateSlots(selectedFloor.totalSlots || 20, floorIndex));
+            const idx = floors.findIndex(f => f._id === selectedFloor._id);
+            setSlots(generateSlots(selectedFloor.totalSlots || 40, idx));
             setSelectedSlot(null);
-            setStep(4);
         }
     }, [selectedFloor]);
 
-    const handleFloorSelect = (f: Floor) => {
-        setSelectedFloor(f);
-    };
+    // Không còn lọc tầng theo loại xe — tất cả tầng đều hiển thị
+
+    const availableCount = slots.filter(s => s.status === 'available').length;
+    const exitTime = new Date(new Date(entryDate).getTime() + duration * 3600000);
+    const selectedSlotLabel = slots.find(s => s.id === selectedSlot)?.label || null;
+
+    const step = !vehicleType ? 1 : !selectedFloor ? 3 : !selectedSlot ? 4 : 4;
+    const stepsDone = [!!vehicleType, true, !!selectedFloor, !!selectedSlot].filter(Boolean).length;
 
     const handleReserve = () => {
         if (!vehicleType || !selectedFloor || !selectedSlot) return;
         navigate('/session', {
-            state: {
-                spot: parkingSpot,
-                vehicleType,
-                floor: selectedFloor,
-                slot: selectedSlot,
-                entryDate,
-                duration,
-            }
+            state: { spot: parkingSpot, vehicleType, floor: selectedFloor, slot: selectedSlot, entryDate, duration }
         });
     };
 
-    const floorLabel = (f: Floor | null) => f ? `${f.name || 'Floor ' + f.floorNumber} (${f.vehicleType === 'motorcycle' ? 'Motorcycle' : f.vehicleType === 'car' ? 'Car' : 'All vehicles'})` : '';
-    const availableCount = slots.filter(s => s.status === 'available').length;
-    const exitTime = new Date(new Date(entryDate).getTime() + duration * 3600000);
-    const totalPrice = parkingSpot.price * duration;
-
-    // Floors available for selected vehicle type
-    const availableFloors = floors.filter(f =>
-        vehicleType ? (f.vehicleType === vehicleType || f.vehicleType === 'both') : true
-    );
-    const motorcycleFloorNums = floors.filter(f => f.vehicleType === 'motorcycle' || f.vehicleType === 'both').length;
-    const carFloorNums = floors.filter(f => f.vehicleType === 'car' || f.vehicleType === 'both').length;
+    const fmtDate = (iso: string) => {
+        const d = new Date(iso);
+        return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}, ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+    };
+    const fmtExit = () => {
+        const d = exitTime;
+        return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+    };
 
     return (
         <>
             <style>{`
-                /* ── Global Reset ── */
-                * { box-sizing: border-box; }
+                @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+                * { box-sizing: border-box; margin: 0; padding: 0; }
 
-                /* ── Page ── */
-                .booking-page {
+                .bk-page {
                     min-height: 100vh;
-                    background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 40%, #f8fafc 100%);
+                    background: #f0f4f8;
                     font-family: 'Inter', 'Segoe UI', sans-serif;
-                    color: #0f172a;
+                    color: #1e293b;
+                    padding-bottom: 80px;
                 }
 
-                /* ── Back button ── */
-                .back-btn {
-                    display: inline-flex;
-                    align-items: center;
-                    gap: 6px;
-                    background: white;
-                    border: 1.5px solid #e2e8f0;
-                    border-radius: 10px;
-                    padding: 8px 16px;
-                    font-size: 14px;
-                    font-weight: 600;
-                    color: #475569;
-                    cursor: pointer;
-                    transition: all 0.2s;
-                    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
-                }
-                .back-btn:hover { background: #f8fafc; border-color: #94a3b8; color: #1e293b; transform: translateX(-2px); }
-
-                /* ── Page header strip ── */
-                .page-top {
-                    background: white;
+                /* Page header */
+                .bk-header {
+                    background: #fff;
                     border-bottom: 1px solid #e2e8f0;
                     padding: 18px 32px;
                     display: flex;
-                    align-items: center;
-                    gap: 16px;
-                    box-shadow: 0 2px 12px rgba(0,0,0,0.04);
-                    position: sticky;
-                    top: 72px;
-                    z-index: 30;
+                    align-items: baseline;
+                    justify-content: space-between;
                 }
-                .page-title {
-                    font-size: 20px;
+                .bk-header h1 {
+                    font-size: 22px;
                     font-weight: 800;
                     color: #0f172a;
-                    letter-spacing: -0.3px;
+                    letter-spacing: -0.4px;
                 }
-                .page-subtitle {
+                .bk-header-sub {
                     font-size: 13px;
                     color: #64748b;
                     font-weight: 500;
-                    margin-left: auto;
                 }
 
-                /* ── Single-column layout ── */
-                .booking-content {
-                    max-width: 780px;
+                /* Main grid */
+                .bk-body {
+                    max-width: 1100px;
                     margin: 0 auto;
-                    padding: 32px 24px 60px;
+                    padding: 24px 20px 0;
                 }
 
-                /* ── Reserve button ── */
-                .reserve-btn-wrap {
-                    margin-top: 12px;
-                    padding: 28px;
-                    background: white;
-                    border-radius: 20px;
-                    border: 1px solid #e2e8f0;
-                    box-shadow: 0 4px 24px rgba(0,0,0,0.05);
+                /* Top 3-col */
+                .bk-top {
+                    display: grid;
+                    grid-template-columns: 260px 1fr 1fr;
+                    gap: 16px;
+                    margin-bottom: 16px;
                 }
-                .reserve-btn {
-                    width: 100%;
-                    padding: 18px;
-                    border: none;
+                @media(max-width: 900px) {
+                    .bk-top { grid-template-columns: 1fr; }
+                }
+
+                /* Cards */
+                .bk-card {
+                    background: #fff;
                     border-radius: 14px;
-                    font-size: 16px;
-                    font-weight: 800;
-                    cursor: pointer;
-                    transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
-                    letter-spacing: 0.02em;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    gap: 10px;
-                }
-                .reserve-btn.ready {
-                    background: linear-gradient(135deg, #2563eb, #4f46e5);
-                    color: white;
-                    box-shadow: 0 8px 28px rgba(79,70,229,0.4);
-                }
-                .reserve-btn.ready:hover {
-                    transform: translateY(-3px) scale(1.015);
-                    box-shadow: 0 14px 36px rgba(79,70,229,0.5);
-                }
-                .reserve-btn.ready:active { transform: scale(0.98); }
-                .reserve-btn.disabled {
-                    background: #f1f5f9;
-                    color: #94a3b8;
-                    cursor: not-allowed;
-                }
-                .reserve-hint {
-                    text-align: center;
-                    margin-top: 12px;
-                    font-size: 12px;
-                    color: #94a3b8;
-                    font-weight: 500;
-                }
-                .step-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin: 0 3px; background: #e2e8f0; }
-                .step-dot.done { background: #3b82f6; }
-
-                /* ── Section card ── */
-                .section-card {
-                    background: white;
-                    border-radius: 20px;
                     border: 1px solid #e2e8f0;
-                    padding: 28px;
-                    box-shadow: 0 4px 24px rgba(0,0,0,0.05);
-                    margin-bottom: 20px;
-                    transition: box-shadow 0.3s;
+                    padding: 18px 20px;
+                    box-shadow: 0 1px 4px rgba(0,0,0,0.04);
                 }
-                .section-card:hover { box-shadow: 0 8px 32px rgba(0,0,0,0.09); }
-
-                .section-header {
+                .bk-card-title {
                     display: flex;
                     align-items: center;
-                    gap: 12px;
-                    margin-bottom: 22px;
-                }
-                .section-step {
-                    width: 32px; height: 32px;
-                    background: linear-gradient(135deg, #3b82f6, #6366f1);
-                    border-radius: 50%;
-                    display: flex; align-items: center; justify-content: center;
-                    color: white;
-                    font-size: 14px;
-                    font-weight: 800;
-                    flex-shrink: 0;
-                    box-shadow: 0 4px 12px rgba(59,130,246,0.35);
-                }
-                .section-step.done {
-                    background: linear-gradient(135deg, #10b981, #059669);
-                    box-shadow: 0 4px 12px rgba(16,185,129,0.35);
-                }
-                .section-title {
-                    font-size: 17px;
+                    gap: 10px;
+                    margin-bottom: 16px;
+                    font-size: 13px;
                     font-weight: 700;
-                    color: #1e293b;
-                    letter-spacing: -0.2px;
+                    color: #374151;
+                }
+                .bk-step-badge {
+                    width: 22px; height: 22px;
+                    border-radius: 50%;
+                    background: #e2e8f0;
+                    display: flex; align-items: center; justify-content: center;
+                    font-size: 11px;
+                    font-weight: 800;
+                    color: #64748b;
+                    flex-shrink: 0;
+                }
+                .bk-step-badge.active {
+                    background: #2563eb;
+                    color: #fff;
+                }
+                .bk-step-badge.done {
+                    background: #10b981;
+                    color: #fff;
                 }
 
-                /* ── Vehicle cards ── */
-                .vehicle-cards {
+                /* Vehicle selector */
+                .bk-vehicle-row {
                     display: grid;
                     grid-template-columns: 1fr 1fr;
-                    gap: 16px;
+                    gap: 10px;
                 }
-                .vehicle-card {
-                    border: 2px solid #e2e8f0;
-                    border-radius: 16px;
-                    padding: 22px 16px;
+                .bk-vehicle-btn {
+                    border: 1.5px solid #e2e8f0;
+                    border-radius: 10px;
+                    background: #f8fafc;
+                    padding: 14px 10px;
                     display: flex;
                     flex-direction: column;
                     align-items: center;
-                    gap: 12px;
+                    gap: 8px;
                     cursor: pointer;
-                    transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
-                    background: white;
+                    transition: all 0.2s;
                     position: relative;
-                    overflow: hidden;
                 }
-                .vehicle-card::before {
-                    content: '';
-                    position: absolute;
-                    inset: 0;
-                    background: linear-gradient(135deg, #eff6ff, #dbeafe);
-                    opacity: 0;
-                    transition: opacity 0.25s;
+                .bk-vehicle-btn:hover { border-color: #93c5fd; background: #eff6ff; }
+                .bk-vehicle-btn.sel {
+                    border-color: #2563eb;
+                    background: #eff6ff;
                 }
-                .vehicle-card:hover { border-color: #93c5fd; transform: translateY(-3px); box-shadow: 0 8px 24px rgba(59,130,246,0.15); }
-                .vehicle-card:hover::before { opacity: 1; }
-                .vehicle-card.selected { border-color: #3b82f6; background: linear-gradient(135deg, #eff6ff, #dbeafe); transform: translateY(-3px); box-shadow: 0 8px 24px rgba(59,130,246,0.25); }
-                .vehicle-card svg, .vehicle-card > * { position: relative; z-index: 1; }
-                .vehicle-name { font-size: 14px; font-weight: 700; color: #1e293b; }
-                .vehicle-floors { font-size: 11px; color: #64748b; font-weight: 500; background: #f1f5f9; padding: 4px 10px; border-radius: 20px; }
-                .vehicle-card.selected .vehicle-floors { background: #dbeafe; color: #1d4ed8; }
-                .vehicle-selected-badge {
-                    position: absolute;
-                    top: 10px; right: 10px;
-                    width: 22px; height: 22px;
-                    background: #3b82f6;
+                .bk-vehicle-btn svg { color: #475569; }
+                .bk-vehicle-btn.sel svg { color: #2563eb; }
+                .bk-vehicle-label { font-size: 12px; font-weight: 600; color: #374151; }
+                .bk-vehicle-btn.sel .bk-vehicle-label { color: #1d4ed8; }
+                .bk-vehicle-check {
+                    position: absolute; top: 7px; right: 7px;
+                    width: 18px; height: 18px;
+                    background: #2563eb;
                     border-radius: 50%;
                     display: flex; align-items: center; justify-content: center;
-                    color: white;
-                    box-shadow: 0 2px 8px rgba(59,130,246,0.5);
+                    color: #fff;
+                    font-size: 10px;
                 }
 
-                /* ── Time inputs ── */
-                .time-grid {
+                /* Time inputs */
+                .bk-time-grid {
                     display: grid;
                     grid-template-columns: 1fr 1fr;
-                    gap: 16px;
+                    gap: 12px;
+                    margin-bottom: 12px;
                 }
-                @media(max-width: 500px) { .time-grid { grid-template-columns: 1fr; } }
-                .time-field label {
+                .bk-field label {
                     display: block;
-                    font-size: 11px;
+                    font-size: 10px;
                     font-weight: 700;
                     color: #94a3b8;
-                    letter-spacing: 0.08em;
                     text-transform: uppercase;
-                    margin-bottom: 6px;
+                    letter-spacing: 0.06em;
+                    margin-bottom: 5px;
                 }
-                .time-field input, .time-field select {
+                .bk-field input, .bk-field select {
                     width: 100%;
-                    padding: 12px 14px;
+                    padding: 9px 11px;
                     border: 1.5px solid #e2e8f0;
-                    border-radius: 12px;
-                    font-size: 14px;
+                    border-radius: 8px;
+                    font-size: 13px;
                     font-weight: 600;
                     color: #1e293b;
                     background: #f8fafc;
-                    transition: all 0.2s;
                     outline: none;
+                    transition: border-color 0.2s;
                 }
-                .time-field input:focus, .time-field select:focus {
-                    border-color: #3b82f6;
-                    background: white;
-                    box-shadow: 0 0 0 3px rgba(59,130,246,0.12);
+                .bk-field input:focus, .bk-field select:focus {
+                    border-color: #2563eb;
+                    background: #fff;
                 }
-
-                .exit-time-info {
-                    margin-top: 14px;
-                    padding: 12px 16px;
-                    background: linear-gradient(135deg, #eff6ff, #e0f2fe);
-                    border-radius: 12px;
+                .bk-exit-info {
                     display: flex;
                     align-items: center;
-                    gap: 10px;
-                    font-size: 13px;
+                    gap: 8px;
+                    background: #eff6ff;
+                    border: 1px solid #bfdbfe;
+                    border-radius: 8px;
+                    padding: 9px 13px;
+                    font-size: 12px;
                     font-weight: 600;
                     color: #1d4ed8;
-                    border: 1px solid #bfdbfe;
                 }
 
-                /* ── Building & floor selection ── */
-                .floor-tabs {
+                /* Floor section */
+                .bk-floor-inner {
+                    display: flex;
+                    gap: 14px;
+                    align-items: flex-start;
+                }
+                .bk-floor-list {
+                    flex: 1;
                     display: flex;
                     flex-direction: column;
-                    gap: 8px;
-                    margin-top: 20px;
+                    gap: 6px;
+                    min-width: 0;
                 }
-                .floor-tab {
+                .bk-floor-item {
                     display: flex;
                     align-items: center;
-                    gap: 12px;
-                    padding: 12px 16px;
+                    gap: 8px;
+                    padding: 8px 12px;
                     border: 1.5px solid #e2e8f0;
-                    border-radius: 12px;
+                    border-radius: 8px;
                     cursor: pointer;
-                    transition: all 0.2s;
-                    background: white;
-                    font-size: 14px;
+                    transition: all 0.18s;
+                    background: #fff;
+                    font-size: 12px;
                     font-weight: 600;
-                    color: #475569;
+                    color: #374151;
                 }
-                .floor-tab.disabled { opacity: 0.4; cursor: not-allowed; }
-                .floor-tab.selectable:hover { border-color: #3b82f6; color: #1d4ed8; background: #eff6ff; }
-                .floor-tab.selected { border-color: #3b82f6; background: linear-gradient(135deg, #eff6ff, #dbeafe); color: #1d4ed8; }
-                .floor-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
-                .floor-dot.motorcycle { background: linear-gradient(135deg, #f59e0b, #f97316); }
-                .floor-dot.car { background: linear-gradient(135deg, #3b82f6, #6366f1); }
-                .floor-tab-slots { margin-left: auto; font-size: 11px; font-weight: 600; background: #f1f5f9; padding: 3px 9px; border-radius: 20px; }
-                .floor-tab.selected .floor-tab-slots { background: #bfdbfe; color: #1d4ed8; }
+                .bk-floor-item:hover { border-color: #93c5fd; background: #eff6ff; }
+                .bk-floor-item.disabled { opacity: 0.45; cursor: not-allowed; }
+                .bk-floor-item.sel { border-color: #2563eb; background: #eff6ff; color: #1d4ed8; }
+                .bk-floor-slots {
+                    margin-left: auto;
+                    background: #10b981;
+                    color: #fff;
+                    font-size: 11px;
+                    font-weight: 700;
+                    padding: 2px 8px;
+                    border-radius: 20px;
+                    white-space: nowrap;
+                }
+                .bk-floor-check {
+                    color: #2563eb;
+                    font-size: 13px;
+                    font-weight: 800;
+                    margin-left: 2px;
+                }
 
-                /* ── Slot grid ── */
-                .slot-section-title {
+                /* Slot grid card */
+                .bk-slot-card {
+                    background: #fff;
+                    border-radius: 14px;
+                    border: 1px solid #e2e8f0;
+                    padding: 18px 20px;
+                    box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+                    margin-bottom: 16px;
+                }
+                .bk-slot-header {
                     display: flex;
                     align-items: center;
                     justify-content: space-between;
-                    margin-bottom: 16px;
+                    margin-bottom: 14px;
+                    flex-wrap: wrap;
+                    gap: 8px;
                 }
-                .slot-legend {
+                .bk-slot-legend {
                     display: flex;
-                    gap: 14px;
+                    gap: 16px;
+                    align-items: center;
                     flex-wrap: wrap;
                 }
-                .slot-legend-item {
+                .bk-legend-item {
                     display: flex;
                     align-items: center;
                     gap: 6px;
@@ -651,406 +496,355 @@ const BookingPage = () => {
                     font-weight: 600;
                     color: #64748b;
                 }
-                .legend-dot {
-                    width: 12px; height: 12px;
-                    border-radius: 4px;
+                .bk-legend-dot {
+                    width: 14px; height: 14px;
+                    border-radius: 3px;
                 }
-                .ld-available { background: linear-gradient(135deg, #d1fae5, #a7f3d0); border: 1px solid #6ee7b7; }
-                .ld-occupied { background: #fee2e2; border: 1px solid #fca5a5; }
-                .ld-selected { background: linear-gradient(135deg, #3b82f6, #6366f1); }
+                .ld-free { background: #fff; border: 1.5px solid #cbd5e1; }
+                .ld-sel { background: #2563eb; }
+                .ld-occ { background: #f1f5f9; border: 1.5px solid #e2e8f0; }
 
-                .slot-grid {
-                    display: grid;
-                    grid-template-columns: repeat(5, 1fr);
-                    gap: 10px;
+                /* Bottom bar */
+                .bk-footer {
+                    position: fixed;
+                    bottom: 0; left: 0; right: 0;
+                    background: #fff;
+                    border-top: 1px solid #e2e8f0;
+                    padding: 14px 32px;
+                    display: flex;
+                    align-items: center;
+                    gap: 20px;
+                    z-index: 100;
+                    box-shadow: 0 -4px 16px rgba(0,0,0,0.06);
                 }
-                @media(max-width: 480px) { .slot-grid { grid-template-columns: repeat(4, 1fr); } }
-
-                .slot-cell {
-                    position: relative;
-                    aspect-ratio: 1;
-                    border-radius: 12px;
+                .bk-footer-steps {
                     display: flex;
                     flex-direction: column;
-                    align-items: center;
-                    justify-content: center;
                     gap: 4px;
-                    cursor: pointer;
-                    border: 2px solid transparent;
-                    transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
-                    font-size: 11px;
-                    background: white;
-                    outline: none;
+                    min-width: 180px;
                 }
-                .slot-number { font-weight: 800; font-size: 12px; }
-                .slot-icon { width: 20px; height: 20px; }
-
-                .slot-available {
-                    background: linear-gradient(135deg, #f0fdf4, #dcfce7);
-                    border-color: #86efac;
-                    color: #166534;
+                .bk-footer-label {
+                    font-size: 12px;
+                    font-weight: 700;
+                    color: #1e293b;
                 }
-                .slot-available:hover {
-                    border-color: #22c55e;
-                    transform: scale(1.08);
-                    box-shadow: 0 6px 20px rgba(34,197,94,0.25);
-                    z-index: 5;
+                .bk-footer-bar {
+                    height: 4px;
+                    border-radius: 4px;
+                    background: #e2e8f0;
+                    overflow: hidden;
+                    width: 160px;
                 }
-                .slot-occupied {
-                    background: #fef2f2;
-                    border-color: #fca5a5;
-                    color: #ef4444;
-                    cursor: not-allowed;
-                    opacity: 0.65;
+                .bk-footer-bar-fill {
+                    height: 100%;
+                    border-radius: 4px;
+                    background: #2563eb;
+                    transition: width 0.4s ease;
                 }
-                .slot-selected {
-                    background: linear-gradient(135deg, #3b82f6, #6366f1) !important;
-                    border-color: #6366f1 !important;
-                    color: white !important;
-                    transform: scale(1.1);
-                    box-shadow: 0 8px 24px rgba(99,102,241,0.4);
-                    z-index: 5;
-                }
-                .slot-check {
-                    position: absolute;
-                    top: 4px; right: 4px;
-                    width: 16px; height: 16px;
-                    background: rgba(255,255,255,0.3);
-                    border-radius: 50%;
-                    display: flex; align-items: center; justify-content: center;
-                }
-                .slot-x {
-                    position: absolute;
-                    top: 3px; right: 5px;
-                    font-size: 9px;
-                    color: #ef4444;
-                    font-weight: 900;
-                }
-
-                /* ── Summary card (right column) ── */
-                .summary-card {
-                    background: white;
-                    border-radius: 20px;
-                    border: 1px solid #e2e8f0;
-                    padding: 28px;
-                    box-shadow: 0 4px 24px rgba(0,0,0,0.07);
-                    position: sticky;
-                    top: 140px;
-                }
-                .summary-title { font-size: 17px; font-weight: 800; color: #1e293b; margin-bottom: 20px; letter-spacing: -0.2px; }
-                .summary-parking-name {
-                    font-size: 15px; font-weight: 700; color: #1d4ed8;
-                    padding: 12px;
-                    background: linear-gradient(135deg, #eff6ff, #dbeafe);
-                    border-radius: 12px;
-                    margin-bottom: 20px;
-                    border: 1px solid #bfdbfe;
-                }
-                .summary-row {
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    padding: 9px 0;
-                    border-bottom: 1px solid #f1f5f9;
+                .bk-footer-summary {
+                    flex: 1;
                     font-size: 13px;
-                }
-                .summary-row:last-child { border-bottom: none; }
-                .summary-label { color: #64748b; font-weight: 600; }
-                .summary-value { color: #1e293b; font-weight: 700; }
-                .summary-value.empty { color: #cbd5e1; font-style: italic; font-weight: 500; }
-                .summary-total {
-                    margin-top: 16px;
-                    padding: 16px;
-                    background: linear-gradient(135deg, #f0fdf4, #dcfce7);
-                    border-radius: 14px;
+                    font-weight: 600;
+                    color: #475569;
                     display: flex;
-                    justify-content: space-between;
                     align-items: center;
-                    border: 1px solid #86efac;
+                    gap: 6px;
+                    flex-wrap: wrap;
                 }
-                .summary-total-label { font-size: 14px; font-weight: 700; color: #166534; }
-                .summary-total-price { font-size: 22px; font-weight: 900; color: #15803d; letter-spacing: -0.5px; }
-
-                /* ── Confirm button ── */
-                .confirm-btn {
-                    width: 100%;
-                    margin-top: 20px;
-                    padding: 16px;
+                .bk-footer-bullet { color: #94a3b8; }
+                .bk-confirm-btn {
+                    padding: 13px 32px;
                     border: none;
-                    border-radius: 14px;
-                    font-size: 15px;
+                    border-radius: 10px;
+                    font-size: 14px;
                     font-weight: 800;
                     cursor: pointer;
-                    transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+                    transition: all 0.2s;
+                    white-space: nowrap;
                     letter-spacing: 0.01em;
                 }
-                .confirm-btn.ready {
-                    background: linear-gradient(135deg, #3b82f6, #6366f1);
-                    color: white;
-                    box-shadow: 0 8px 24px rgba(99,102,241,0.4);
+                .bk-confirm-btn.ready {
+                    background: #2563eb;
+                    color: #fff;
+                    box-shadow: 0 4px 14px rgba(37,99,235,0.35);
                 }
-                .confirm-btn.ready:hover { transform: translateY(-3px) scale(1.02); box-shadow: 0 14px 32px rgba(99,102,241,0.5); }
-                .confirm-btn.ready:active { transform: scale(0.98); }
-                .confirm-btn.disabled {
+                .bk-confirm-btn.ready:hover {
+                    background: #1d4ed8;
+                    transform: translateY(-1px);
+                    box-shadow: 0 6px 20px rgba(37,99,235,0.45);
+                }
+                .bk-confirm-btn.disabled {
                     background: #f1f5f9;
                     color: #94a3b8;
                     cursor: not-allowed;
                 }
-                .confirm-steps { margin-top: 14px; font-size: 12px; color: #94a3b8; text-align: center; font-weight: 500; }
-                .step-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin: 0 3px; background: #e2e8f0; }
-                .step-dot.done { background: #3b82f6; }
 
-                /* ── Empty state ── */
-                .empty-state {
-                    text-align: center;
-                    padding: 40px 20px;
-                    color: #94a3b8;
+                /* Loading / error */
+                .bk-loading {
+                    display: flex; align-items: center; justify-content: center;
+                    padding: 28px; gap: 10px;
+                    color: #64748b; font-size: 12px; font-weight: 600;
                 }
-                .empty-state-icon { font-size: 48px; margin-bottom: 12px; }
-                .empty-state-text { font-size: 14px; font-weight: 600; }
+                .bk-spinner {
+                    width: 20px; height: 20px;
+                    border: 2.5px solid #e2e8f0;
+                    border-top-color: #2563eb;
+                    border-radius: 50%;
+                    animation: bk-spin 0.7s linear infinite;
+                }
+                @keyframes bk-spin { to { transform: rotate(360deg); } }
+                .bk-error {
+                    text-align: center; padding: 20px; color: #ef4444;
+                    font-size: 12px; font-weight: 600;
+                }
+                .bk-retry {
+                    margin-top: 8px; background: none; border: 1.5px solid #ef4444;
+                    border-radius: 6px; padding: 5px 14px; color: #ef4444; font-weight: 700;
+                    cursor: pointer; font-size: 12px;
+                }
 
-                /* ── Fade-in animation ── */
-                @keyframes fadeSlideIn {
-                    from { opacity: 0; transform: translateY(14px); }
+                @keyframes fadeUp {
+                    from { opacity: 0; transform: translateY(10px); }
                     to { opacity: 1; transform: translateY(0); }
                 }
-                .animate-in { animation: fadeSlideIn 0.35s ease-out forwards; }
-
-                /* ── Spinner ── */
-                @keyframes spin {
-                    to { transform: rotate(360deg); }
-                }
-
-                /* ── Error state ── */
-                .error-state {
-                    display: flex;
-                    flex-direction: column;
-                    align-items: center;
-                    padding: 24px;
-                    gap: 10px;
-                    color: #ef4444;
-                    font-size: 13px;
-                    font-weight: 600;
-                    text-align: center;
-                }
-                .error-state button {
-                    margin-top: 8px;
-                    padding: 8px 20px;
-                    border: 1.5px solid #ef4444;
-                    border-radius: 8px;
-                    background: white;
-                    color: #ef4444;
-                    font-weight: 700;
-                    cursor: pointer;
-                    transition: all 0.2s;
-                }
-                .error-state button:hover { background: #fef2f2; }
+                .fade-up { animation: fadeUp 0.3s ease-out forwards; }
             `}</style>
 
-            <div className="booking-page">
+            <div className="bk-page">
                 <Header />
 
-                {/* Sticky top bar */}
-                <div className="page-top">
-                    <button className="back-btn" onClick={() => navigate('/find-parking')}>
-                        <ArrowLeftIcon /> Back
-                    </button>
-                    <h1 className="page-title">Reserve a Parking Spot</h1>
-                    <span className="page-subtitle">{parkingSpot.title}</span>
+                {/* Page Title Bar */}
+                <div className="bk-header">
+                    <h1>Đặt Chỗ Gửi Xe Thông Minh</h1>
+                    <span className="bk-header-sub">{parkingSpot.title}</span>
                 </div>
 
-                <div className="booking-content">
-                    <div>
-                        {/* Step 1 — Vehicle */}
-                        <div className="section-card animate-in">
-                            <div className="section-header">
-                                <div className={`section-step ${vehicleType ? 'done' : ''}`}>
-                                    {vehicleType ? <CheckIcon /> : '1'}
-                                </div>
-                                <span className="section-title">Select Your Vehicle Type</span>
+                <div className="bk-body">
+                    {/* ── TOP 3 COLUMNS ── */}
+                    <div className="bk-top">
+
+                        {/* ── STEP 1: Vehicle ── */}
+                        <div className="bk-card">
+                            <div className="bk-card-title">
+                                <span className={`bk-step-badge ${vehicleType ? 'done' : 'active'}`}>
+                                    {vehicleType ? '✓' : '1'}
+                                </span>
+                                Chọn Loại Phương Tiện
                             </div>
-                            <div className="vehicle-cards">
-                                <div
-                                    className={`vehicle-card ${vehicleType === 'motorcycle' ? 'selected' : ''}`}
+                            <div className="bk-vehicle-row">
+                                {/* Motorcycle */}
+                                <button
+                                    className={`bk-vehicle-btn ${vehicleType === 'motorcycle' ? 'sel' : ''}`}
                                     onClick={() => setVehicleType('motorcycle')}
                                 >
-                                    {vehicleType === 'motorcycle' && <span className="vehicle-selected-badge"><CheckIcon /></span>}
-                                    <MotorcycleIcon />
-                                    <span className="vehicle-name">Motorcycle</span>
-                                    <span className="vehicle-floors">
-                                    {motorcycleFloorNums > 0 ? `${motorcycleFloorNums} floor${motorcycleFloorNums > 1 ? 's' : ''}` : 'No floors'}
-                                </span>
-                                </div>
-                                <div
-                                    className={`vehicle-card ${vehicleType === 'car' ? 'selected' : ''}`}
+                                    {vehicleType === 'motorcycle' && <span className="bk-vehicle-check">✓</span>}
+                                    <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" width="40" height="40">
+                                        <circle cx="9" cy="34" r="6" />
+                                        <circle cx="39" cy="34" r="6" />
+                                        <path d="M15 34h18M24 16l4.5 10.5H16l3-6H24" />
+                                        <path d="M28.5 16H35l4.5 7.5" />
+                                        <circle cx="36" cy="14.5" r="2.5" />
+                                    </svg>
+                                    <span className="bk-vehicle-label">Xe máy</span>
+
+                                </button>
+                                {/* Car */}
+                                <button
+                                    className={`bk-vehicle-btn ${vehicleType === 'car' ? 'sel' : ''}`}
                                     onClick={() => setVehicleType('car')}
                                 >
-                                    {vehicleType === 'car' && <span className="vehicle-selected-badge"><CheckIcon /></span>}
-                                    <CarIcon />
-                                    <span className="vehicle-name">Car</span>
-                                    <span className="vehicle-floors">
-                                    {carFloorNums > 0 ? `${carFloorNums} floor${carFloorNums > 1 ? 's' : ''}` : 'No floors'}
-                                </span>
-                                </div>
+                                    {vehicleType === 'car' && <span className="bk-vehicle-check">✓</span>}
+                                    <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" width="40" height="40">
+                                        <rect x="4" y="22" width="40" height="14" rx="3" />
+                                        <path d="M10 22l4.5-9h19L37 22" />
+                                        <circle cx="13" cy="36" r="4" />
+                                        <circle cx="35" cy="36" r="4" />
+                                        <rect x="18" y="14" width="12" height="8" rx="1.5" />
+                                        <path d="M4 28h3M41 28h3" />
+                                    </svg>
+                                    <span className="bk-vehicle-label">Ô tô</span>
+
+                                </button>
                             </div>
                         </div>
 
-                        {/* Step 2 — Time */}
-                        <div className="section-card animate-in" style={{ animationDelay: '0.05s' }}>
-                            <div className="section-header">
-                                <div className={`section-step ${entryDate && duration ? 'done' : ''}`}>
-                                    {entryDate && duration ? <CheckIcon /> : '2'}
-                                </div>
-                                <span className="section-title">Entry Time &amp; Duration</span>
+                        {/* ── STEP 2: Time ── */}
+                        <div className="bk-card">
+                            <div className="bk-card-title">
+                                <span className={`bk-step-badge ${entryDate && duration ? 'done' : 'active'}`}>
+                                    {entryDate && duration ? '✓' : '2'}
+                                </span>
+                                Thời Gian Vào &amp; Thời Lượng
                             </div>
-                            <div className="time-grid">
-                                <div className="time-field">
-                                    <label>Entry Date &amp; Time</label>
+                            <div className="bk-time-grid">
+                                <div className="bk-field">
+                                    <label>Ngày &amp; Giờ Vào</label>
                                     <input
                                         type="datetime-local"
                                         value={entryDate}
                                         onChange={e => setEntryDate(e.target.value)}
                                     />
                                 </div>
-                                <div className="time-field">
-                                    <label>Duration</label>
+                                <div className="bk-field">
+                                    <label>Thời Lượng</label>
                                     <select value={duration} onChange={e => setDuration(Number(e.target.value))}>
                                         {[1, 2, 3, 4, 5, 6, 8, 10, 12, 24].map(h => (
-                                            <option key={h} value={h}>{h} hour{h > 1 ? 's' : ''}</option>
+                                            <option key={h} value={h}>{h} giờ</option>
                                         ))}
                                     </select>
                                 </div>
                             </div>
                             {entryDate && (
-                                <div className="exit-time-info">
-                                    <ClockIcon />
-                                    Estimated exit time:&nbsp;
-                                    <strong>
-                                        {exitTime.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })}&nbsp;
-                                        {exitTime.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
-                                    </strong>
+                                <div className="bk-exit-info">
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                        <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
+                                    </svg>
+                                    Dự kiến ra: <strong>{fmtExit()}</strong>
                                 </div>
                             )}
                         </div>
 
-                        {/* Step 3 — Floor */}
-                        <div className="section-card animate-in" style={{ animationDelay: '0.1s' }}>
-                            <div className="section-header">
-                                <div className={`section-step ${selectedFloor ? 'done' : ''}`}>
-                                    {selectedFloor ? <CheckIcon /> : '3'}
-                                </div>
-                                <span className="section-title">Select Building Floor</span>
+                        {/* ── STEP 3: Floor ── */}
+                        <div className="bk-card">
+                            <div className="bk-card-title">
+                                <span className={`bk-step-badge ${selectedFloor ? 'done' : vehicleType ? 'active' : ''}`}>
+                                    {selectedFloor ? '✓' : '3'}
+                                </span>
+                                Chọn Tầng
                             </div>
 
-                            {/* 3D building */}
                             {floorsLoading ? (
-                                <LoadingSpinner />
+                                <div className="bk-loading"><div className="bk-spinner" /> Đang tải...</div>
                             ) : floorsError ? (
-                                <div className="error-state">
-                                    <span>⚠️ {floorsError}</span>
-                                    <button onClick={() => window.location.reload()}>Retry</button>
+                                <div className="bk-error">
+                                    ⚠️ {floorsError}
+                                    <br />
+                                    <button className="bk-retry" onClick={() => window.location.reload()}>Thử lại</button>
                                 </div>
                             ) : (
-                                <BuildingVisual
-                                    selectedFloor={selectedFloor}
-                                    vehicleType={vehicleType}
-                                    onSelectFloor={handleFloorSelect}
-                                    floors={floors}
-                                />
+                                <div className="bk-floor-inner">
+                                    {/* 3D iso */}
+                                    <div style={{ flexShrink: 0 }}>
+                                        <IsoBuilding
+                                            floors={floors}
+                                            selectedFloor={selectedFloor}
+                                            onSelect={f => setSelectedFloor(f)}
+                                        />
+                                    </div>
+
+                                    {/* Floor list */}
+                                    <div className="bk-floor-list">
+                                        {floors.length === 0 ? (
+                                            <div style={{ color: '#94a3b8', fontSize: 12, padding: '8px 0' }}>Không có tầng</div>
+                                        ) : (
+                                            floors.map(f => {
+                                                const isSel = selectedFloor?._id === f._id;
+                                                return (
+                                                    <div
+                                                        key={f._id}
+                                                        className={`bk-floor-item ${isSel ? 'sel' : ''}`}
+                                                        onClick={() => setSelectedFloor(f)}
+                                                    >
+                                                        <span>{f.name || `Tầng ${f.floorNumber}`}</span>
+                                                        {isSel && <span className="bk-floor-check">✓</span>}
+                                                        <span className="bk-floor-slots">
+                                                            {isSel ? `${availableCount} chỗ` : `${f.totalSlots ?? '?'} chỗ`}
+                                                        </span>
+                                                    </div>
+                                                );
+                                            })
+                                        )}
+                                    </div>
+                                </div>
                             )}
-
-                            {/* Floor list tabs */}
-                            <div className="floor-tabs">
-                                {floorsLoading ? (
-                                    <div style={{ textAlign: 'center', padding: '16px', color: '#94a3b8', fontSize: '13px' }}>Loading floors...</div>
-                                ) : floorsError ? null : floors.length === 0 ? (
-                                    <div style={{ textAlign: 'center', padding: '16px', color: '#94a3b8', fontSize: '13px' }}>No floors available.</div>
-                                ) : (
-                                    floors.map((f) => {
-                                        const selectable = vehicleType ? (f.vehicleType === vehicleType || f.vehicleType === 'both') : false;
-                                        const isSelected = selectedFloor?._id === f._id;
-                                        const dotClass = f.vehicleType === 'car' ? 'car' : 'motorcycle';
-                                        return (
-                                            <div
-                                                key={f._id}
-                                                className={`floor-tab ${!vehicleType || !selectable ? 'disabled' : 'selectable'} ${isSelected ? 'selected' : ''}`}
-                                                onClick={() => selectable && handleFloorSelect(f)}
-                                            >
-                                                <span className={`floor-dot ${dotClass}`}></span>
-                                                <span>{f.name || `Floor ${f.floorNumber}`}</span>
-                                                <span style={{ fontSize: '12px', color: '#94a3b8', fontWeight: 500 }}>
-                                                    {f.vehicleType === 'motorcycle' ? '🏍 Motorcycle' : f.vehicleType === 'car' ? '🚗 Car' : '🏍🚗 All'}
-                                                </span>
-                                                <span className="floor-tab-slots">
-                                                    {isSelected ? `${availableCount} avail.` : `${f.totalSlots ?? '?'} slots`}
-                                                </span>
-                                            </div>
-                                        );
-                                    })
-                                )}
-                            </div>
-                        </div>
-
-                        {/* Step 4 — Slot */}
-                        {selectedFloor && (
-                            <div className="section-card animate-in" style={{ animationDelay: '0.15s' }}>
-                                <div className="section-header">
-                                    <div className={`section-step ${selectedSlot ? 'done' : ''}`}>
-                                        {selectedSlot ? <CheckIcon /> : '4'}
-                                    </div>
-                                    <span className="section-title">Choose a Slot — {floorLabel(selectedFloor)}</span>
-                                </div>
-
-                                {/* Legend */}
-                                <div className="slot-section-title">
-                                    <span style={{ fontSize: '13px', color: '#64748b', fontWeight: 600 }}>
-                                        {availableCount} of {selectedFloor?.totalSlots ?? slots.length} slots available
-                                    </span>
-                                    <div className="slot-legend">
-                                        <div className="slot-legend-item"><span className="legend-dot ld-available"></span>Available</div>
-                                        <div className="slot-legend-item"><span className="legend-dot ld-occupied"></span>Occupied</div>
-                                        <div className="slot-legend-item"><span className="legend-dot ld-selected"></span>Selected</div>
-                                    </div>
-                                </div>
-
-                                <SlotGrid
-                                    slots={slots}
-                                    selectedSlot={selectedSlot}
-                                    onSelect={setSelectedSlot}
-                                    vehicleType={vehicleType}
-                                />
-                            </div>
-                        )}
-
-                        {!selectedFloor && (
-                            <div className="section-card" style={{ opacity: 0.5 }}>
-                                <div className="empty-state">
-                                    <div className="empty-state-icon">🅿️</div>
-                                    <div className="empty-state-text">Select a floor above to see available slots</div>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* ── Reserve Button ── */}
-                        <div className="reserve-btn-wrap animate-in" style={{ animationDelay: '0.2s' }}>
-                            <button
-                                id="reserve-spot-btn"
-                                className={`reserve-btn ${vehicleType && selectedFloor && selectedSlot ? 'ready' : 'disabled'}`}
-                                onClick={handleReserve}
-                                disabled={!vehicleType || !selectedFloor || !selectedSlot}
-                            >
-                                <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/></svg>
-                                Reserve This Spot
-                            </button>
-                            <div className="reserve-hint">
-                                <span className={`step-dot ${vehicleType ? 'done' : ''}`}></span>
-                                <span className={`step-dot ${entryDate ? 'done' : ''}`}></span>
-                                <span className={`step-dot ${selectedFloor ? 'done' : ''}`}></span>
-                                <span className={`step-dot ${selectedSlot ? 'done' : ''}`}></span>
-                                &nbsp;{[!!vehicleType, !!entryDate, !!selectedFloor, !!selectedSlot].filter(Boolean).length}/4 steps completed
-                            </div>
                         </div>
                     </div>
+
+                    {/* ── STEP 4: Slot grid ── */}
+                    {selectedFloor && (
+                        <div className="bk-slot-card fade-up">
+                            <div className="bk-slot-header">
+                                <div className="bk-card-title" style={{ marginBottom: 0 }}>
+                                    <span className={`bk-step-badge ${selectedSlot ? 'done' : 'active'}`}>
+                                        {selectedSlot ? '✓' : '4'}
+                                    </span>
+                                    Chọn Vị Trí Đỗ ({selectedFloor.name || `Tầng ${selectedFloor.floorNumber}`})
+                                </div>
+                                <div className="bk-slot-legend">
+                                    <span className="bk-legend-item">
+                                        <span className="bk-legend-dot ld-free" /> Trống
+                                    </span>
+                                    <span className="bk-legend-item">
+                                        <span className="bk-legend-dot ld-sel" /> Đang chọn
+                                    </span>
+                                    <span className="bk-legend-item">
+                                        <span className="bk-legend-dot ld-occ" /> Đã đặt
+                                    </span>
+                                </div>
+                            </div>
+                            <ParkingMap
+                                slots={slots}
+                                selectedSlot={selectedSlot}
+                                onSelect={setSelectedSlot}
+                            />
+                        </div>
+                    )}
+
+                    {!selectedFloor && (
+                        <div className="bk-slot-card" style={{ opacity: 0.5, textAlign: 'center', padding: '28px', color: '#94a3b8' }}>
+                            <div style={{ fontSize: 32, marginBottom: 8 }}>🅿️</div>
+                            <div style={{ fontSize: 13, fontWeight: 600 }}>Chọn tầng để xem vị trí đỗ xe</div>
+                        </div>
+                    )}
+                </div>
+
+                {/* ── BOTTOM FOOTER BAR ── */}
+                <div className="bk-footer">
+                    <div className="bk-footer-steps">
+                        <div className="bk-footer-label">
+                            Bước {Math.min(stepsDone + 1, 4)}/4 —{' '}
+                            {!vehicleType ? 'Chọn loại phương tiện'
+                                : !selectedFloor ? 'Chọn tầng đỗ xe'
+                                    : !selectedSlot ? 'Chọn vị trí đỗ'
+                                        : 'Hoàn tất chọn vị trí'}
+                        </div>
+                        <div className="bk-footer-bar">
+                            <div className="bk-footer-bar-fill" style={{ width: `${(stepsDone / 4) * 100}%` }} />
+                        </div>
+                    </div>
+
+                    <div className="bk-footer-summary">
+                        {vehicleType && (
+                            <>{vehicleType === 'car' ? 'Ô tô' : 'Xe máy'}</>
+                        )}
+                        {selectedFloor && (
+                            <>
+                                <span className="bk-footer-bullet">•</span>
+                                {selectedFloor.name || `Tầng ${selectedFloor.floorNumber}`}
+                            </>
+                        )}
+                        {selectedSlotLabel && (
+                            <>
+                                <span className="bk-footer-bullet">•</span>
+                                Vị trí {selectedSlotLabel}
+                            </>
+                        )}
+                        {duration && (
+                            <>
+                                <span className="bk-footer-bullet">•</span>
+                                {duration} giờ
+                            </>
+                        )}
+                    </div>
+
+                    <button
+                        id="confirm-booking-btn"
+                        className={`bk-confirm-btn ${vehicleType && selectedFloor && selectedSlot ? 'ready' : 'disabled'}`}
+                        onClick={handleReserve}
+                        disabled={!vehicleType || !selectedFloor || !selectedSlot}
+                    >
+                        Xác nhận đặt chỗ
+                    </button>
                 </div>
             </div>
         </>
