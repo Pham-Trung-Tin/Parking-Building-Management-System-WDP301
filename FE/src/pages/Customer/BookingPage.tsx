@@ -28,20 +28,29 @@ const generateSlots = (totalSlots: number, floorIndex: number) => {
 };
 
 // ── Isometric Building ─────────────────────────────────────────────────────────
-const IsoBuilding = ({ floors, selectedFloor, onSelect }: {
+const IsoBuilding = ({ floors, selectedFloor, vehicleType, onSelect }: {
     floors: Floor[];
     selectedFloor: Floor | null;
+    vehicleType: string | null;
     onSelect: (f: Floor) => void;
 }) => {
     const sorted = [...floors].sort((a, b) => b.floorNumber - a.floorNumber);
     const W = 180, H = 44, D = 26, startX = 70, startY = 20, gap = 4;
 
-    // Tất cả tầng đều có thể chọn — không lọc theo loại xe
-    const isSelectable = (_f: Floor) => true;
+    const isComp = (f: Floor) => true;
 
-    const face = (f: Floor) => selectedFloor?._id === f._id ? '#2563eb' : '#dbeafe';
-    const side = (f: Floor) => selectedFloor?._id === f._id ? '#1d4ed8' : '#bfdbfe';
-    const top  = (f: Floor) => selectedFloor?._id === f._id ? '#93c5fd' : '#e0f2fe';
+    const face = (f: Floor) => {
+        if (!isComp(f)) return '#f1f5f9';
+        return selectedFloor?._id === f._id ? '#2563eb' : '#dbeafe';
+    };
+    const side = (f: Floor) => {
+        if (!isComp(f)) return '#e2e8f0';
+        return selectedFloor?._id === f._id ? '#1d4ed8' : '#bfdbfe';
+    };
+    const top  = (f: Floor) => {
+        if (!isComp(f)) return '#f8fafc';
+        return selectedFloor?._id === f._id ? '#93c5fd' : '#e0f2fe';
+    };
 
     if (sorted.length === 0) return (
         <div style={{ height: 180, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: 13 }}>
@@ -56,24 +65,25 @@ const IsoBuilding = ({ floors, selectedFloor, onSelect }: {
             {sorted.map((f, idx) => {
                 const baseY = startY + idx * (H + gap);
                 const sel = selectedFloor?._id === f._id;
+                const comp = isComp(f);
                 const frontPts = `${startX},${baseY + D} ${startX + W},${baseY + D} ${startX + W},${baseY + D + H} ${startX},${baseY + D + H}`;
                 const topPts = `${startX},${baseY + D} ${startX + W},${baseY + D} ${startX + W + D},${baseY} ${startX + D},${baseY}`;
                 const sidePts = `${startX + W},${baseY + D} ${startX + W + D},${baseY} ${startX + W + D},${baseY + H} ${startX + W},${baseY + D + H}`;
                 return (
-                    <g key={f._id} onClick={() => onSelect(f)} style={{ cursor: 'pointer' }}>
-                        <polygon points={topPts} fill={top(f)} stroke="#94a3b8" strokeWidth="0.8" />
-                        <polygon points={frontPts} fill={face(f)} stroke="#94a3b8" strokeWidth="0.8" />
-                        <polygon points={sidePts} fill={side(f)} stroke="#94a3b8" strokeWidth="0.8" />
+                    <g key={f._id} onClick={() => comp && onSelect(f)} style={{ cursor: comp ? 'pointer' : 'not-allowed' }}>
+                        <polygon points={topPts} fill={top(f)} stroke={comp ? '#94a3b8' : '#cbd5e1'} strokeWidth="0.8" />
+                        <polygon points={frontPts} fill={face(f)} stroke={comp ? '#94a3b8' : '#cbd5e1'} strokeWidth="0.8" />
+                        <polygon points={sidePts} fill={side(f)} stroke={comp ? '#94a3b8' : '#cbd5e1'} strokeWidth="0.8" />
                         {/* windows */}
                         {[0, 1, 2].map(w => (
                             <rect key={w} x={startX + 18 + w * 52} y={baseY + D + 12} width={32} height={18} rx="2"
-                                fill={sel ? 'rgba(255,255,255,0.25)' : 'rgba(219,234,254,0.6)'}
-                                stroke={sel ? 'rgba(255,255,255,0.5)' : '#cbd5e1'} strokeWidth="0.5" />
+                                fill={sel ? 'rgba(255,255,255,0.25)' : comp ? 'rgba(219,234,254,0.6)' : 'rgba(203,213,225,0.25)'}
+                                stroke={sel ? 'rgba(255,255,255,0.5)' : comp ? '#cbd5e1' : '#e2e8f0'} strokeWidth="0.5" />
                         ))}
                         {/* label */}
                         <text x={startX + W / 2} y={baseY + D + H / 2 + 5} textAnchor="middle"
                             fontSize="11" fontWeight="700"
-                            fill={sel ? '#fff' : '#1e40af'}>
+                            fill={sel ? '#fff' : comp ? '#1e40af' : '#94a3b8'}>
                             {f.name || `Tầng ${f.floorNumber}`}
                         </text>
                         {/* check on selected */}
@@ -291,12 +301,24 @@ const BookingPage = () => {
                 /* Top 3-col */
                 .bk-top {
                     display: grid;
-                    grid-template-columns: 260px 1fr 1fr;
-                    gap: 16px;
-                    margin-bottom: 16px;
+                    grid-template-columns: 210px 1fr 1.6fr;
+                    grid-template-rows: auto auto;
+                    grid-template-areas:
+                        "veh  time  floor"
+                        "slot slot  floor";
+                    gap: 12px;
+                    margin-bottom: 12px;
+                    align-items: start;
                 }
-                @media(max-width: 900px) {
-                    .bk-top { grid-template-columns: 1fr; }
+                .bk-area-veh   { grid-area: veh; }
+                .bk-area-time  { grid-area: time; }
+                .bk-area-floor { grid-area: floor; align-self: stretch; }
+                .bk-area-slot  { grid-area: slot; }
+                @media (max-width: 860px) {
+                    .bk-top {
+                        grid-template-columns: 1fr;
+                        grid-template-areas: "veh" "time" "floor" "slot";
+                    }
                 }
 
                 /* Cards */
@@ -624,7 +646,7 @@ const BookingPage = () => {
                     <div className="bk-top">
 
                         {/* ── STEP 1: Vehicle ── */}
-                        <div className="bk-card">
+                        <div className="bk-card bk-area-veh">
                             <div className="bk-card-title">
                                 <span className={`bk-step-badge ${vehicleType ? 'done' : 'active'}`}>
                                     {vehicleType ? '✓' : '1'}
@@ -669,7 +691,7 @@ const BookingPage = () => {
                         </div>
 
                         {/* ── STEP 2: Time ── */}
-                        <div className="bk-card">
+                        <div className="bk-card bk-area-time">
                             <div className="bk-card-title">
                                 <span className={`bk-step-badge ${entryDate && duration ? 'done' : 'active'}`}>
                                     {entryDate && duration ? '✓' : '2'}
@@ -705,7 +727,7 @@ const BookingPage = () => {
                         </div>
 
                         {/* ── STEP 3: Floor ── */}
-                        <div className="bk-card">
+                        <div className="bk-card bk-area-floor">
                             <div className="bk-card-title">
                                 <span className={`bk-step-badge ${selectedFloor ? 'done' : vehicleType ? 'active' : ''}`}>
                                     {selectedFloor ? '✓' : '3'}
@@ -721,6 +743,16 @@ const BookingPage = () => {
                                     <br />
                                     <button className="bk-retry" onClick={() => window.location.reload()}>Thử lại</button>
                                 </div>
+                            ) : !vehicleType ? (
+                                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 16px', textAlign: 'center', color: '#64748b', minHeight: 200 }}>
+                                    <div style={{ fontSize: 32, marginBottom: 8 }}>🏢</div>
+                                    <div style={{ fontSize: 13, fontWeight: 700, color: '#475569', marginBottom: 4 }}>
+                                        Vui lòng chọn phương tiện
+                                    </div>
+                                    <div style={{ fontSize: 11, color: '#94a3b8', maxWidth: 220, lineHeight: 1.4 }}>
+                                        Chọn loại phương tiện ở Bước 1 để hiển thị danh sách tầng đỗ phù hợp.
+                                    </div>
+                                </div>
                             ) : (
                                 <div className="bk-floor-inner">
                                     {/* 3D iso */}
@@ -728,6 +760,7 @@ const BookingPage = () => {
                                         <IsoBuilding
                                             floors={floors}
                                             selectedFloor={selectedFloor}
+                                            vehicleType={vehicleType}
                                             onSelect={f => setSelectedFloor(f)}
                                         />
                                     </div>
@@ -739,13 +772,22 @@ const BookingPage = () => {
                                         ) : (
                                             floors.map(f => {
                                                 const isSel = selectedFloor?._id === f._id;
+                                                const isComp = true;
                                                 return (
                                                     <div
                                                         key={f._id}
-                                                        className={`bk-floor-item ${isSel ? 'sel' : ''}`}
-                                                        onClick={() => setSelectedFloor(f)}
+                                                        className={`bk-floor-item ${isSel ? 'sel' : ''} ${!isComp ? 'disabled' : ''}`}
+                                                        style={{ pointerEvents: isComp ? 'auto' : 'none' }}
+                                                        onClick={() => isComp && setSelectedFloor(f)}
                                                     >
-                                                        <span>{f.name || `Tầng ${f.floorNumber}`}</span>
+                                                        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                                            <span style={{ fontSize: 12, fontWeight: 700 }}>
+                                                                {f.name || `Tầng ${f.floorNumber}`}
+                                                            </span>
+                                                            <span style={{ fontSize: 9.5, color: isSel ? '#2563eb' : '#64748b', fontWeight: 500 }}>
+                                                                {f.vehicleType === 'motorcycle' ? '🏍️ Xe máy' : f.vehicleType === 'car' ? '🚗 Ô tô' : '🚗🏍️ Cả hai'}
+                                                            </span>
+                                                        </div>
                                                         {isSel && <span className="bk-floor-check">✓</span>}
                                                         <span className="bk-floor-slots">
                                                             {isSel ? `${availableCount} chỗ` : `${f.totalSlots ?? '?'} chỗ`}
@@ -758,44 +800,44 @@ const BookingPage = () => {
                                 </div>
                             )}
                         </div>
+
+                        {/* ── STEP 4: Slot grid — under card 1+2 ── */}
+                        <div className="bk-area-slot">
+                            {selectedFloor ? (
+                                <div className="bk-slot-card fade-up">
+                                    <div className="bk-slot-header">
+                                        <div className="bk-card-title" style={{ marginBottom: 0 }}>
+                                            <span className={`bk-step-badge ${selectedSlot ? 'done' : 'active'}`}>
+                                                {selectedSlot ? '✓' : '4'}
+                                            </span>
+                                            Chọn Vị Trí Đỗ ({selectedFloor.name || `Tầng ${selectedFloor.floorNumber}`})
+                                        </div>
+                                        <div className="bk-slot-legend">
+                                            <span className="bk-legend-item">
+                                                <span className="bk-legend-dot ld-free" /> Trống
+                                            </span>
+                                            <span className="bk-legend-item">
+                                                <span className="bk-legend-dot ld-sel" /> Đang chọn
+                                            </span>
+                                            <span className="bk-legend-item">
+                                                <span className="bk-legend-dot ld-occ" /> Đã đặt
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <ParkingMap
+                                        slots={slots}
+                                        selectedSlot={selectedSlot}
+                                        onSelect={setSelectedSlot}
+                                    />
+                                </div>
+                            ) : (
+                                <div className="bk-slot-card" style={{ opacity: 0.5, textAlign: 'center', padding: '28px', color: '#94a3b8' }}>
+                                    <div style={{ fontSize: 32, marginBottom: 8 }}>🅿️</div>
+                                    <div style={{ fontSize: 13, fontWeight: 600 }}>Chọn tầng để xem vị trí đỗ xe</div>
+                                </div>
+                            )}
+                        </div>
                     </div>
-
-                    {/* ── STEP 4: Slot grid ── */}
-                    {selectedFloor && (
-                        <div className="bk-slot-card fade-up">
-                            <div className="bk-slot-header">
-                                <div className="bk-card-title" style={{ marginBottom: 0 }}>
-                                    <span className={`bk-step-badge ${selectedSlot ? 'done' : 'active'}`}>
-                                        {selectedSlot ? '✓' : '4'}
-                                    </span>
-                                    Chọn Vị Trí Đỗ ({selectedFloor.name || `Tầng ${selectedFloor.floorNumber}`})
-                                </div>
-                                <div className="bk-slot-legend">
-                                    <span className="bk-legend-item">
-                                        <span className="bk-legend-dot ld-free" /> Trống
-                                    </span>
-                                    <span className="bk-legend-item">
-                                        <span className="bk-legend-dot ld-sel" /> Đang chọn
-                                    </span>
-                                    <span className="bk-legend-item">
-                                        <span className="bk-legend-dot ld-occ" /> Đã đặt
-                                    </span>
-                                </div>
-                            </div>
-                            <ParkingMap
-                                slots={slots}
-                                selectedSlot={selectedSlot}
-                                onSelect={setSelectedSlot}
-                            />
-                        </div>
-                    )}
-
-                    {!selectedFloor && (
-                        <div className="bk-slot-card" style={{ opacity: 0.5, textAlign: 'center', padding: '28px', color: '#94a3b8' }}>
-                            <div style={{ fontSize: 32, marginBottom: 8 }}>🅿️</div>
-                            <div style={{ fontSize: 13, fontWeight: 600 }}>Chọn tầng để xem vị trí đỗ xe</div>
-                        </div>
-                    )}
                 </div>
 
                 {/* ── BOTTOM FOOTER BAR ── */}
