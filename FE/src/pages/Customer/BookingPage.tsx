@@ -4,6 +4,7 @@ import Header from '../../components/Header/Header';
 import floorService, { Floor } from '../../services/api/floorService';
 import zoneService, { Zone } from '../../services/api/zoneService';
 import parkingSlotService, { ParkingSlot } from '../../services/api/parkingSlotService';
+import vehicleTypeService, { VehicleType } from '../../services/api/vehicleTypeService';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 const getZoneId = (z: ParkingSlot['zone']): string =>
@@ -273,7 +274,11 @@ const BookingPage = () => {
     const location = useLocation();
     const parkingSpot = location.state?.spot || { title: 'Bitexco Financial Tower Parking', price: 50000 };
 
-    const [vehicleType, setVehicleType] = useState<string | null>(null);
+    const [vehicleType, setVehicleType] = useState<VehicleType | null>(null);
+
+    // Vehicle Types from API
+    const [vehicleTypes, setVehicleTypes] = useState<VehicleType[]>([]);
+    const [vehicleTypesLoading, setVehicleTypesLoading] = useState(false);
     const [selectedFloor, setSelectedFloor] = useState<Floor | null>(null);
     const [selectedZone, setSelectedZone] = useState<Zone | null>(null);
     const [selectedSlot, setSelectedSlot] = useState<ParkingSlot | null>(null);
@@ -294,6 +299,29 @@ const BookingPage = () => {
     const [floorSlots, setFloorSlots] = useState<ParkingSlot[]>([]);
     const [slotsLoading, setSlotsLoading] = useState(false);
     const [slotsError, setSlotsError] = useState<string | null>(null);
+
+    // Fetch vehicle types from API
+    useEffect(() => {
+        const fetchVehicleTypes = async () => {
+            setVehicleTypesLoading(true);
+            try {
+                const data = await vehicleTypeService.getAll();
+                const list: VehicleType[] = Array.isArray(data) ? data : (data as any)?.data ?? [];
+                setVehicleTypes(list.filter(v => v.isActive && !v.isDeleted));
+            } catch {
+                // Fallback sang 2 loại mặc định nếu API lỗi
+                setVehicleTypes([
+                    { _id: 'car', name: 'Ô tô', code: 'CAR', size: 'medium', isActive: true,
+                      pricing: { hourlyRate: 10000, dailyRate: 80000 } },
+                    { _id: 'motorcycle', name: 'Xe máy', code: 'MOTORBIKE', size: 'small', isActive: true,
+                      pricing: { hourlyRate: 5000, dailyRate: 40000 } },
+                ]);
+            } finally {
+                setVehicleTypesLoading(false);
+            }
+        };
+        fetchVehicleTypes();
+    }, []);
 
     // Fetch floors
     useEffect(() => {
@@ -325,7 +353,20 @@ const BookingPage = () => {
                 if (parkingSpot._id) params.parkingLot = parkingSpot._id;
                 const data = await zoneService.getZones(params);
                 const list: Zone[] = Array.isArray(data) ? data : (data as any)?.data ?? [];
-                setZones(list.filter(z => !z.isDeleted && z.status === 'active'));
+                // Lọc zone theo loại xe đã chọn (nếu zone có cấu hình allowedVehicleTypes)
+                const filtered = list.filter(z => {
+                    if (!z.isDeleted && z.status === 'active') {
+                        if (!vehicleType) return true;
+                        if (!z.allowedVehicleTypes || z.allowedVehicleTypes.length === 0) return true;
+                        // allowedVehicleTypes có thể là mảng _id strings hoặc objects
+                        return z.allowedVehicleTypes.some((vt: any) => {
+                            const vtId = typeof vt === 'string' ? vt : vt?._id ?? vt?.code;
+                            return vtId === vehicleType._id || vtId === vehicleType.code;
+                        });
+                    }
+                    return false;
+                });
+                setZones(filtered);
             } catch (err: any) {
                 setZonesError(err?.message || 'Không thể tải dữ liệu khu đỗ.');
             } finally {
@@ -375,17 +416,23 @@ const BookingPage = () => {
     const exitTime = new Date(new Date(entryDate).getTime() + duration * 3600000);
     const stepsDone = [!!vehicleType, true, !!selectedFloor, !!selectedZone, !!selectedSlot].filter(Boolean).length;
 
+    // Giá cước từ vehicleType đã chọn
+    const hourlyRate = vehicleType?.pricing?.hourlyRate ?? 0;
+    const estimatedPrice = hourlyRate * duration;
+
     const handleReserve = () => {
         if (!vehicleType || !selectedFloor || !selectedZone || !selectedSlot) return;
         navigate('/session', {
             state: {
                 spot: parkingSpot,
-                vehicleType,
+                vehicleType,               // full VehicleType object (có pricing, _id, code)
+                vehicleTypeId: vehicleType._id,
                 floor: selectedFloor,
                 zone: selectedZone,
                 slot: selectedSlot,
                 entryDate,
                 duration,
+                estimatedPrice,
             }
         });
     };
@@ -619,25 +666,54 @@ const BookingPage = () => {
                                 <span className={`bk-step-badge ${vehicleType ? 'done' : 'active'}`}>{vehicleType ? '✓' : '1'}</span>
                                 Chọn Loại Phương Tiện
                             </div>
-                            <div className="bk-vehicle-row">
-                                <button className={`bk-vehicle-btn ${vehicleType === 'motorcycle' ? 'sel' : ''}`} onClick={() => setVehicleType('motorcycle')}>
-                                    {vehicleType === 'motorcycle' && <span className="bk-vehicle-check">✓</span>}
-                                    <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" width="40" height="40">
-                                        <circle cx="9" cy="34" r="6" /><circle cx="39" cy="34" r="6" />
-                                        <path d="M15 34h18M24 16l4.5 10.5H16l3-6H24" /><path d="M28.5 16H35l4.5 7.5" /><circle cx="36" cy="14.5" r="2.5" />
-                                    </svg>
-                                    <span className="bk-vehicle-label">Xe máy</span>
-                                </button>
-                                <button className={`bk-vehicle-btn ${vehicleType === 'car' ? 'sel' : ''}`} onClick={() => setVehicleType('car')}>
-                                    {vehicleType === 'car' && <span className="bk-vehicle-check">✓</span>}
-                                    <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" width="40" height="40">
-                                        <rect x="4" y="22" width="40" height="14" rx="3" /><path d="M10 22l4.5-9h19L37 22" />
-                                        <circle cx="13" cy="36" r="4" /><circle cx="35" cy="36" r="4" />
-                                        <rect x="18" y="14" width="12" height="8" rx="1.5" /><path d="M4 28h3M41 28h3" />
-                                    </svg>
-                                    <span className="bk-vehicle-label">Ô tô</span>
-                                </button>
-                            </div>
+                            {vehicleTypesLoading ? (
+                                <div className="bk-loading"><div className="bk-spinner" /> Đang tải...</div>
+                            ) : (
+                                <div className="bk-vehicle-row">
+                                    {vehicleTypes.map(vt => {
+                                        const isSel = vehicleType?._id === vt._id;
+                                        const isMotorbike = ['MOTORBIKE', 'MOTORCYCLE', 'ELECTRIC_BIKE', 'BICYCLE'].some(c => vt.code.includes(c));
+                                        return (
+                                            <button
+                                                key={vt._id}
+                                                className={`bk-vehicle-btn ${isSel ? 'sel' : ''}`}
+                                                onClick={() => setVehicleType(isSel ? null : vt)}
+                                            >
+                                                {isSel && <span className="bk-vehicle-check">✓</span>}
+                                                {/* Icon SVG theo loại xe */}
+                                                {isMotorbike ? (
+                                                    <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" width="40" height="40">
+                                                        <circle cx="9" cy="34" r="6" /><circle cx="39" cy="34" r="6" />
+                                                        <path d="M15 34h18M24 16l4.5 10.5H16l3-6H24" /><path d="M28.5 16H35l4.5 7.5" /><circle cx="36" cy="14.5" r="2.5" />
+                                                    </svg>
+                                                ) : vt.code === 'SMALL_TRUCK' ? (
+                                                    <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" width="40" height="40">
+                                                        <rect x="2" y="16" width="28" height="20" rx="2" />
+                                                        <path d="M30 24h10l4 8v4H30V24z" />
+                                                        <circle cx="10" cy="38" r="4" /><circle cx="38" cy="38" r="4" />
+                                                        <path d="M2 28h28" />
+                                                    </svg>
+                                                ) : (
+                                                    <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" width="40" height="40">
+                                                        <rect x="4" y="22" width="40" height="14" rx="3" /><path d="M10 22l4.5-9h19L37 22" />
+                                                        <circle cx="13" cy="36" r="4" /><circle cx="35" cy="36" r="4" />
+                                                        <rect x="18" y="14" width="12" height="8" rx="1.5" /><path d="M4 28h3M41 28h3" />
+                                                    </svg>
+                                                )}
+                                                <span className="bk-vehicle-label">{vt.name}</span>
+                                                {vt.pricing?.hourlyRate > 0 && (
+                                                    <span style={{
+                                                        fontSize: 10, color: isSel ? 'rgba(255,255,255,0.85)' : '#64748b',
+                                                        fontWeight: 600, marginTop: 2,
+                                                    }}>
+                                                        {new Intl.NumberFormat('vi-VN').format(vt.pricing.hourlyRate)}đ/h
+                                                    </span>
+                                                )}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            )}
                         </div>
 
                         {/* ── STEP 2: Time ── */}
@@ -850,11 +926,17 @@ const BookingPage = () => {
                     </div>
 
                     <div className="bk-footer-summary">
-                        {vehicleType && <>{vehicleType === 'car' ? '🚗 Ô tô' : '🏍️ Xe máy'}</>}
+                        {vehicleType && <>{vehicleType.name}</>}
                         {selectedFloor && <><span className="bk-footer-bullet">•</span>{selectedFloor.name || `Tầng ${selectedFloor.floorNumber}`}</>}
                         {selectedZone && <><span className="bk-footer-bullet">•</span>{selectedZone.name}</>}
                         {selectedSlot && <><span className="bk-footer-bullet">•</span><strong style={{ color: '#2563eb' }}>Ô {selectedSlot.slotCode}</strong></>}
                         {duration && <><span className="bk-footer-bullet">•</span>{duration} giờ</>}
+                        {estimatedPrice > 0 && vehicleType && (
+                            <><span className="bk-footer-bullet">•</span>
+                            <strong style={{ color: '#10b981' }}>
+                                ~{new Intl.NumberFormat('vi-VN').format(estimatedPrice)}đ
+                            </strong></>
+                        )}
                     </div>
 
                     <button
