@@ -44,12 +44,26 @@ axiosClient.interceptors.response.use(
 
         // Nếu 401 và chưa retry, thử refresh token
         if (status === 401 && !originalRequest._retry) {
+            // Bỏ qua các API auth để trả về lỗi validation hoặc thông tin đăng nhập sai bình thường
+            const isAuthRequest = originalRequest.url?.includes('/auth/login') ||
+                                  originalRequest.url?.includes('/auth/register') ||
+                                  originalRequest.url?.includes('/auth/verify-email') ||
+                                  originalRequest.url?.includes('/auth/forgot-password') ||
+                                  originalRequest.url?.includes('/auth/reset-password') ||
+                                  originalRequest.url?.includes('/auth/refresh-token');
+
+            if (isAuthRequest) {
+                return Promise.reject({ status, message, raw: error });
+            }
+
             const refreshToken = localStorage.getItem('refreshToken');
 
-            // Không có refreshToken → logout ngay
+            // Không có refreshToken → logout ngay (chỉ chuyển hướng nếu không ở trang login)
             if (!refreshToken) {
                 localStorage.removeItem('accessToken');
-                window.location.href = '/login';
+                if (window.location.pathname !== '/login') {
+                    window.location.href = '/login';
+                }
                 return Promise.reject({ status, message, raw: error });
             }
 
@@ -89,7 +103,9 @@ axiosClient.interceptors.response.use(
                 processQueue(refreshError, null);
                 localStorage.removeItem('accessToken');
                 localStorage.removeItem('refreshToken');
-                window.location.href = '/login';
+                if (window.location.pathname !== '/login') {
+                    window.location.href = '/login';
+                }
                 return Promise.reject(refreshError);
             } finally {
                 isRefreshing = false;
