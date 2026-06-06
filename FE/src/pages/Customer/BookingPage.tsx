@@ -2,30 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import Header from '../../components/Header/Header';
 import floorService, { Floor } from '../../services/api/floorService';
-
-// ── Helpers ────────────────────────────────────────────────────────────────────
-const generateSlots = (totalSlots: number, floorIndex: number) => {
-    const rows = ['A', 'B', 'C', 'D', 'E'];
-    const occupiedSets: number[][] = [
-        [2, 5, 8, 12, 17, 23, 30, 35],
-        [1, 4, 9, 11, 15, 19, 25, 28, 33],
-        [3, 6, 10, 13, 16, 22, 27, 32],
-        [2, 7, 8, 14, 18, 20, 26, 31],
-    ];
-    const occupied = occupiedSets[floorIndex % occupiedSets.length] || [];
-    return Array.from({ length: totalSlots }, (_, i) => {
-        const rowIdx = Math.floor(i / 10);
-        const colNum = (i % 10) + 1;
-        const rowLabel = rows[rowIdx] || String.fromCharCode(65 + rowIdx);
-        return {
-            id: i + 1,
-            label: `${rowLabel}${String(colNum).padStart(2, '0')}`,
-            row: rowLabel,
-            col: colNum,
-            status: occupied.includes(i + 1) ? 'occupied' : 'available',
-        };
-    });
-};
+import zoneService, { Zone } from '../../services/api/zoneService';
 
 // ── Isometric Building ─────────────────────────────────────────────────────────
 const IsoBuilding = ({ floors, selectedFloor, vehicleType, onSelect }: {
@@ -37,20 +14,9 @@ const IsoBuilding = ({ floors, selectedFloor, vehicleType, onSelect }: {
     const sorted = [...floors].sort((a, b) => b.floorNumber - a.floorNumber);
     const W = 180, H = 44, D = 26, startX = 70, startY = 20, gap = 4;
 
-    const isComp = (f: Floor) => true;
-
-    const face = (f: Floor) => {
-        if (!isComp(f)) return '#f1f5f9';
-        return selectedFloor?._id === f._id ? '#2563eb' : '#dbeafe';
-    };
-    const side = (f: Floor) => {
-        if (!isComp(f)) return '#e2e8f0';
-        return selectedFloor?._id === f._id ? '#1d4ed8' : '#bfdbfe';
-    };
-    const top  = (f: Floor) => {
-        if (!isComp(f)) return '#f8fafc';
-        return selectedFloor?._id === f._id ? '#93c5fd' : '#e0f2fe';
-    };
+    const face = (f: Floor) => selectedFloor?._id === f._id ? '#2563eb' : '#dbeafe';
+    const side = (f: Floor) => selectedFloor?._id === f._id ? '#1d4ed8' : '#bfdbfe';
+    const top  = (f: Floor) => selectedFloor?._id === f._id ? '#93c5fd' : '#e0f2fe';
 
     if (sorted.length === 0) return (
         <div style={{ height: 180, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: 13 }}>
@@ -65,116 +31,89 @@ const IsoBuilding = ({ floors, selectedFloor, vehicleType, onSelect }: {
             {sorted.map((f, idx) => {
                 const baseY = startY + idx * (H + gap);
                 const sel = selectedFloor?._id === f._id;
-                const comp = isComp(f);
                 const frontPts = `${startX},${baseY + D} ${startX + W},${baseY + D} ${startX + W},${baseY + D + H} ${startX},${baseY + D + H}`;
                 const topPts = `${startX},${baseY + D} ${startX + W},${baseY + D} ${startX + W + D},${baseY} ${startX + D},${baseY}`;
                 const sidePts = `${startX + W},${baseY + D} ${startX + W + D},${baseY} ${startX + W + D},${baseY + H} ${startX + W},${baseY + D + H}`;
                 return (
-                    <g key={f._id} onClick={() => comp && onSelect(f)} style={{ cursor: comp ? 'pointer' : 'not-allowed' }}>
-                        <polygon points={topPts} fill={top(f)} stroke={comp ? '#94a3b8' : '#cbd5e1'} strokeWidth="0.8" />
-                        <polygon points={frontPts} fill={face(f)} stroke={comp ? '#94a3b8' : '#cbd5e1'} strokeWidth="0.8" />
-                        <polygon points={sidePts} fill={side(f)} stroke={comp ? '#94a3b8' : '#cbd5e1'} strokeWidth="0.8" />
-                        {/* windows */}
+                    <g key={f._id} onClick={() => onSelect(f)} style={{ cursor: 'pointer' }}>
+                        <polygon points={topPts} fill={top(f)} stroke="#94a3b8" strokeWidth="0.8" />
+                        <polygon points={frontPts} fill={face(f)} stroke="#94a3b8" strokeWidth="0.8" />
+                        <polygon points={sidePts} fill={side(f)} stroke="#94a3b8" strokeWidth="0.8" />
                         {[0, 1, 2].map(w => (
                             <rect key={w} x={startX + 18 + w * 52} y={baseY + D + 12} width={32} height={18} rx="2"
-                                fill={sel ? 'rgba(255,255,255,0.25)' : comp ? 'rgba(219,234,254,0.6)' : 'rgba(203,213,225,0.25)'}
-                                stroke={sel ? 'rgba(255,255,255,0.5)' : comp ? '#cbd5e1' : '#e2e8f0'} strokeWidth="0.5" />
+                                fill={sel ? 'rgba(255,255,255,0.25)' : 'rgba(219,234,254,0.6)'}
+                                stroke={sel ? 'rgba(255,255,255,0.5)' : '#cbd5e1'} strokeWidth="0.5" />
                         ))}
-                        {/* label */}
                         <text x={startX + W / 2} y={baseY + D + H / 2 + 5} textAnchor="middle"
                             fontSize="11" fontWeight="700"
-                            fill={sel ? '#fff' : comp ? '#1e40af' : '#94a3b8'}>
+                            fill={sel ? '#fff' : '#1e40af'}>
                             {f.name || `Tầng ${f.floorNumber}`}
                         </text>
-                        {/* check on selected */}
                         {sel && (
                             <text x={startX + W - 12} y={baseY + D + H / 2 + 5} textAnchor="middle" fontSize="13" fill="#fff">✓</text>
                         )}
                     </g>
                 );
             })}
-            {/* ground shadow */}
             <ellipse cx={startX + W / 2 + D / 2} cy={startY + sorted.length * (H + gap) + D + 10}
                 rx={W / 2 + 16} ry="8" fill="rgba(0,0,0,0.07)" />
         </svg>
     );
 };
 
-// ── Parking Map ────────────────────────────────────────────────────────────────
-const ParkingMap = ({ slots, selectedSlot, onSelect }: {
-    slots: { id: number; label: string; row: string; col: number; status: string }[];
-    selectedSlot: number | null;
-    onSelect: (id: number) => void;
+// ── Zone Card ──────────────────────────────────────────────────────────────────
+const ZoneCard = ({ zone, selected, onSelect }: {
+    zone: Zone;
+    selected: boolean;
+    onSelect: (z: Zone) => void;
 }) => {
-    const rows = [...new Set(slots.map(s => s.row))];
-    const maxCol = Math.max(...slots.map(s => s.col));
-    const midCol = Math.ceil(maxCol / 2);
+    const pct = zone.totalSlots > 0 ? Math.round((zone.availableSlots / zone.totalSlots) * 100) : 0;
+    const isLow = zone.availableSlots <= 5;
+    const isFull = zone.availableSlots === 0;
+
+    const barColor = isFull ? '#ef4444' : isLow ? '#f59e0b' : '#10b981';
+
+    const vehicleLabel = () => {
+        const types = zone.allowedVehicleTypes || [];
+        if (types.includes('motorcycle') && types.includes('car')) return '🚗🏍️ Cả hai';
+        if (types.includes('motorcycle')) return '🏍️ Xe máy';
+        if (types.includes('car')) return '🚗 Ô tô';
+        return '🚗🏍️ Cả hai';
+    };
 
     return (
-        <div style={{ overflowX: 'auto', padding: '0 4px' }}>
-            <div style={{ display: 'flex', gap: 8, minWidth: 'max-content' }}>
-                {/* Row labels */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingTop: 28 }}>
-                    {rows.map(row => (
-                        <div key={row} style={{
-                            width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            fontSize: 11, fontWeight: 700, color: '#475569'
-                        }}>{row}</div>
-                    ))}
+        <div
+            className={`zone-card ${selected ? 'sel' : ''} ${isFull ? 'full' : ''}`}
+            onClick={() => !isFull && onSelect(zone)}
+            style={{ cursor: isFull ? 'not-allowed' : 'pointer' }}
+        >
+            {/* Zone header */}
+            <div className="zone-card-top">
+                <div className="zone-badge" style={{
+                    background: selected ? '#2563eb' : '#f1f5f9',
+                    color: selected ? '#fff' : '#475569',
+                }}>
+                    {zone.code}
                 </div>
-                {/* Slot columns split by aisle */}
-                <div style={{ display: 'flex', gap: 12 }}>
-                    {[Array.from({ length: midCol }, (_, i) => i + 1), Array.from({ length: maxCol - midCol }, (_, i) => i + midCol + 1)].map((colGroup, gi) => (
-                        <div key={gi}>
-                            {/* Column headers */}
-                            <div style={{ display: 'flex', gap: 4, marginBottom: 4 }}>
-                                {colGroup.map(col => (
-                                    <div key={col} style={{
-                                        width: 28, fontSize: 9, textAlign: 'center', color: '#94a3b8', fontWeight: 600
-                                    }}>
-                                        {String(col).padStart(2, '0')}
-                                    </div>
-                                ))}
-                            </div>
-                            {/* Rows */}
-                            {rows.map(row => (
-                                <div key={row} style={{ display: 'flex', gap: 4, marginBottom: 6 }}>
-                                    {colGroup.map(col => {
-                                        const slot = slots.find(s => s.row === row && s.col === col);
-                                        if (!slot) return <div key={col} style={{ width: 28 }} />;
-                                        const isSel = selectedSlot === slot.id;
-                                        const isOcc = slot.status === 'occupied';
-                                        return (
-                                            <button
-                                                key={slot.id}
-                                                disabled={isOcc}
-                                                onClick={() => !isOcc && onSelect(slot.id)}
-                                                title={slot.label}
-                                                style={{
-                                                    width: 28, height: 28,
-                                                    border: isSel ? '2px solid #2563eb' : isOcc ? '1.5px solid #e2e8f0' : '1.5px solid #cbd5e1',
-                                                    borderRadius: 4,
-                                                    background: isSel ? '#2563eb' : isOcc ? '#f1f5f9' : '#fff',
-                                                    color: isSel ? '#fff' : isOcc ? '#cbd5e1' : '#475569',
-                                                    fontSize: 8,
-                                                    fontWeight: 700,
-                                                    cursor: isOcc ? 'not-allowed' : 'pointer',
-                                                    padding: 0,
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'center',
-                                                    transition: 'all 0.15s',
-                                                    flexShrink: 0,
-                                                }}
-                                            >
-                                                {isSel ? '✓' : isOcc ? '' : slot.label}
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                            ))}
-                        </div>
-                    ))}
+                <div className="zone-info">
+                    <div className="zone-name">{zone.name}</div>
+                    <div className="zone-vehicle">{vehicleLabel()}</div>
+                </div>
+                {selected && <div className="zone-check">✓</div>}
+                {isFull && <div className="zone-full-badge">Hết chỗ</div>}
+            </div>
+
+            {/* Slot bar */}
+            <div className="zone-slot-info">
+                <div className="zone-slot-bar-bg">
+                    <div className="zone-slot-bar-fill" style={{
+                        width: `${pct}%`,
+                        background: barColor,
+                    }} />
+                </div>
+                <div className="zone-slot-text">
+                    <span style={{ color: barColor, fontWeight: 700 }}>{zone.availableSlots}</span>
+                    <span style={{ color: '#94a3b8' }}>/{zone.totalSlots} chỗ trống</span>
                 </div>
             </div>
         </div>
@@ -189,17 +128,23 @@ const BookingPage = () => {
 
     const [vehicleType, setVehicleType] = useState<string | null>(null);
     const [selectedFloor, setSelectedFloor] = useState<Floor | null>(null);
-    const [slots, setSlots] = useState<{ id: number; label: string; row: string; col: number; status: string }[]>([]);
-    const [selectedSlot, setSelectedSlot] = useState<number | null>(null);
+    const [selectedZone, setSelectedZone] = useState<Zone | null>(null);
     const [entryDate, setEntryDate] = useState(() => new Date().toISOString().slice(0, 16));
     const [duration, setDuration] = useState(2);
 
+    // Floors state
     const [floors, setFloors] = useState<Floor[]>([]);
     const [floorsLoading, setFloorsLoading] = useState(false);
     const [floorsError, setFloorsError] = useState<string | null>(null);
 
+    // Zones state
+    const [zones, setZones] = useState<Zone[]>([]);
+    const [zonesLoading, setZonesLoading] = useState(false);
+    const [zonesError, setZonesError] = useState<string | null>(null);
+
+    // Fetch floors
     useEffect(() => {
-        const fetch = async () => {
+        const fetchFloors = async () => {
             setFloorsLoading(true);
             setFloorsError(null);
             try {
@@ -214,47 +159,58 @@ const BookingPage = () => {
                 setFloorsLoading(false);
             }
         };
-        fetch();
+        fetchFloors();
     }, [parkingSpot._id]);
 
+    // Fetch zones when floor is selected
     useEffect(() => {
-        setSelectedFloor(null);
-        setSelectedSlot(null);
-        setSlots([]);
-    }, [vehicleType]);
-
-    useEffect(() => {
-        if (selectedFloor) {
-            const idx = floors.findIndex(f => f._id === selectedFloor._id);
-            setSlots(generateSlots(selectedFloor.totalSlots || 40, idx));
-            setSelectedSlot(null);
+        if (!selectedFloor) {
+            setZones([]);
+            setSelectedZone(null);
+            return;
         }
+        const fetchZones = async () => {
+            setZonesLoading(true);
+            setZonesError(null);
+            setSelectedZone(null);
+            try {
+                const params: any = { floor: selectedFloor._id };
+                if (parkingSpot._id) params.parkingLot = parkingSpot._id;
+                const data = await zoneService.getZones(params);
+                const list: Zone[] = Array.isArray(data) ? data : (data as any)?.data ?? [];
+                setZones(list.filter(z => !z.isDeleted && z.status === 'active'));
+            } catch (err: any) {
+                setZonesError(err?.message || 'Không thể tải dữ liệu khu đỗ.');
+            } finally {
+                setZonesLoading(false);
+            }
+        };
+        fetchZones();
     }, [selectedFloor]);
 
-    // Không còn lọc tầng theo loại xe — tất cả tầng đều hiển thị
+    // Reset when vehicle changes
+    useEffect(() => {
+        setSelectedFloor(null);
+        setSelectedZone(null);
+        setZones([]);
+    }, [vehicleType]);
 
-    const availableCount = slots.filter(s => s.status === 'available').length;
     const exitTime = new Date(new Date(entryDate).getTime() + duration * 3600000);
-    const selectedSlotLabel = slots.find(s => s.id === selectedSlot)?.label || null;
-
-    const step = !vehicleType ? 1 : !selectedFloor ? 3 : !selectedSlot ? 4 : 4;
-    const stepsDone = [!!vehicleType, true, !!selectedFloor, !!selectedSlot].filter(Boolean).length;
+    const stepsDone = [!!vehicleType, true, !!selectedFloor, !!selectedZone].filter(Boolean).length;
 
     const handleReserve = () => {
-        if (!vehicleType || !selectedFloor || !selectedSlot) return;
+        if (!vehicleType || !selectedFloor || !selectedZone) return;
         navigate('/session', {
-            state: { spot: parkingSpot, vehicleType, floor: selectedFloor, slot: selectedSlot, entryDate, duration }
+            state: { spot: parkingSpot, vehicleType, floor: selectedFloor, zone: selectedZone, entryDate, duration }
         });
     };
 
-    const fmtDate = (iso: string) => {
-        const d = new Date(iso);
-        return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}, ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
-    };
     const fmtExit = () => {
         const d = exitTime;
         return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
     };
+
+    const totalAvailableZones = zones.filter(z => z.availableSlots > 0).length;
 
     return (
         <>
@@ -468,7 +424,6 @@ const BookingPage = () => {
                     color: #374151;
                 }
                 .bk-floor-item:hover { border-color: #93c5fd; background: #eff6ff; }
-                .bk-floor-item.disabled { opacity: 0.45; cursor: not-allowed; }
                 .bk-floor-item.sel { border-color: #2563eb; background: #eff6ff; color: #1d4ed8; }
                 .bk-floor-slots {
                     margin-left: auto;
@@ -487,8 +442,8 @@ const BookingPage = () => {
                     margin-left: 2px;
                 }
 
-                /* Slot grid card */
-                .bk-slot-card {
+                /* ── Zone card (Card 4) ── */
+                .bk-zone-card {
                     background: #fff;
                     border-radius: 14px;
                     border: 1px solid #e2e8f0;
@@ -496,35 +451,160 @@ const BookingPage = () => {
                     box-shadow: 0 1px 4px rgba(0,0,0,0.04);
                     margin-bottom: 16px;
                 }
-                .bk-slot-header {
+                .bk-zone-header {
                     display: flex;
                     align-items: center;
                     justify-content: space-between;
-                    margin-bottom: 14px;
+                    margin-bottom: 16px;
                     flex-wrap: wrap;
                     gap: 8px;
                 }
-                .bk-slot-legend {
-                    display: flex;
-                    gap: 16px;
-                    align-items: center;
-                    flex-wrap: wrap;
-                }
-                .bk-legend-item {
-                    display: flex;
-                    align-items: center;
-                    gap: 6px;
+                .bk-zone-stat {
                     font-size: 11px;
                     font-weight: 600;
                     color: #64748b;
+                    background: #f1f5f9;
+                    padding: 4px 10px;
+                    border-radius: 20px;
                 }
-                .bk-legend-dot {
-                    width: 14px; height: 14px;
-                    border-radius: 3px;
+                .bk-zone-stat span {
+                    color: #10b981;
+                    font-weight: 800;
                 }
-                .ld-free { background: #fff; border: 1.5px solid #cbd5e1; }
-                .ld-sel { background: #2563eb; }
-                .ld-occ { background: #f1f5f9; border: 1.5px solid #e2e8f0; }
+
+                /* Zone grid */
+                .zone-grid {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+                    gap: 10px;
+                }
+
+                /* Individual zone card */
+                .zone-card {
+                    border: 1.5px solid #e2e8f0;
+                    border-radius: 10px;
+                    padding: 12px 14px;
+                    background: #fff;
+                    transition: all 0.2s;
+                    position: relative;
+                    overflow: hidden;
+                }
+                .zone-card:hover:not(.full) {
+                    border-color: #93c5fd;
+                    background: #f8fbff;
+                    box-shadow: 0 4px 12px rgba(37,99,235,0.1);
+                    transform: translateY(-1px);
+                }
+                .zone-card.sel {
+                    border-color: #2563eb;
+                    background: #eff6ff;
+                    box-shadow: 0 4px 16px rgba(37,99,235,0.18);
+                }
+                .zone-card.full {
+                    background: #f9fafb;
+                    opacity: 0.65;
+                }
+
+                .zone-card-top {
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    margin-bottom: 10px;
+                }
+                .zone-badge {
+                    width: 36px; height: 36px;
+                    border-radius: 8px;
+                    display: flex; align-items: center; justify-content: center;
+                    font-size: 11px;
+                    font-weight: 800;
+                    flex-shrink: 0;
+                    letter-spacing: -0.3px;
+                }
+                .zone-info {
+                    flex: 1;
+                    min-width: 0;
+                }
+                .zone-name {
+                    font-size: 13px;
+                    font-weight: 700;
+                    color: #1e293b;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                }
+                .zone-card.sel .zone-name { color: #1d4ed8; }
+                .zone-vehicle {
+                    font-size: 10px;
+                    color: #64748b;
+                    margin-top: 2px;
+                    font-weight: 500;
+                }
+                .zone-check {
+                    width: 20px; height: 20px;
+                    background: #2563eb;
+                    border-radius: 50%;
+                    display: flex; align-items: center; justify-content: center;
+                    color: #fff;
+                    font-size: 11px;
+                    font-weight: 800;
+                    flex-shrink: 0;
+                }
+                .zone-full-badge {
+                    background: #fee2e2;
+                    color: #dc2626;
+                    font-size: 10px;
+                    font-weight: 700;
+                    padding: 2px 7px;
+                    border-radius: 20px;
+                    flex-shrink: 0;
+                }
+
+                /* Slot bar inside zone card */
+                .zone-slot-info {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 4px;
+                }
+                .zone-slot-bar-bg {
+                    height: 5px;
+                    border-radius: 5px;
+                    background: #f1f5f9;
+                    overflow: hidden;
+                }
+                .zone-slot-bar-fill {
+                    height: 100%;
+                    border-radius: 5px;
+                    transition: width 0.4s ease, background 0.3s;
+                }
+                .zone-slot-text {
+                    font-size: 11px;
+                    display: flex;
+                    gap: 3px;
+                }
+
+                /* Loading / error */
+                .bk-loading {
+                    display: flex; align-items: center; justify-content: center;
+                    padding: 28px; gap: 10px;
+                    color: #64748b; font-size: 12px; font-weight: 600;
+                }
+                .bk-spinner {
+                    width: 20px; height: 20px;
+                    border: 2.5px solid #e2e8f0;
+                    border-top-color: #2563eb;
+                    border-radius: 50%;
+                    animation: bk-spin 0.7s linear infinite;
+                }
+                @keyframes bk-spin { to { transform: rotate(360deg); } }
+                .bk-error {
+                    text-align: center; padding: 20px; color: #ef4444;
+                    font-size: 12px; font-weight: 600;
+                }
+                .bk-retry {
+                    margin-top: 8px; background: none; border: 1.5px solid #ef4444;
+                    border-radius: 6px; padding: 5px 14px; color: #ef4444; font-weight: 700;
+                    cursor: pointer; font-size: 12px;
+                }
 
                 /* Bottom bar */
                 .bk-footer {
@@ -601,35 +681,21 @@ const BookingPage = () => {
                     cursor: not-allowed;
                 }
 
-                /* Loading / error */
-                .bk-loading {
-                    display: flex; align-items: center; justify-content: center;
-                    padding: 28px; gap: 10px;
-                    color: #64748b; font-size: 12px; font-weight: 600;
-                }
-                .bk-spinner {
-                    width: 20px; height: 20px;
-                    border: 2.5px solid #e2e8f0;
-                    border-top-color: #2563eb;
-                    border-radius: 50%;
-                    animation: bk-spin 0.7s linear infinite;
-                }
-                @keyframes bk-spin { to { transform: rotate(360deg); } }
-                .bk-error {
-                    text-align: center; padding: 20px; color: #ef4444;
-                    font-size: 12px; font-weight: 600;
-                }
-                .bk-retry {
-                    margin-top: 8px; background: none; border: 1.5px solid #ef4444;
-                    border-radius: 6px; padding: 5px 14px; color: #ef4444; font-weight: 700;
-                    cursor: pointer; font-size: 12px;
-                }
-
                 @keyframes fadeUp {
                     from { opacity: 0; transform: translateY(10px); }
                     to { opacity: 1; transform: translateY(0); }
                 }
                 .fade-up { animation: fadeUp 0.3s ease-out forwards; }
+
+                /* Empty zone state */
+                .zone-empty {
+                    text-align: center;
+                    padding: 32px 20px;
+                    color: #94a3b8;
+                }
+                .zone-empty .zone-empty-icon { font-size: 36px; margin-bottom: 10px; }
+                .zone-empty .zone-empty-title { font-size: 13px; font-weight: 700; color: #64748b; margin-bottom: 4px; }
+                .zone-empty .zone-empty-sub { font-size: 11px; color: #94a3b8; }
             `}</style>
 
             <div className="bk-page">
@@ -654,7 +720,6 @@ const BookingPage = () => {
                                 Chọn Loại Phương Tiện
                             </div>
                             <div className="bk-vehicle-row">
-                                {/* Motorcycle */}
                                 <button
                                     className={`bk-vehicle-btn ${vehicleType === 'motorcycle' ? 'sel' : ''}`}
                                     onClick={() => setVehicleType('motorcycle')}
@@ -668,9 +733,7 @@ const BookingPage = () => {
                                         <circle cx="36" cy="14.5" r="2.5" />
                                     </svg>
                                     <span className="bk-vehicle-label">Xe máy</span>
-
                                 </button>
-                                {/* Car */}
                                 <button
                                     className={`bk-vehicle-btn ${vehicleType === 'car' ? 'sel' : ''}`}
                                     onClick={() => setVehicleType('car')}
@@ -685,7 +748,6 @@ const BookingPage = () => {
                                         <path d="M4 28h3M41 28h3" />
                                     </svg>
                                     <span className="bk-vehicle-label">Ô tô</span>
-
                                 </button>
                             </div>
                         </div>
@@ -772,13 +834,11 @@ const BookingPage = () => {
                                         ) : (
                                             floors.map(f => {
                                                 const isSel = selectedFloor?._id === f._id;
-                                                const isComp = true;
                                                 return (
                                                     <div
                                                         key={f._id}
-                                                        className={`bk-floor-item ${isSel ? 'sel' : ''} ${!isComp ? 'disabled' : ''}`}
-                                                        style={{ pointerEvents: isComp ? 'auto' : 'none' }}
-                                                        onClick={() => isComp && setSelectedFloor(f)}
+                                                        className={`bk-floor-item ${isSel ? 'sel' : ''}`}
+                                                        onClick={() => setSelectedFloor(f)}
                                                     >
                                                         <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
                                                             <span style={{ fontSize: 12, fontWeight: 700 }}>
@@ -790,7 +850,7 @@ const BookingPage = () => {
                                                         </div>
                                                         {isSel && <span className="bk-floor-check">✓</span>}
                                                         <span className="bk-floor-slots">
-                                                            {isSel ? `${availableCount} chỗ` : `${f.totalSlots ?? '?'} chỗ`}
+                                                            {f.availableSlots ?? f.totalSlots ?? '?'} chỗ
                                                         </span>
                                                     </div>
                                                 );
@@ -801,39 +861,55 @@ const BookingPage = () => {
                             )}
                         </div>
 
-                        {/* ── STEP 4: Slot grid — under card 1+2 ── */}
+                        {/* ── STEP 4: Zone (Khu đỗ) ── */}
                         <div className="bk-area-slot">
                             {selectedFloor ? (
-                                <div className="bk-slot-card fade-up">
-                                    <div className="bk-slot-header">
+                                <div className="bk-zone-card fade-up">
+                                    <div className="bk-zone-header">
                                         <div className="bk-card-title" style={{ marginBottom: 0 }}>
-                                            <span className={`bk-step-badge ${selectedSlot ? 'done' : 'active'}`}>
-                                                {selectedSlot ? '✓' : '4'}
+                                            <span className={`bk-step-badge ${selectedZone ? 'done' : 'active'}`}>
+                                                {selectedZone ? '✓' : '4'}
                                             </span>
-                                            Chọn Vị Trí Đỗ ({selectedFloor.name || `Tầng ${selectedFloor.floorNumber}`})
+                                            Chọn Khu Đỗ ({selectedFloor.name || `Tầng ${selectedFloor.floorNumber}`})
                                         </div>
-                                        <div className="bk-slot-legend">
-                                            <span className="bk-legend-item">
-                                                <span className="bk-legend-dot ld-free" /> Trống
-                                            </span>
-                                            <span className="bk-legend-item">
-                                                <span className="bk-legend-dot ld-sel" /> Đang chọn
-                                            </span>
-                                            <span className="bk-legend-item">
-                                                <span className="bk-legend-dot ld-occ" /> Đã đặt
-                                            </span>
-                                        </div>
+                                        {!zonesLoading && zones.length > 0 && (
+                                            <div className="bk-zone-stat">
+                                                <span>{totalAvailableZones}</span>/{zones.length} khu còn chỗ
+                                            </div>
+                                        )}
                                     </div>
-                                    <ParkingMap
-                                        slots={slots}
-                                        selectedSlot={selectedSlot}
-                                        onSelect={setSelectedSlot}
-                                    />
+
+                                    {zonesLoading ? (
+                                        <div className="bk-loading"><div className="bk-spinner" /> Đang tải khu đỗ...</div>
+                                    ) : zonesError ? (
+                                        <div className="bk-error">
+                                            ⚠️ {zonesError}
+                                            <br />
+                                            <button className="bk-retry" onClick={() => setSelectedFloor({ ...selectedFloor })}>Thử lại</button>
+                                        </div>
+                                    ) : zones.length === 0 ? (
+                                        <div className="zone-empty">
+                                            <div className="zone-empty-icon">🏢</div>
+                                            <div className="zone-empty-title">Không có khu đỗ nào</div>
+                                            <div className="zone-empty-sub">Tầng này chưa có khu đỗ xe hoặc tất cả đã đầy.</div>
+                                        </div>
+                                    ) : (
+                                        <div className="zone-grid">
+                                            {zones.map(zone => (
+                                                <ZoneCard
+                                                    key={zone._id}
+                                                    zone={zone}
+                                                    selected={selectedZone?._id === zone._id}
+                                                    onSelect={setSelectedZone}
+                                                />
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
                             ) : (
-                                <div className="bk-slot-card" style={{ opacity: 0.5, textAlign: 'center', padding: '28px', color: '#94a3b8' }}>
+                                <div className="bk-zone-card" style={{ opacity: 0.5, textAlign: 'center', padding: '28px', color: '#94a3b8' }}>
                                     <div style={{ fontSize: 32, marginBottom: 8 }}>🅿️</div>
-                                    <div style={{ fontSize: 13, fontWeight: 600 }}>Chọn tầng để xem vị trí đỗ xe</div>
+                                    <div style={{ fontSize: 13, fontWeight: 600 }}>Chọn tầng để xem các khu đỗ xe</div>
                                 </div>
                             )}
                         </div>
@@ -847,8 +923,8 @@ const BookingPage = () => {
                             Bước {Math.min(stepsDone + 1, 4)}/4 —{' '}
                             {!vehicleType ? 'Chọn loại phương tiện'
                                 : !selectedFloor ? 'Chọn tầng đỗ xe'
-                                    : !selectedSlot ? 'Chọn vị trí đỗ'
-                                        : 'Hoàn tất chọn vị trí'}
+                                    : !selectedZone ? 'Chọn khu đỗ'
+                                        : 'Hoàn tất chọn khu đỗ'}
                         </div>
                         <div className="bk-footer-bar">
                             <div className="bk-footer-bar-fill" style={{ width: `${(stepsDone / 4) * 100}%` }} />
@@ -865,10 +941,10 @@ const BookingPage = () => {
                                 {selectedFloor.name || `Tầng ${selectedFloor.floorNumber}`}
                             </>
                         )}
-                        {selectedSlotLabel && (
+                        {selectedZone && (
                             <>
                                 <span className="bk-footer-bullet">•</span>
-                                Vị trí {selectedSlotLabel}
+                                {selectedZone.name} ({selectedZone.code})
                             </>
                         )}
                         {duration && (
@@ -881,9 +957,9 @@ const BookingPage = () => {
 
                     <button
                         id="confirm-booking-btn"
-                        className={`bk-confirm-btn ${vehicleType && selectedFloor && selectedSlot ? 'ready' : 'disabled'}`}
+                        className={`bk-confirm-btn ${vehicleType && selectedFloor && selectedZone ? 'ready' : 'disabled'}`}
                         onClick={handleReserve}
-                        disabled={!vehicleType || !selectedFloor || !selectedSlot}
+                        disabled={!vehicleType || !selectedFloor || !selectedZone}
                     >
                         Xác nhận đặt chỗ
                     </button>
