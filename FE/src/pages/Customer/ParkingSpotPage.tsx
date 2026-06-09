@@ -2,15 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../../components/Header/Header';
 import parkingLotService, { ParkingLot } from '../../services/api/parkingLotService';
-import ParkingFinderMap from '../../components/ParkingFinderMap';
+import ParkingFinderMap from '../../components/Map/ParkingFinderMap';
 
 // SVG Icons
-const CalendarIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>;
-const FilterIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>;
-const StarIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="#f59e0b" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>;
-const WalkingIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m13 14 1 7"/><path d="m13 14-2.5-3.5L8 12"/><path d="m13 14-1-6 3-2 1.5 2.5"/><path d="M9 21h2"/><circle cx="13" cy="4" r="2"/></svg>;
-const ChevronDown = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>;
-const MapPinIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>;
+const CalendarIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2" /><line x1="16" x2="16" y1="2" y2="6" /><line x1="8" x2="8" y1="2" y2="6" /><line x1="3" x2="21" y1="10" y2="10" /></svg>;
+const FilterIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" /></svg>;
+const StarIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="#f59e0b" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>;
+const WalkingIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m13 14 1 7" /><path d="m13 14-2.5-3.5L8 12" /><path d="m13 14-1-6 3-2 1.5 2.5" /><path d="M9 21h2" /><circle cx="13" cy="4" r="2" /></svg>;
+const ChevronDown = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>;
+const MapPinIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" /><circle cx="12" cy="10" r="3" /></svg>;
 
 // Fallback images for parking lots without images
 const FALLBACK_IMAGES = [
@@ -56,7 +56,7 @@ const SkeletonCard = () => (
 
 const ParkingSpotPage = () => {
     const navigate = useNavigate();
-    const [activeFilters, setActiveFilters] = useState(['garage']);
+    const [activeFilters, setActiveFilters] = useState(['all']);
     const [showFees, setShowFees] = useState(false);
     const [searchText, setSearchText] = useState('');
 
@@ -126,38 +126,7 @@ const ParkingSpotPage = () => {
         <div className="flex flex-col h-screen overflow-hidden font-sans bg-white">
             <Header />
 
-            {/* Search/Time Bar */}
-            <div className="border-b border-slate-200 bg-white px-4 py-3 flex flex-wrap items-center justify-center gap-4 shadow-[0_2px_10px_rgba(0,0,0,0.02)] z-10 relative">
-                <div className="flex items-center gap-3 cursor-pointer hover:bg-slate-50 p-2 rounded-lg transition-colors" onClick={() => alert('Change Event')}>
-                    <div className="bg-blue-600 text-white flex flex-col items-center justify-center rounded px-2 py-1 w-[46px]">
-                        <span className="text-[10px] font-bold uppercase leading-none tracking-wide mb-1">May</span>
-                        <span className="text-lg font-extrabold leading-none">29</span>
-                    </div>
-                    <div>
-                        <div className="text-xs text-slate-500 font-medium">District 1 Events</div>
-                        <div className="font-bold text-slate-900 text-[15px]">Saigon Music Festival</div>
-                    </div>
-                </div>
 
-                <div className="hidden md:block h-8 w-px bg-slate-200 mx-2"></div>
-
-                <div
-                    className="flex items-center border border-slate-300 rounded-lg p-2 gap-4 cursor-pointer hover:border-slate-400 transition-colors bg-white hover:bg-slate-50 active:scale-95"
-                    onClick={() => alert('Open time picker')}
-                >
-                    <span className="text-slate-500 ml-1"><CalendarIcon /></span>
-                    <div>
-                        <div className="text-[10px] text-slate-500 uppercase font-bold tracking-wide">Start time</div>
-                        <div className="text-sm font-bold text-slate-900">Today, 4:30 PM</div>
-                    </div>
-                    <div className="h-6 w-px bg-slate-200"></div>
-                    <div>
-                        <div className="text-[10px] text-slate-500 uppercase font-bold tracking-wide">End time</div>
-                        <div className="text-sm font-bold text-slate-900">Today, 10:00 PM</div>
-                    </div>
-                    <span className="text-slate-400 mr-1"><ChevronDown /></span>
-                </div>
-            </div>
 
             {/* Filter Bar */}
             <div className="bg-slate-50 border-b border-slate-200 px-4 py-3 flex items-center justify-between z-10 relative overflow-x-auto">
@@ -166,26 +135,37 @@ const ParkingSpotPage = () => {
                         onClick={() => toggleFilter('all')}
                         className={`flex items-center gap-2 border px-4 py-1.5 rounded-full text-sm font-semibold transition-colors shadow-sm active:scale-95 ${activeFilters.includes('all') ? 'bg-blue-50 border-blue-600 text-blue-600' : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-100'}`}
                     >
-                        <FilterIcon /> Filters
+                        <FilterIcon /> All
                     </button>
                     <button
-                        onClick={() => toggleFilter('vehicle')}
-                        className={`flex items-center gap-2 border px-4 py-1.5 rounded-full text-sm font-semibold transition-colors shadow-sm active:scale-95 ${activeFilters.includes('vehicle') ? 'bg-blue-50 border-blue-600 text-blue-600' : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-100'}`}
+                        onClick={() => toggleFilter('motorbike')}
+                        className={`flex items-center gap-2 border px-4 py-1.5 rounded-full text-sm font-semibold transition-colors shadow-sm active:scale-95 ${activeFilters.includes('motorbike') ? 'bg-blue-50 border-blue-600 text-blue-600' : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-100'}`}
                     >
-                        Vehicle Type <ChevronDown />
+                        Motorbike
                     </button>
                     <button
-                        onClick={() => toggleFilter('selfpark')}
-                        className={`flex items-center gap-2 border px-4 py-1.5 rounded-full text-sm font-semibold transition-colors shadow-sm active:scale-95 ${activeFilters.includes('selfpark') ? 'bg-blue-50 border-blue-600 text-blue-600' : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-100'}`}
+                        onClick={() => toggleFilter('car')}
+                        className={`flex items-center gap-2 border px-4 py-1.5 rounded-full text-sm font-semibold transition-colors shadow-sm active:scale-95 ${activeFilters.includes('car') ? 'bg-blue-50 border-blue-600 text-blue-600' : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-100'}`}
                     >
-                        Self Park
+                        Car
                     </button>
                     <button
-                        onClick={() => toggleFilter('garage')}
-                        className={`flex items-center gap-2 border px-4 py-1.5 rounded-full text-sm font-semibold transition-colors shadow-sm active:scale-95 ${activeFilters.includes('garage') ? 'bg-blue-50 border-blue-600 text-blue-600' : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-100'}`}
+                        onClick={() => toggleFilter('ev')}
+                        className={`flex items-center gap-2 border px-4 py-1.5 rounded-full text-sm font-semibold transition-colors shadow-sm active:scale-95 ${activeFilters.includes('ev') ? 'bg-blue-50 border-blue-600 text-blue-600' : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-100'}`}
                     >
-                        Garage - Covered
+                        Electric Vehicle
                     </button>
+                    {(activeFilters.length > 1 || activeFilters[0] !== 'all' || searchText) && (
+                        <button
+                            onClick={() => {
+                                setActiveFilters(['all']);
+                                setSearchText('');
+                            }}
+                            className="flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-semibold transition-colors active:scale-95 text-slate-500 hover:text-red-500 hover:bg-red-50"
+                        >
+                            Clear Filters
+                        </button>
+                    )}
                 </div>
                 <div className="flex items-center gap-2 min-w-max ml-4">
                     <label className="relative inline-flex items-center cursor-pointer select-none">

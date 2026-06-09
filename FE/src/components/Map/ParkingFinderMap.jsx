@@ -38,6 +38,22 @@ const parkingIcon = new L.DivIcon({
   popupAnchor: [0, -15],
 });
 
+// Tạo Custom Icon hiển thị vị trí người dùng (Chấm tròn màu xanh dương)
+const userIcon = new L.DivIcon({
+  html: `<div style="
+    background-color: #2196F3;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 3px solid white;
+    box-shadow: 0 0 15px rgba(33, 150, 243, 0.8);
+  "></div>`,
+  className: 'custom-user-icon',
+  iconSize: [20, 20],
+  iconAnchor: [10, 10],
+  popupAnchor: [0, -10],
+});
+
 // Component con hỗ trợ di chuyển tâm bản đồ mượt mà (flyTo) khi tọa độ thay đổi
 const MapController = ({ center }) => {
   const map = useMap();
@@ -52,13 +68,14 @@ const MapController = ({ center }) => {
 const ParkingFinderMap = () => {
   // Tâm bản đồ mặc định: Khu vực trung tâm (ví dụ: TP.HCM)
   const [center, setCenter] = useState([10.7769, 106.7009]);
+  const [userLocation, setUserLocation] = useState(null);
   const [parkings, setParkings] = useState([]);
   const [loading, setLoading] = useState(false);
 
   // Hàm gọi Overpass API để lấy bãi xe xung quanh 1.5km
   const fetchParkings = async (lat, lng) => {
     setLoading(true);
-    
+
     // Câu lệnh OverpassQL: 
     // - Tìm các node, way, relation có tag "amenity=parking"
     // - (around:1500, lat, lng): Bán kính 1500m (1.5km) xung quanh tọa độ hiện tại
@@ -81,7 +98,7 @@ const ParkingFinderMap = () => {
           'Content-Type': 'application/x-www-form-urlencoded'
         }
       });
-      
+
       const elements = response.data.elements || [];
       setParkings(elements);
     } catch (error) {
@@ -93,7 +110,29 @@ const ParkingFinderMap = () => {
 
   // Gọi API lần đầu khi component vừa render
   useEffect(() => {
-    fetchParkings(center[0], center[1]);
+    // Tự động lấy vị trí hiện tại ngay khi vừa vào trang
+    if ("geolocation" in navigator) {
+      setLoading(true);
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const { latitude, longitude } = position.coords;
+          // Cập nhật tâm bản đồ và vị trí người dùng
+          setCenter([latitude, longitude]);
+          setUserLocation([latitude, longitude]);
+          // Quét dữ liệu bãi xe tại tọa độ mới
+          fetchParkings(latitude, longitude);
+        },
+        (error) => {
+          console.warn("Không lấy được vị trí ban đầu (có thể do người dùng từ chối):", error);
+          // Nếu lỗi hoặc từ chối, dùng vị trí mặc định (TP.HCM)
+          fetchParkings(center[0], center[1]);
+        },
+        { enableHighAccuracy: true, timeout: 5000 }
+      );
+    } else {
+      // Nếu trình duyệt không hỗ trợ geolocation
+      fetchParkings(center[0], center[1]);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -104,8 +143,9 @@ const ParkingFinderMap = () => {
       navigator.geolocation.getCurrentPosition(
         (position) => {
           const { latitude, longitude } = position.coords;
-          // Cập nhật tâm bản đồ mới
+          // Cập nhật tâm bản đồ mới và vị trí người dùng
           setCenter([latitude, longitude]);
+          setUserLocation([latitude, longitude]);
           // Quét lại dữ liệu bãi xe tại tọa độ mới
           fetchParkings(latitude, longitude);
         },
@@ -124,7 +164,7 @@ const ParkingFinderMap = () => {
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
       {/* Nút bấm định vị được thiết kế absolute nổi trên bản đồ */}
-      <button 
+      <button
         onClick={handleFindMyLocation}
         disabled={loading}
         style={{
@@ -147,33 +187,44 @@ const ParkingFinderMap = () => {
           transition: 'all 0.3s ease'
         }}
       >
-        {loading ? '⏳ Đang quét...' : '📍 Tìm bãi xe quanh tôi'}
+        {loading ? '⏳ Đang quét...' : '📍 Find parking'}
       </button>
 
-      <MapContainer 
-        center={center} 
-        zoom={15} 
+      <MapContainer
+        center={center}
+        zoom={15}
         style={{ width: '100%', height: '100%', zIndex: 1 }}
       >
         {/* Component rỗng xử lý logic flyTo */}
         <MapController center={center} />
-        
+
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
+
+        {/* Marker hiển thị vị trí của người dùng */}
+        {userLocation && (
+          <Marker position={userLocation} icon={userIcon}>
+            <Popup>
+              <div style={{ textAlign: 'center', fontSize: '14px', margin: 0 }}>
+                <strong>📍 Bạn đang ở đây</strong>
+              </div>
+            </Popup>
+          </Marker>
+        )}
 
         {/* Lặp qua kết quả từ Overpass API để vẽ Marker */}
         {parkings.map((p) => {
           // Với node thì có lat/lon, với way/relation thì có center.lat/center.lon
           const lat = p.lat || (p.center && p.center.lat);
           const lon = p.lon || (p.center && p.center.lon);
-          
+
           if (!lat || !lon) return null;
 
           const tags = p.tags || {};
           const name = tags.name || 'Bãi giữ xe tòa nhà/vỉa hè';
-          
+
           // Xử lý xác định loại hình truy cập Public/Private
           let accessInfo = "Public (Công cộng)";
           if (tags.access === 'private' || tags.parking === 'private' || tags.access === 'customers') {
@@ -189,18 +240,18 @@ const ParkingFinderMap = () => {
                   <h3 style={{ margin: '0 0 8px 0', fontSize: '16px', color: '#1a1a1a' }}>
                     {name}
                   </h3>
-                  
+
                   <div style={{ fontSize: '14px', color: '#555', display: 'flex', flexDirection: 'column', gap: '4px' }}>
                     <p style={{ margin: 0 }}>
                       <strong>Truy cập:</strong> <span style={{ color: accessInfo.includes('Private') ? '#e74c3c' : '#27ae60', fontWeight: 'bold' }}>{accessInfo}</span>
                     </p>
-                    
+
                     {tags.fee && (
                       <p style={{ margin: 0 }}>
                         <strong>Phí:</strong> {tags.fee === 'yes' ? 'Có thu phí' : tags.fee === 'no' ? 'Miễn phí' : tags.fee}
                       </p>
                     )}
-                    
+
                     {tags.capacity && (
                       <p style={{ margin: 0 }}>
                         <strong>Sức chứa:</strong> {tags.capacity} xe
