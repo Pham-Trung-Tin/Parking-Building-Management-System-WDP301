@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../../components/Header/Header';
 import parkingLotService, { ParkingLot } from '../../services/api/parkingLotService';
+import ParkingFinderMap from '../../components/ParkingFinderMap';
 
 // SVG Icons
 const CalendarIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>;
@@ -366,49 +367,8 @@ const ParkingSpotPage = () => {
                 </div>
 
                 {/* Map Area */}
-                <div className="flex-1 bg-slate-200 relative hidden lg:block">
-                    <iframe
-                        src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3919.513274106207!2d106.69908351533424!3d10.77194489232356!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x31752f40a3b49e59%3A0xa1bd14e483a6028c!2zQ2jhu6MgQuG6v24gVGjDoG5o!5e0!3m2!1svi!2s!4v1714578945678!5m2!1svi!2s"
-                        className="w-full h-full border-0 grayscale-[0.2] contrast-[1.1] opacity-90"
-                        allowFullScreen={true}
-                        loading="lazy"
-                        referrerPolicy="no-referrer-when-downgrade"
-                    ></iframe>
-
-                    {/* Map markers - dynamic từ data */}
-                    {filteredLots.slice(0, 4).map((lot, idx) => {
-                        const positions = [
-                            { top: '45%', left: '45%' },
-                            { top: '35%', left: '55%' },
-                            { top: '55%', left: '40%' },
-                            { top: '60%', left: '58%' },
-                        ];
-                        const pos = positions[idx] || positions[0];
-                        const price = getPrice(lot);
-                        const isFirst = idx === 0;
-                        return (
-                            <div
-                                key={lot._id}
-                                className={`absolute flex items-center justify-center z-10 ${isFirst ? 'animate-bounce' : ''}`}
-                                style={{ top: pos.top, left: pos.left, transform: 'translate(-50%,-50%)' }}
-                                onClick={() => alert(`Select: ${lot.name}`)}
-                            >
-                                <div className={`rounded-full px-3 py-1 font-bold text-sm shadow-[0_4px_10px_rgba(0,0,0,0.3)] border-2 cursor-pointer hover:scale-110 transition-transform whitespace-nowrap ${isFirst ? 'bg-blue-600 text-white border-white' : 'bg-white text-slate-800 border-slate-200 hover:bg-blue-600 hover:text-white hover:border-blue-600'}`}>
-                                    {formatPrice(showFees ? price + 5000 : price)}
-                                </div>
-                            </div>
-                        );
-                    })}
-
-                    {/* Mở trong Maps button */}
-                    <a
-                        href="https://maps.google.com"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="absolute top-3 right-3 bg-white text-slate-700 text-xs font-bold px-3 py-2 rounded-lg shadow-md border border-slate-200 hover:bg-slate-50 transition-colors z-20 flex items-center gap-1.5"
-                    >
-                        <MapPinIcon /> Mở trong Maps ↗
-                    </a>
+                <div className="flex-1 bg-slate-200 relative hidden lg:block z-0">
+                    <ParkingFinderMap />
                 </div>
             </div>
 
