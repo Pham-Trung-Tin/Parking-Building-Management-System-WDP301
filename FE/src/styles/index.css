@@ -1,10 +1,48 @@
-* {
-    box-sizing: border-box;
-}
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-body {
-    margin: 0;
-    min-height: 100vh;
-    background: #f8fafc;
-    color: #0f172a;
-}
+@layer utilities {
+  .animate-fade-in-up {
+    animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+  .animate-fade-in-down {
+    animation: fadeInDown 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+  .animate-on-scroll {
+    opacity: 0;
+  }
+  .animate-on-scroll.slide-up.animate-in {
+    animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+  .animate-on-scroll.fade-in.animate-in {
+    animation: fadeIn 1s ease-out forwards;
+  }
+
+  @keyframes fadeInUp {
+    from {
+      opacity: 0;
+      transform: translateY(30px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes fadeInDown {
+    from {
+      opacity: 0;
+      transform: translateY(-20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+}
