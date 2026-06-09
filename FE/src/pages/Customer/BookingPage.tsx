@@ -126,6 +126,26 @@ const ZoneCard = ({ zone, selected, onSelect }: {
     );
 };
 
+// ─── Legend Item ─────────────────────────────────────────────────────────────
+const LegendItem = ({ color, border, label, icon }: { color: string; border?: string; label: string; icon?: React.ReactNode }) => (
+    <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 600, color: '#e2e8f0' }}>
+        <span style={{
+            width: 20,
+            height: 20,
+            borderRadius: 4,
+            background: color,
+            border: `1.5px solid ${border || color}`,
+            flexShrink: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+        }}>
+            {icon}
+        </span>
+        {label}
+    </span>
+);
+
 // ─── Parking Slot Map Grid ───────────────────────────────────────────────────
 const SlotMapGrid = ({ slots, selectedSlotId, onSelect }: {
     slots: ParkingSlot[];
@@ -150,60 +170,6 @@ const SlotMapGrid = ({ slots, selectedSlotId, onSelect }: {
         return sorted;
     }, [slots]);
 
-
-
-    const statusStyle = (slot: ParkingSlot, isSel: boolean) => {
-        if (isSel) return { bg: '#2563eb', border: '#1d4ed8', color: '#fff', cursor: 'pointer' };
-        switch (slot.status) {
-            case 'available':   return { bg: '#fff',    border: '#cbd5e1', color: '#475569', cursor: 'pointer' };
-            case 'occupied':    return { bg: '#fef2f2', border: '#fca5a5', color: '#dc2626', cursor: 'not-allowed' };
-            case 'reserved':    return { bg: '#fff7ed', border: '#fed7aa', color: '#c2410c', cursor: 'not-allowed' };
-            case 'maintenance': return { bg: '#fefce8', border: '#fde68a', color: '#92400e', cursor: 'not-allowed' };
-            case 'locked':      return { bg: '#f1f5f9', border: '#e2e8f0', color: '#94a3b8', cursor: 'not-allowed' };
-            default:            return { bg: '#fff',    border: '#cbd5e1', color: '#475569', cursor: 'pointer' };
-        }
-    };
-
-    const statusIcon = (status: string, isSel: boolean): React.ReactNode => {
-        if (isSel) return '✓';
-        if (status === 'occupied') {
-            return (
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" width="16" height="16" style={{ color: '#475569' }}>
-                    <rect x="2" y="10" width="20" height="8" rx="2" />
-                    <path d="M6 10l2-5h8l2 5" />
-                    <circle cx="6" cy="18" r="1.5" />
-                    <circle cx="18" cy="18" r="1.5" />
-                </svg>
-            );
-        }
-        if (status === 'reserved') {
-            return (
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" width="15" height="15" style={{ color: '#475569' }}>
-                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                    <line x1="16" y1="2" x2="16" y2="6" />
-                    <line x1="8" y1="2" x2="8" y2="6" />
-                    <line x1="3" y1="10" x2="21" y2="10" />
-                </svg>
-            );
-        }
-        if (status === 'maintenance') {
-            return (
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" width="15" height="15" style={{ color: '#475569' }}>
-                    <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
-                </svg>
-            );
-        }
-        if (status === 'locked') {
-            return (
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" width="15" height="15" style={{ color: '#94a3b8' }}>
-                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                </svg>
-            );
-        }
-        return null;
-    };
-
     if (rows.length === 0) return (
         <div style={{ textAlign: 'center', padding: '32px', color: '#94a3b8', fontSize: 13 }}>
             <div style={{ fontSize: 32, marginBottom: 8 }}>🅿️</div>
@@ -212,94 +178,339 @@ const SlotMapGrid = ({ slots, selectedSlotId, onSelect }: {
     );
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {rows.map(({ row, slots: rowSlots }) => (
-                <div key={row} style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-                    <div style={{
-                        width: 50,
-                        fontSize: 12,
-                        fontWeight: 800,
-                        color: '#64748b',
-                        paddingTop: 14,
-                        flexShrink: 0
-                    }}>
-                        Hàng {row}
-                    </div>
-                    <div style={{
-                        flex: 1,
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(auto-fill, minmax(56px, 1fr))',
-                        gap: 8,
-                        maxWidth: 632, // 10 columns * 56px + 9 gaps * 8px = 632px
-                    }}>
-                        {rowSlots.map(slot => {
-                            const isSel = selectedSlotId === slot._id;
-                            const isAvail = slot.status === 'available';
-                            const st = statusStyle(slot, isSel);
-                            const icon = statusIcon(slot.status, isSel);
-                            return (
-                                <button
-                                    key={slot._id}
-                                    disabled={!isAvail && !isSel}
-                                    onClick={() => isAvail && onSelect(slot)}
-                                    title={`${slot.slotCode}${slot.status !== 'available' ? ` — ${slot.status}` : ''}`}
-                                    style={{
-                                        width: 56,
-                                        height: 46,
-                                        border: `1.5px solid ${st.border}`,
-                                        borderRadius: 6,
-                                        background: st.bg,
-                                        color: st.color,
-                                        fontSize: icon ? 14 : 9.5,
-                                        fontWeight: 700,
-                                        cursor: st.cursor,
-                                        padding: 0,
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        transition: 'all 0.15s',
-                                        flexShrink: 0,
-                                        boxShadow: isSel ? '0 0 0 2px rgba(37,99,235,0.3)' : 'none',
-                                        transform: isSel ? 'scale(1.06)' : 'scale(1)',
-                                        position: 'relative',
-                                    }}
-                                >
-                                    {icon || (
-                                        <span style={{ fontSize: 9.5, lineHeight: 1.1, textAlign: 'center', display: 'block', wordBreak: 'break-all', padding: '0 2px' }}>
-                                            {slot.slotCode}
-                                        </span>
-                                    )}
-                                    {/* EV badge */}
-                                    {slot.features?.hasEVCharger && !isSel && isAvail && (
-                                        <span style={{
-                                            position: 'absolute', top: 2, right: 2,
-                                            fontSize: 8, background: '#10b981', color: '#fff',
-                                            borderRadius: 3, padding: '0 2px', lineHeight: '12px'
-                                        }}>⚡</span>
-                                    )}
-                                </button>
-                            );
-                        })}
-                    </div>
+        <div style={{
+            background: 'radial-gradient(circle at center, #1b202d 0%, #0d121c 100%)', // Dark realistic asphalt
+            borderRadius: 16,
+            border: '1px solid #1f2937',
+            padding: '24px',
+            color: '#fff',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 28,
+            overflowX: 'auto',
+            position: 'relative',
+            boxShadow: 'inset 0 0 40px rgba(0,0,0,0.8)'
+        }}>
+            {/* Glassmorphic Floating Legend Card */}
+            <div style={{
+                background: 'rgba(255, 255, 255, 0.08)',
+                backdropFilter: 'blur(20px)',
+                WebkitBackdropFilter: 'blur(20px)',
+                borderRadius: '16px',
+                border: '1px solid rgba(255, 255, 255, 0.15)',
+                padding: '16px 24px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 12,
+                boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.3)',
+                alignSelf: 'flex-start',
+                minWidth: 'max-content'
+            }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontSize: 14, fontWeight: 800, color: '#ffffff', letterSpacing: '-0.3px' }}>Tối Ưu Hoá Vị Trí Bởi AI &amp; ANPR</span>
+                    <span style={{ fontSize: 9, background: '#2563eb', color: '#fff', padding: '2px 5px', borderRadius: 4, fontWeight: 900 }}>AI</span>
                 </div>
-            ))}
+                
+                <div style={{ display: 'flex', gap: '12px 16px', flexWrap: 'wrap' }}>
+                    <LegendItem color="rgba(16, 185, 129, 0.05)" border="#10b981" label="Trống" />
+                    <LegendItem color="#2563eb" border="#2563eb" label="Đang chọn" icon={<span style={{ color: '#fff', fontSize: 10, fontWeight: 900 }}>✓</span>} />
+                    <LegendItem color="rgba(239, 68, 68, 0.05)" border="#ef4444" label="Đang đỗ" icon={
+                        <svg viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" width="12" height="12">
+                            <rect x="2" y="10" width="20" height="8" rx="2" />
+                            <path d="M6 10l2-5h8l2 5" />
+                            <circle cx="6" cy="18" r="1.5" />
+                            <circle cx="18" cy="18" r="1.5" />
+                        </svg>
+                    } />
+                    <LegendItem color="rgba(234, 179, 8, 0.05)" border="#eab308" label="Đã đặt" icon={
+                        <svg viewBox="0 0 24 24" fill="none" stroke="#eab308" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" width="11" height="11">
+                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                            <line x1="16" y1="2" x2="16" y2="6" />
+                            <line x1="8" y1="2" x2="8" y2="6" />
+                            <line x1="3" y1="10" x2="21" y2="10" />
+                        </svg>
+                    } />
+                    <LegendItem color="rgba(202, 138, 4, 0.05)" border="#ca8a04" label="Bảo trì" icon={
+                        <svg viewBox="0 0 24 24" fill="none" stroke="#ca8a04" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" width="11" height="11">
+                            <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+                        </svg>
+                    } />
+                    <LegendItem color="rgba(100, 116, 139, 0.05)" border="#64748b" label="Khoá" icon={
+                        <svg viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" width="11" height="11">
+                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                        </svg>
+                    } />
+                </div>
+            </div>
+
+            {/* Parking Layout Rows */}
+            {rows.map(({ row, slots: rowSlots }) => {
+                // Chunk rowSlots into pairs of top/bottom rows (max 10 slots each)
+                const slotRows: ParkingSlot[][] = [];
+                for (let i = 0; i < rowSlots.length; i += 10) {
+                    slotRows.push(rowSlots.slice(i, i + 10));
+                }
+
+                // Group slotRows into pairs
+                const pairs: { top: ParkingSlot[]; bottom?: ParkingSlot[] }[] = [];
+                for (let i = 0; i < slotRows.length; i += 2) {
+                    pairs.push({
+                        top: slotRows[i],
+                        bottom: slotRows[i + 1]
+                    });
+                }
+
+                return (
+                    <div key={row} style={{ display: 'flex', flexDirection: 'column', width: '100%', minWidth: '700px' }}>
+                        {/* Row Header */}
+                        <div style={{ fontSize: 13, fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.15em', marginBottom: 12, paddingLeft: 8 }}>
+                            HÀNG {row}
+                        </div>
+
+                        {pairs.map((pair, pIdx) => (
+                            <div key={pIdx} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%', margin: '12px 0' }}>
+                                {/* Top slots (face down) */}
+                                <div style={{ display: 'flex', gap: 8, justifyContent: 'center', alignItems: 'flex-end', width: '100%' }}>
+                                    {/* Real Slots */}
+                                    {pair.top.map(slot => {
+                                        const isSel = selectedSlotId === slot._id;
+                                        const isAvail = slot.status === 'available';
+                                        const isOccupied = slot.status === 'occupied';
+                                        const isReserved = slot.status === 'reserved';
+                                        const isMaint = slot.status === 'maintenance';
+                                        const isLocked = slot.status === 'locked';
+
+                                        let textColor = 'rgba(255,255,255,0.7)';
+                                        if (isOccupied) textColor = '#ef4444';
+                                        if (isReserved || isMaint) textColor = '#fbbf24';
+                                        if (isLocked) textColor = '#64748b';
+
+                                        const borderStyle = isSel ? {
+                                            borderTop: '2px solid #2563eb',
+                                            borderLeft: '2px solid #2563eb',
+                                            borderRight: '2px solid #2563eb',
+                                            borderBottom: 'none',
+                                            boxShadow: '0 -2px 10px rgba(37,99,235,0.4)',
+                                        } : {
+                                            borderTop: '1.5px solid rgba(255,255,255,0.25)',
+                                            borderLeft: '1.5px solid rgba(255,255,255,0.25)',
+                                            borderRight: '1.5px solid rgba(255,255,255,0.25)',
+                                            borderBottom: 'none'
+                                        };
+
+                                        return (
+                                            <button
+                                                key={slot._id}
+                                                disabled={!isAvail && !isSel}
+                                                onClick={() => isAvail && onSelect(slot)}
+                                                title={`${slot.slotCode} — ${slot.status}`}
+                                                style={{
+                                                    width: 48,
+                                                    height: 76,
+                                                    ...borderStyle,
+                                                    background: isSel ? 'rgba(37, 99, 235, 0.15)' : isLocked ? 'rgba(255,255,255,0.01)' : 'rgba(255, 255, 255, 0.03)',
+                                                    cursor: isAvail ? 'pointer' : 'not-allowed',
+                                                    display: 'flex',
+                                                    flexDirection: 'column',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'space-between',
+                                                    padding: '8px 2px',
+                                                    transition: 'all 0.2s',
+                                                    position: 'relative',
+                                                    outline: 'none',
+                                                    borderRadius: 0,
+                                                }}
+                                            >
+                                                <span style={{ fontSize: 10, fontWeight: 800, color: isSel ? '#2563eb' : textColor, fontFamily: 'monospace' }}>
+                                                    {slot.slotCode.replace(/^[^-]+-/, '')}
+                                                </span>
+                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1, position: 'relative' }}>
+                                                    {isSel ? (
+                                                        <div style={{ width: 18, height: 18, borderRadius: '50%', background: '#10b981', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 900, boxShadow: '0 2px 4px rgba(0,0,0,0.3)' }}>✓</div>
+                                                    ) : isOccupied ? (
+                                                        <>
+                                                            <div style={{ position: 'absolute', top: -14, right: -12, width: 6, height: 6, borderRadius: '50%', background: '#10b981' }} />
+                                                            <svg viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" width="18" height="18">
+                                                                <rect x="2" y="10" width="20" height="8" rx="2" />
+                                                                <path d="M6 10l2-5h8l2 5" />
+                                                                <circle cx="6" cy="18" r="1.5" />
+                                                                <circle cx="18" cy="18" r="1.5" />
+                                                            </svg>
+                                                        </>
+                                                    ) : isReserved ? (
+                                                        <svg viewBox="0 0 24 24" fill="none" stroke="#eab308" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" width="16" height="16">
+                                                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                                                            <line x1="16" y1="2" x2="16" y2="6" />
+                                                            <line x1="8" y1="2" x2="8" y2="6" />
+                                                            <line x1="3" y1="10" x2="21" y2="10" />
+                                                        </svg>
+                                                    ) : isMaint ? (
+                                                        <svg viewBox="0 0 24 24" fill="none" stroke="#ca8a04" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" width="16" height="16">
+                                                            <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+                                                        </svg>
+                                                    ) : isLocked ? (
+                                                        <svg viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" width="15" height="15">
+                                                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                                                            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                                                        </svg>
+                                                    ) : slot.features?.hasEVCharger ? (
+                                                        <span style={{ fontSize: 10, color: '#10b981', lineHeight: 1 }}>⚡</span>
+                                                    ) : null}
+                                                </div>
+                                            </button>
+                                        );
+                                    })}
+
+                                    {/* Pad empty spacing slots */}
+                                    {pair.top.length < 10 && Array.from({ length: 10 - pair.top.length }).map((_, i) => (
+                                        <div key={`empty-top-${i}`} style={{ width: 48, height: 76 }} />
+                                    ))}
+                                </div>
+
+                                {/* Horizontal Driveway */}
+                                <div style={{
+                                    height: 44,
+                                    background: '#090d14',
+                                    borderTop: '1px dashed rgba(255,255,255,0.12)',
+                                    borderBottom: '1px dashed rgba(255,255,255,0.12)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    position: 'relative',
+                                    margin: '8px 0',
+                                    width: '100%',
+                                    borderRadius: '4px'
+                                }}>
+                                    {/* Dashed Center Road Line */}
+                                    <div style={{
+                                        position: 'absolute',
+                                        top: '50%',
+                                        left: 0,
+                                        right: 0,
+                                        height: 0,
+                                        borderTop: '1.8px dashed rgba(255,255,255,0.18)',
+                                        transform: 'translateY(-50%)',
+                                        pointerEvents: 'none'
+                                    }} />
+
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'rgba(255,255,255,0.35)', fontSize: 10, fontWeight: 700, zIndex: 1, paddingLeft: 16 }}>
+                                        <span>Lối Vào</span>
+                                        <span style={{ fontSize: 12 }}>↑</span>
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'rgba(255,255,255,0.35)', fontSize: 10, fontWeight: 700, zIndex: 1, paddingRight: 16 }}>
+                                        <span style={{ fontSize: 12 }}>↓</span>
+                                        <span>Lối Ra</span>
+                                    </div>
+                                </div>
+
+                                {/* Bottom slots (face up) */}
+                                {pair.bottom && (
+                                    <div style={{ display: 'flex', gap: 8, justifyContent: 'center', alignItems: 'flex-start', width: '100%' }}>
+                                        {/* Real Slots */}
+                                        {pair.bottom.map(slot => {
+                                            const isSel = selectedSlotId === slot._id;
+                                            const isAvail = slot.status === 'available';
+                                            const isOccupied = slot.status === 'occupied';
+                                            const isReserved = slot.status === 'reserved';
+                                            const isMaint = slot.status === 'maintenance';
+                                            const isLocked = slot.status === 'locked';
+
+                                            let textColor = 'rgba(255,255,255,0.7)';
+                                            if (isOccupied) textColor = '#ef4444';
+                                            if (isReserved || isMaint) textColor = '#fbbf24';
+                                            if (isLocked) textColor = '#64748b';
+
+                                            const borderStyle = isSel ? {
+                                                borderBottom: '2px solid #2563eb',
+                                                borderLeft: '2px solid #2563eb',
+                                                borderRight: '2px solid #2563eb',
+                                                borderTop: 'none',
+                                                boxShadow: '0 2px 10px rgba(37,99,235,0.4)',
+                                            } : {
+                                                borderBottom: '1.5px solid rgba(255,255,255,0.25)',
+                                                borderLeft: '1.5px solid rgba(255,255,255,0.25)',
+                                                borderRight: '1.5px solid rgba(255,255,255,0.25)',
+                                                borderTop: 'none'
+                                            };
+
+                                            return (
+                                                <button
+                                                    key={slot._id}
+                                                    disabled={!isAvail && !isSel}
+                                                    onClick={() => isAvail && onSelect(slot)}
+                                                    title={`${slot.slotCode} — ${slot.status}`}
+                                                    style={{
+                                                        width: 48,
+                                                        height: 76,
+                                                        ...borderStyle,
+                                                        background: isSel ? 'rgba(37, 99, 235, 0.15)' : isLocked ? 'rgba(255,255,255,0.01)' : 'rgba(255, 255, 255, 0.03)',
+                                                        cursor: isAvail ? 'pointer' : 'not-allowed',
+                                                        display: 'flex',
+                                                        flexDirection: 'column-reverse',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'space-between',
+                                                        padding: '8px 2px',
+                                                        transition: 'all 0.2s',
+                                                        position: 'relative',
+                                                        outline: 'none',
+                                                        borderRadius: 0,
+                                                    }}
+                                                >
+                                                    <span style={{ fontSize: 10, fontWeight: 800, color: isSel ? '#2563eb' : textColor, fontFamily: 'monospace' }}>
+                                                        {slot.slotCode.replace(/^[^-]+-/, '')}
+                                                    </span>
+                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1, position: 'relative' }}>
+                                                        {isSel ? (
+                                                            <div style={{ width: 18, height: 18, borderRadius: '50%', background: '#10b981', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 900, boxShadow: '0 2px 4px rgba(0,0,0,0.3)' }}>✓</div>
+                                                        ) : isOccupied ? (
+                                                            <>
+                                                                <div style={{ position: 'absolute', top: -14, right: -12, width: 6, height: 6, borderRadius: '50%', background: '#10b981' }} />
+                                                                <svg viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" width="18" height="18">
+                                                                    <rect x="2" y="10" width="20" height="8" rx="2" />
+                                                                    <path d="M6 10l2-5h8l2 5" />
+                                                                    <circle cx="6" cy="18" r="1.5" />
+                                                                    <circle cx="18" cy="18" r="1.5" />
+                                                                </svg>
+                                                            </>
+                                                        ) : isReserved ? (
+                                                            <svg viewBox="0 0 24 24" fill="none" stroke="#eab308" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" width="16" height="16">
+                                                                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                                                                <line x1="16" y1="2" x2="16" y2="6" />
+                                                                <line x1="8" y1="2" x2="8" y2="6" />
+                                                                <line x1="3" y1="10" x2="21" y2="10" />
+                                                            </svg>
+                                                        ) : isMaint ? (
+                                                            <svg viewBox="0 0 24 24" fill="none" stroke="#ca8a04" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" width="16" height="16">
+                                                                <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+                                                            </svg>
+                                                        ) : isLocked ? (
+                                                            <svg viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" width="15" height="15">
+                                                                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                                                                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                                                            </svg>
+                                                        ) : slot.features?.hasEVCharger ? (
+                                                            <span style={{ fontSize: 10, color: '#10b981', lineHeight: 1 }}>⚡</span>
+                                                        ) : null}
+                                                    </div>
+                                                </button>
+                                            );
+                                        })}
+
+                                        {/* Pad empty spacing slots */}
+                                        {pair.bottom.length < 10 && Array.from({ length: 10 - pair.bottom.length }).map((_, i) => (
+                                            <div key={`empty-bottom-${i}`} style={{ width: 48, height: 76 }} />
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                );
+            })}
         </div>
     );
 };
-
-// ─── Legend Item ─────────────────────────────────────────────────────────────
-const LegendItem = ({ color, border, label, icon }: { color: string; border?: string; label: string; icon?: React.ReactNode }) => (
-    <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 600, color: '#64748b' }}>
-        <span style={{
-            width: 20, height: 20, borderRadius: 4, background: color,
-            border: `1.5px solid ${border || color}`, flexShrink: 0,
-            display: 'flex', alignItems: 'center', justifyContent: 'center'
-        }}>
-            {icon}
-        </span>
-        {label}
-    </span>
-);
 
 // ─── Main Page ───────────────────────────────────────────────────────────────
 const BookingPage = () => {
@@ -884,38 +1095,7 @@ const BookingPage = () => {
                                         </div>
                                     </div>
 
-                                    {/* Legend */}
-                                    <div className="bk-map-legend" style={{ marginBottom: 14, display: 'flex', gap: 14, flexWrap: 'wrap' }}>
-                                        <LegendItem color="#fff" border="#cbd5e1" label="Trống" />
-                                        <LegendItem color="#0f172a" border="#0f172a" label="Đang chọn" icon={<span style={{ color: '#fff', fontSize: 10, fontWeight: 900 }}>✓</span>} />
-                                        <LegendItem color="#fff" border="#cbd5e1" label="Đang đỗ" icon={
-                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" width="11" height="11" style={{ color: '#475569' }}>
-                                                <rect x="2" y="10" width="20" height="8" rx="2" />
-                                                <path d="M6 10l2-5h8l2 5" />
-                                                <circle cx="6" cy="18" r="1.5" />
-                                                <circle cx="18" cy="18" r="1.5" />
-                                            </svg>
-                                        } />
-                                        <LegendItem color="#fff" border="#cbd5e1" label="Đã đặt" icon={
-                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" width="11" height="11" style={{ color: '#475569' }}>
-                                                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                                                <line x1="16" y1="2" x2="16" y2="6" />
-                                                <line x1="8" y1="2" x2="8" y2="6" />
-                                                <line x1="3" y1="10" x2="21" y2="10" />
-                                            </svg>
-                                        } />
-                                        <LegendItem color="#fff" border="#cbd5e1" label="Bảo trì" icon={
-                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" width="11" height="11" style={{ color: '#475569' }}>
-                                                <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
-                                            </svg>
-                                        } />
-                                        <LegendItem color="#f1f5f9" border="#cbd5e1" label="Khoá" icon={
-                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" width="11" height="11" style={{ color: '#94a3b8' }}>
-                                                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                                                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                                            </svg>
-                                        } />
-                                    </div>
+                                    {/* (Legend is now rendered inside SlotMapGrid) */}
 
                                     {slotsLoading ? (
                                         <div className="bk-loading"><div className="bk-spinner" /> Đang tải bản đồ ô đỗ...</div>
