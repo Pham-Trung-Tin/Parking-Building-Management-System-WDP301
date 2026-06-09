@@ -60,8 +60,9 @@ const ParkingSpotPage = () => {
     const [showFees, setShowFees] = useState(false);
     const [searchText, setSearchText] = useState('');
 
-    // API state
-    const [parkingLots, setParkingLots] = useState<ParkingLot[]>([]);
+    // API state (sử dụng từ Map)
+    const [mapParkings, setMapParkings] = useState<any[]>([]);
+    const [selectedParkingId, setSelectedParkingId] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -70,26 +71,6 @@ const ParkingSpotPage = () => {
             prev.includes(filter) ? prev.filter(f => f !== filter) : [...prev, filter]
         );
     };
-
-    // Fetch parking lots from API
-    useEffect(() => {
-        const fetchLots = async () => {
-            setLoading(true);
-            setError(null);
-            try {
-                const data = await parkingLotService.getParkingLots({ status: 'active' });
-                const list: ParkingLot[] = Array.isArray(data)
-                    ? data
-                    : (data?.data ?? data?.parkingLots ?? data?.lots ?? []);
-                setParkingLots(list.filter(l => !l.isDeleted));
-            } catch (err: any) {
-                setError(err?.message || 'Không thể tải danh sách bãi đỗ xe.');
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchLots();
-    }, []);
 
     const handleBookNow = (lot: ParkingLot) => {
         navigate('/booking', {
@@ -111,15 +92,16 @@ const ParkingSpotPage = () => {
         return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(price);
     };
 
-    // Filter by search
-    const filteredLots = parkingLots.filter(lot => {
-        if (!searchText) return true;
-        const q = searchText.toLowerCase();
-        return (
-            lot.name?.toLowerCase().includes(q) ||
-            lot.code?.toLowerCase().includes(q) ||
-            formatAddress(lot.address).toLowerCase().includes(q)
-        );
+    // Apply filters and search
+    const filteredLots = mapParkings.filter(p => {
+        const tags = p.tags || {};
+        const name = (tags.name || 'Building / Sidewalk Parking').toLowerCase();
+        
+        if (searchText && !name.includes(searchText.toLowerCase())) {
+            return false;
+        }
+        
+        return true;
     });
 
     return (
@@ -189,7 +171,7 @@ const ParkingSpotPage = () => {
                     <div className="px-5 py-3 flex justify-between items-center bg-white border-b border-slate-200 shadow-sm z-10">
                         <div className="flex items-center gap-2">
                             <span className="text-sm font-semibold text-slate-600">Sort by Relevance</span>
-                            {!loading && parkingLots.length > 0 && (
+                            {!loading && mapParkings.length > 0 && (
                                 <span className="text-xs bg-blue-100 text-blue-700 font-bold px-2 py-0.5 rounded-full">
                                     {filteredLots.length} bãi
                                 </span>
@@ -244,102 +226,54 @@ const ParkingSpotPage = () => {
                             <div className="flex flex-col items-center justify-center py-12 text-center gap-2">
                                 <div className="text-4xl">🅿️</div>
                                 <div className="text-sm font-bold text-slate-700">
-                                    {searchText ? 'Không tìm thấy bãi đỗ phù hợp' : 'Chưa có bãi đỗ xe nào'}
+                                    {searchText ? 'No matching parking lots' : 'No parking lots found'}
                                 </div>
                                 <div className="text-xs text-slate-400">
-                                    {searchText ? 'Thử từ khóa khác' : 'Vui lòng quay lại sau'}
+                                    {searchText ? 'Try a different keyword' : 'Please check back later'}
                                 </div>
                             </div>
                         )}
 
                         {/* Parking lot cards */}
-                        {!loading && !error && filteredLots.map((lot, idx) => {
-                            const price = getPrice(lot);
-                            const image = (lot.images && lot.images.length > 0 && lot.images[0])
-                                ? lot.images[0]
-                                : FALLBACK_IMAGES[idx % FALLBACK_IMAGES.length];
-                            const isPopular = (lot.availableSlots ?? 0) > 100 || idx === 0;
-                            const address = formatAddress(lot.address);
-                            const availColor = getAvailabilityColor(lot.availableSlots ?? 0, lot.totalSlots ?? 1);
+                        {!loading && !error && filteredLots.map((p, idx) => {
+                            const tags = p.tags || {};
+                            const name = tags.name || 'Building / Sidewalk Parking';
+                            let accessInfo = "Public";
+                            if (tags.access === 'private' || tags.parking === 'private' || tags.access === 'customers') {
+                                accessInfo = "Private / Customers";
+                            } else if (tags.access) {
+                                accessInfo = tags.access;
+                            }
+                            
+                            const isSelected = selectedParkingId === p.id;
 
                             return (
                                 <div
-                                    key={lot._id}
-                                    className="bg-white rounded-xl shadow-sm border border-slate-200 p-3 flex gap-4 hover:shadow-md transition-all duration-300 hover:border-blue-400 group cursor-pointer"
-                                    onClick={() => alert(`View details: ${lot.name}`)}
+                                    key={p.id}
+                                    className={`bg-white rounded-xl shadow-sm border p-4 flex flex-col gap-2 hover:shadow-md transition-all duration-300 cursor-pointer ${isSelected ? 'border-blue-500 bg-blue-50' : 'border-slate-200 hover:border-blue-400'}`}
+                                    onClick={() => setSelectedParkingId(p.id)}
                                 >
-                                    {/* Image */}
-                                    <div className="relative w-[110px] h-[90px] rounded-lg overflow-hidden shrink-0 bg-slate-100">
-                                        {isPopular && (
-                                            <div className="absolute top-0 left-0 bg-slate-900 text-white text-[10px] font-bold px-2 py-0.5 rounded-br-lg z-10">
-                                                Popular
-                                            </div>
-                                        )}
-                                        <img
-                                            src={image}
-                                            alt={lot.name}
-                                            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                                            onError={(e) => {
-                                                (e.target as HTMLImageElement).src = FALLBACK_IMAGES[idx % FALLBACK_IMAGES.length];
-                                            }}
-                                        />
+                                    <div className="flex justify-between items-start gap-2">
+                                        <h3 className={`text-base font-bold leading-snug mb-1 flex-1 ${isSelected ? 'text-blue-700' : 'text-slate-900'}`}>
+                                            {name}
+                                        </h3>
+                                        <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase shrink-0 ${accessInfo.includes('Private') ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}`}>
+                                            {accessInfo}
+                                        </span>
                                     </div>
-
-                                    {/* Info */}
-                                    <div className="flex flex-col flex-1 py-0.5 min-w-0">
-                                        <div className="flex justify-between items-start gap-2">
-                                            <h3 className="text-[13px] font-bold text-slate-900 leading-snug mb-1 line-clamp-2 group-hover:text-blue-600 transition-colors flex-1">
-                                                {lot.name}
-                                            </h3>
-                                            <div className="text-[15px] font-extrabold text-slate-900 whitespace-nowrap shrink-0">
-                                                {formatPrice(showFees ? price + 5000 : price)}
-                                            </div>
-                                        </div>
-
-                                        {/* Address */}
-                                        {address && (
-                                            <div className="flex items-center gap-1 text-[10px] text-slate-500 mb-1.5 font-medium">
-                                                <MapPinIcon />
-                                                <span className="truncate">{address}</span>
-                                            </div>
-                                        )}
-
-                                        {/* Availability */}
-                                        <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-600 mb-2">
-                                            <span className="flex items-center gap-1 text-slate-800">
-                                                <span className="text-slate-400"><WalkingIcon /></span>
-                                                <span style={{ color: availColor }} className="font-bold">
-                                                    {lot.availableSlots ?? '?'}/{lot.totalSlots ?? '?'}
-                                                </span>
-                                                <span className="text-slate-500 font-normal">chỗ trống</span>
-                                            </span>
-                                            {lot.totalFloors && (
-                                                <>
-                                                    <span className="w-1 h-1 rounded-full bg-slate-300"></span>
-                                                    <span className="text-slate-600">{lot.totalFloors} tầng</span>
-                                                </>
-                                            )}
-                                        </div>
-
-                                        {/* Actions */}
-                                        <div className="flex justify-between items-end mt-auto">
-                                            <button
-                                                className="text-blue-600 text-xs font-bold hover:underline mb-1"
-                                                onClick={(e) => { e.stopPropagation(); alert(`Details: ${lot.name}`); }}
-                                            >
-                                                Details
-                                            </button>
-                                            <div className="flex flex-col items-end">
-                                                <span className="text-[10px] font-semibold text-slate-500 mb-0.5">Subtotal</span>
-                                                <button
-                                                    className="bg-blue-600 text-white px-5 py-2 rounded-md font-bold text-sm hover:bg-blue-700 active:scale-95 transition-all shadow-sm"
-                                                    onClick={(e) => { e.stopPropagation(); handleBookNow(lot); }}
-                                                >
-                                                    Book Now
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
+                                    
+                                    {tags.fee && <div className="text-sm text-slate-600"><strong>Fee:</strong> {tags.fee === 'yes' ? 'Yes' : tags.fee === 'no' ? 'Free' : tags.fee}</div>}
+                                    {tags.capacity && <div className="text-sm text-slate-600"><strong>Capacity:</strong> {tags.capacity} spaces</div>}
+                                    
+                                    <button 
+                                        className={`mt-2 w-full py-2 rounded-lg font-bold text-sm transition-colors ${isSelected ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setSelectedParkingId(p.id);
+                                        }}
+                                    >
+                                        {isSelected ? '📍 Selected' : '🗺️ View on map'}
+                                    </button>
                                 </div>
                             );
                         })}
@@ -347,8 +281,12 @@ const ParkingSpotPage = () => {
                 </div>
 
                 {/* Map Area */}
-                <div className="flex-1 bg-slate-200 relative hidden lg:block z-0">
-                    <ParkingFinderMap />
+                <div className="hidden lg:block flex-1 relative bg-slate-100 z-0">
+                    <ParkingFinderMap 
+                        onDataLoad={(data) => setMapParkings(data)}
+                        selectedParkingId={selectedParkingId}
+                        onSelectParking={(id) => setSelectedParkingId(id)}
+                    />
                 </div>
             </div>
 

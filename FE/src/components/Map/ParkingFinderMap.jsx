@@ -66,13 +66,30 @@ const MapController = ({ center }) => {
   return null;
 };
 
-const ParkingFinderMap = () => {
+const MapSync = ({ selectedId, markerRefs }) => {
+  const map = useMap();
+  useEffect(() => {
+    if (selectedId && markerRefs.current && markerRefs.current[selectedId]) {
+      const marker = markerRefs.current[selectedId];
+      // Mở popup
+      marker.openPopup();
+      // Di chuyển bản đồ đến marker đó
+      map.flyTo(marker.getLatLng(), 17, { duration: 1.5 });
+    }
+  }, [selectedId, map, markerRefs]);
+  return null;
+};
+
+const ParkingFinderMap = ({ onDataLoad, selectedParkingId, onSelectParking }) => {
   // Tâm bản đồ mặc định: Khu vực trung tâm (ví dụ: TP.HCM)
   const [center, setCenter] = useState([10.7769, 106.7009]);
   const [userLocation, setUserLocation] = useState(null);
   const [parkings, setParkings] = useState([]);
   const [loading, setLoading] = useState(false);
   const [routingTarget, setRoutingTarget] = useState(null); // Lưu tọa độ bãi xe muốn chỉ đường đến
+  
+  // Lưu trữ các tham chiếu đến Marker để có thể điều khiển mở popup từ bên ngoài
+  const markerRefs = React.useRef({});
 
   // Hàm gọi Overpass API để lấy bãi xe xung quanh 1.5km
   const fetchParkings = async (lat, lng) => {
@@ -103,6 +120,7 @@ const ParkingFinderMap = () => {
 
       const elements = response.data.elements || [];
       setParkings(elements);
+      if (onDataLoad) onDataLoad(elements);
     } catch (error) {
       console.error("Lỗi khi gọi Overpass API lấy dữ liệu bãi xe:", error);
     } finally {
@@ -227,6 +245,9 @@ const ParkingFinderMap = () => {
       >
         {/* Component rỗng xử lý logic flyTo */}
         <MapController center={center} />
+        
+        {/* Component đồng bộ chọn bãi xe từ Sidebar */}
+        <MapSync selectedId={selectedParkingId} markerRefs={markerRefs} />
 
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
@@ -269,7 +290,21 @@ const ParkingFinderMap = () => {
           }
 
           return (
-            <Marker key={p.id} position={[lat, lon]} icon={parkingIcon}>
+            <Marker 
+              key={p.id} 
+              position={[lat, lon]} 
+              icon={parkingIcon}
+              ref={(m) => {
+                if (m) {
+                  markerRefs.current[p.id] = m;
+                }
+              }}
+              eventHandlers={{
+                click: () => {
+                  if (onSelectParking) onSelectParking(p.id);
+                }
+              }}
+            >
               <Popup>
                 <div style={{ minWidth: '180px', fontFamily: 'Arial, sans-serif' }}>
                   <h3 style={{ margin: '0 0 8px 0', fontSize: '16px', color: '#1a1a1a' }}>
