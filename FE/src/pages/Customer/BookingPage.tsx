@@ -519,6 +519,7 @@ const BookingPage = () => {
     const parkingSpot = location.state?.spot || { title: 'Bitexco Financial Tower Parking', price: 50000 };
 
     const [vehicleType, setVehicleType] = useState<VehicleType | null>(null);
+    const [showConfirmModal, setShowConfirmModal] = useState(false);
 
     // Vehicle Types from API
     const [vehicleTypes, setVehicleTypes] = useState<VehicleType[]>([]);
@@ -1111,28 +1112,56 @@ const BookingPage = () => {
                                                 onSelect={s => setSelectedSlot(prev => prev?._id === s._id ? null : s)}
                                             />
 
-                                            {/* Selected slot detail panel */}
+                                            {/* Selected slot detail panel & main confirm button */}
                                             {selectedSlot && (
-                                                <div className="slot-detail fade-up">
-                                                    <div className="slot-detail-code">{selectedSlot.slotCode}</div>
-                                                    <div className="slot-detail-info">
-                                                        <div>Hàng {selectedSlot.position?.row ?? '?'} · Cột {selectedSlot.position?.column ?? '?'}</div>
-                                                        <div style={{ color: '#0f172a' }}>✓ Sẵn sàng đặt</div>
+                                                <>
+                                                    <div className="slot-detail fade-up">
+                                                        <div className="slot-detail-code">{selectedSlot.slotCode}</div>
+                                                        <div className="slot-detail-info">
+                                                            <div>Hàng {selectedSlot.position?.row ?? '?'} · Cột {selectedSlot.position?.column ?? '?'}</div>
+                                                            <div style={{ color: '#0f172a' }}>✓ Sẵn sàng đặt</div>
+                                                        </div>
+                                                        <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                                                            {selectedSlot.features?.hasEVCharger && <span className="slot-feature-badge">⚡ EV</span>}
+                                                            {selectedSlot.features?.isVIP && <span className="slot-feature-badge">⭐ VIP</span>}
+                                                            {selectedSlot.features?.isHandicapped && <span className="slot-feature-badge">♿ Khuyết tật</span>}
+                                                            {selectedSlot.features?.hasCCTV && <span className="slot-feature-badge">📷 CCTV</span>}
+                                                            {getVehicleTypeName(selectedSlot.vehicleType) && (
+                                                                <span className="slot-feature-badge">🚗 {getVehicleTypeName(selectedSlot.vehicleType)}</span>
+                                                            )}
+                                                        </div>
+                                                        <button
+                                                            style={{ marginLeft: 8, background: 'none', border: '1.5px solid #bfdbfe', borderRadius: 7, padding: '4px 10px', color: '#3b82f6', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
+                                                            onClick={() => setSelectedSlot(null)}
+                                                        >Bỏ chọn</button>
                                                     </div>
-                                                    <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                                                        {selectedSlot.features?.hasEVCharger && <span className="slot-feature-badge">⚡ EV</span>}
-                                                        {selectedSlot.features?.isVIP && <span className="slot-feature-badge">⭐ VIP</span>}
-                                                        {selectedSlot.features?.isHandicapped && <span className="slot-feature-badge">♿ Khuyết tật</span>}
-                                                        {selectedSlot.features?.hasCCTV && <span className="slot-feature-badge">📷 CCTV</span>}
-                                                        {getVehicleTypeName(selectedSlot.vehicleType) && (
-                                                            <span className="slot-feature-badge">🚗 {getVehicleTypeName(selectedSlot.vehicleType)}</span>
-                                                        )}
+
+                                                    {/* Confirm button under Slot Map Details */}
+                                                    <div className="fade-up" style={{ marginTop: 20, display: 'flex', justifyContent: 'center' }}>
+                                                        <button
+                                                            onClick={() => setShowConfirmModal(true)}
+                                                            style={{
+                                                                background: '#0f172a',
+                                                                color: '#fff',
+                                                                border: 'none',
+                                                                borderRadius: '10px',
+                                                                padding: '14px 48px',
+                                                                fontSize: '15px',
+                                                                fontWeight: 800,
+                                                                cursor: 'pointer',
+                                                                boxShadow: '0 4px 14px rgba(15,23,42,0.3)',
+                                                                transition: 'all 0.2s',
+                                                                width: '100%',
+                                                                maxWidth: '320px',
+                                                                textAlign: 'center'
+                                                            }}
+                                                            onMouseOver={e => { e.currentTarget.style.background = '#1e293b'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
+                                                            onMouseOut={e => { e.currentTarget.style.background = '#0f172a'; e.currentTarget.style.transform = 'translateY(0)'; }}
+                                                        >
+                                                            Xác nhận đặt chỗ
+                                                        </button>
                                                     </div>
-                                                    <button
-                                                        style={{ marginLeft: 8, background: 'none', border: '1.5px solid #bfdbfe', borderRadius: 7, padding: '4px 10px', color: '#3b82f6', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
-                                                        onClick={() => setSelectedSlot(null)}
-                                                    >Bỏ chọn</button>
-                                                </div>
+                                                </>
                                             )}
                                         </>
                                     )}
@@ -1148,47 +1177,129 @@ const BookingPage = () => {
                         </div> {/* end bk-top-col-right */}
                     </div> {/* end bk-top-row */}
                 </div> {/* end bk-body */}
-
-                {/* ── FOOTER ── */}
-                <div className="bk-footer">
-                    <div className="bk-footer-steps">
-                        <div className="bk-footer-label">
-                            Bước {Math.min(stepsDone + 1, 5)}/5 —{' '}
-                            {!vehicleType ? 'Chọn loại phương tiện'
-                                : !selectedFloor ? 'Chọn tầng đỗ xe'
-                                    : !selectedZone ? 'Chọn khu đỗ'
-                                        : !selectedSlot ? 'Chọn ô đỗ cụ thể'
-                                            : 'Hoàn tất — Sẵn sàng đặt chỗ 🎉'}
-                        </div>
-                        <div className="bk-footer-bar">
-                            <div className="bk-footer-bar-fill" style={{ width: `${(stepsDone / 5) * 100}%` }} />
-                        </div>
-                    </div>
-
-                    <div className="bk-footer-summary">
-                        {vehicleType && <>{vehicleType.name}</>}
-                        {selectedFloor && <><span className="bk-footer-bullet">•</span>{selectedFloor.name || `Tầng ${selectedFloor.floorNumber}`}</>}
-                        {selectedZone && <><span className="bk-footer-bullet">•</span>{selectedZone.name}</>}
-                        {selectedSlot && <><span className="bk-footer-bullet">•</span><strong style={{ color: '#0f172a' }}>Ô {selectedSlot.slotCode}</strong></>}
-                        {duration && <><span className="bk-footer-bullet">•</span>{duration} giờ</>}
-                        {estimatedPrice > 0 && vehicleType && (
-                            <><span className="bk-footer-bullet">•</span>
-                            <strong style={{ color: '#0f172a' }}>
-                                ~{new Intl.NumberFormat('vi-VN').format(estimatedPrice)}đ
-                            </strong></>
-                        )}
-                    </div>
-
-                    <button
-                        id="confirm-booking-btn"
-                        className={`bk-confirm-btn ${vehicleType && selectedFloor && selectedZone && selectedSlot ? 'ready' : 'disabled'}`}
-                        onClick={handleReserve}
-                        disabled={!vehicleType || !selectedFloor || !selectedZone || !selectedSlot}
-                    >
-                        Xác nhận đặt chỗ
-                    </button>
-                </div>
             </div>
+
+            {/* ── CONFIRMATION MODAL ── */}
+            {showConfirmModal && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    background: 'rgba(15, 23, 42, 0.6)',
+                    backdropFilter: 'blur(8px)',
+                    WebkitBackdropFilter: 'blur(8px)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 9999,
+                    animation: 'fadeIn 0.2s ease-out'
+                }}>
+                    <div style={{
+                        background: '#ffffff',
+                        borderRadius: '16px',
+                        width: '90%',
+                        maxWidth: '480px',
+                        padding: '28px',
+                        boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)',
+                        animation: 'scaleUp 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) forwards',
+                        color: '#1e293b'
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
+                            <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#dbeafe', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <span style={{ fontSize: 18 }}>🅿️</span>
+                            </div>
+                            <h2 style={{ fontSize: 18, fontWeight: 800, color: '#0f172a' }}>Xác Nhận Đặt Chỗ</h2>
+                        </div>
+
+                        <div style={{ background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0', padding: '16px', display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 24 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                                <span style={{ color: '#64748b', fontWeight: 500 }}>Điểm đỗ:</span>
+                                <strong style={{ color: '#0f172a', textAlign: 'right' }}>{parkingSpot.title}</strong>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                                <span style={{ color: '#64748b', fontWeight: 500 }}>Vị trí ô đỗ:</span>
+                                <strong style={{ color: '#0f172a' }}>
+                                    {selectedFloor?.name || `Tầng ${selectedFloor?.floorNumber}`} · {selectedZone?.name} · <span style={{ color: '#2563eb' }}>{selectedSlot?.slotCode}</span>
+                                </strong>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                                <span style={{ color: '#64748b', fontWeight: 500 }}>Loại phương tiện:</span>
+                                <strong style={{ color: '#0f172a' }}>{vehicleType?.name}</strong>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                                <span style={{ color: '#64748b', fontWeight: 500 }}>Thời gian vào:</span>
+                                <strong style={{ color: '#0f172a' }}>
+                                    {new Date(entryDate).toLocaleDateString('vi-VN')} {new Date(entryDate).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                                </strong>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                                <span style={{ color: '#64748b', fontWeight: 500 }}>Thời gian ra (dự kiến):</span>
+                                <strong style={{ color: '#0f172a' }}>{fmtExit()}</strong>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                                <span style={{ color: '#64748b', fontWeight: 500 }}>Thời lượng:</span>
+                                <strong style={{ color: '#0f172a' }}>{duration} giờ</strong>
+                            </div>
+                            
+                            <div style={{ height: '1px', background: '#e2e8f0', margin: '4px 0' }} />
+                            
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                                <span style={{ color: '#0f172a', fontWeight: 700, fontSize: 14 }}>Ước tính tạm tính:</span>
+                                <strong style={{ color: '#16a34a', fontSize: 20, fontWeight: 900 }}>
+                                    {new Intl.NumberFormat('vi-VN').format(estimatedPrice)}đ
+                                </strong>
+                            </div>
+                        </div>
+
+                        <div style={{ display: 'flex', gap: 12 }}>
+                            <button
+                                onClick={() => setShowConfirmModal(false)}
+                                style={{
+                                    flex: 1,
+                                    padding: '12px',
+                                    border: '1.5px solid #cbd5e1',
+                                    borderRadius: '8px',
+                                    background: '#ffffff',
+                                    color: '#475569',
+                                    fontSize: '14px',
+                                    fontWeight: 700,
+                                    cursor: 'pointer',
+                                    transition: 'all 0.15s'
+                                }}
+                                onMouseOver={e => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.borderColor = '#94a3b8'; }}
+                                onMouseOut={e => { e.currentTarget.style.background = '#ffffff'; e.currentTarget.style.borderColor = '#cbd5e1'; }}
+                            >
+                                Hủy bỏ
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setShowConfirmModal(false);
+                                    handleReserve();
+                                }}
+                                style={{
+                                    flex: 1,
+                                    padding: '12px',
+                                    border: 'none',
+                                    borderRadius: '8px',
+                                    background: '#0f172a',
+                                    color: '#ffffff',
+                                    fontSize: '14px',
+                                    fontWeight: 700,
+                                    cursor: 'pointer',
+                                    transition: 'all 0.15s',
+                                    boxShadow: '0 4px 6px -1px rgba(15,23,42,0.2)'
+                                }}
+                                onMouseOver={e => { e.currentTarget.style.background = '#1e293b'; }}
+                                onMouseOut={e => { e.currentTarget.style.background = '#0f172a'; }}
+                            >
+                                Xác nhận đặt
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </>
     );
 };

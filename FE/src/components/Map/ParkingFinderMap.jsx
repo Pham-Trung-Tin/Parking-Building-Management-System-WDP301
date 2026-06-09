@@ -59,7 +59,7 @@ const userIcon = new L.DivIcon({
 const MapController = ({ center }) => {
   const map = useMap();
   useEffect(() => {
-    if (center) {
+    if (center && Array.isArray(center) && center.length === 2 && !isNaN(center[0]) && !isNaN(center[1])) {
       map.flyTo(center, 15, { duration: 1.5 });
     }
   }, [center, map]);
@@ -74,7 +74,10 @@ const MapSync = ({ selectedId, markerRefs }) => {
       // Mở popup
       marker.openPopup();
       // Di chuyển bản đồ đến marker đó
-      map.flyTo(marker.getLatLng(), 17, { duration: 1.5 });
+      const latLng = marker.getLatLng();
+      if (latLng && !isNaN(latLng.lat) && !isNaN(latLng.lng)) {
+        map.flyTo(latLng, 17, { duration: 1.5 });
+      }
     }
   }, [selectedId, map, markerRefs]);
   return null;
@@ -136,11 +139,16 @@ const ParkingFinderMap = ({ onDataLoad, selectedParkingId, onSelectParking }) =>
       navigator.geolocation.getCurrentPosition(
         (position) => {
           const { latitude, longitude } = position.coords;
-          // Cập nhật tâm bản đồ và vị trí người dùng
-          setCenter([latitude, longitude]);
-          setUserLocation([latitude, longitude]);
-          // Quét dữ liệu bãi xe tại tọa độ mới
-          fetchParkings(latitude, longitude);
+          if (latitude !== undefined && longitude !== undefined && !isNaN(latitude) && !isNaN(longitude)) {
+            // Cập nhật tâm bản đồ và vị trí người dùng
+            setCenter([latitude, longitude]);
+            setUserLocation([latitude, longitude]);
+            // Quét dữ liệu bãi xe tại tọa độ mới
+            fetchParkings(latitude, longitude);
+          } else {
+            console.warn("Vị trí GPS không hợp lệ (NaN/undefined):", latitude, longitude);
+            fetchParkings(center[0], center[1]);
+          }
         },
         (error) => {
           console.warn("Không lấy được vị trí ban đầu (có thể do người dùng từ chối):", error);
@@ -163,11 +171,17 @@ const ParkingFinderMap = ({ onDataLoad, selectedParkingId, onSelectParking }) =>
       navigator.geolocation.getCurrentPosition(
         (position) => {
           const { latitude, longitude } = position.coords;
-          // Cập nhật tâm bản đồ mới và vị trí người dùng
-          setCenter([latitude, longitude]);
-          setUserLocation([latitude, longitude]);
-          // Quét lại dữ liệu bãi xe tại tọa độ mới
-          fetchParkings(latitude, longitude);
+          if (latitude !== undefined && longitude !== undefined && !isNaN(latitude) && !isNaN(longitude)) {
+            // Cập nhật tâm bản đồ mới và vị trí người dùng
+            setCenter([latitude, longitude]);
+            setUserLocation([latitude, longitude]);
+            // Quét lại dữ liệu bãi xe tại tọa độ mới
+            fetchParkings(latitude, longitude);
+          } else {
+            console.error("Vị trí GPS không hợp lệ (NaN/undefined):", latitude, longitude);
+            alert("Vị trí định vị từ GPS không hợp lệ.");
+            setLoading(false);
+          }
         },
         (error) => {
           console.error("Lỗi lấy vị trí GPS:", error);
