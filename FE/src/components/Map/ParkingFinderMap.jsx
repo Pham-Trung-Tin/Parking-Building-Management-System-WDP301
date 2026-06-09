@@ -3,6 +3,7 @@ import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import axios from 'axios';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import RoutingMachine from './RoutingMachine';
 
 // Fix lỗi mất icon mặc định của Leaflet khi build bằng React/Vite
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
@@ -71,6 +72,7 @@ const ParkingFinderMap = () => {
   const [userLocation, setUserLocation] = useState(null);
   const [parkings, setParkings] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [routingTarget, setRoutingTarget] = useState(null); // Lưu tọa độ bãi xe muốn chỉ đường đến
 
   // Hàm gọi Overpass API để lấy bãi xe xung quanh 1.5km
   const fetchParkings = async (lat, lng) => {
@@ -190,6 +192,34 @@ const ParkingFinderMap = () => {
         {loading ? '⏳ Đang quét...' : '📍 Find parking'}
       </button>
 
+      {/* Nút hủy chỉ đường (hiển thị khi đang bật chế độ chỉ đường) */}
+      {routingTarget && (
+        <button
+          onClick={() => setRoutingTarget(null)}
+          style={{
+            position: 'absolute',
+            top: '70px',
+            right: '20px',
+            zIndex: 1000,
+            padding: '10px 20px',
+            backgroundColor: '#FF3B30',
+            color: 'white',
+            border: 'none',
+            borderRadius: '8px',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+            cursor: 'pointer',
+            fontWeight: 'bold',
+            fontSize: '14px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            transition: 'all 0.3s ease'
+          }}
+        >
+          ❌ Cancel directions
+        </button>
+      )}
+
       <MapContainer
         center={center}
         zoom={15}
@@ -203,12 +233,17 @@ const ParkingFinderMap = () => {
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
 
+        {/* Component Vẽ Đường đi (RoutingMachine) */}
+        {userLocation && routingTarget && (
+          <RoutingMachine userCoords={userLocation} parkingCoords={routingTarget} />
+        )}
+
         {/* Marker hiển thị vị trí của người dùng */}
         {userLocation && (
           <Marker position={userLocation} icon={userIcon}>
             <Popup>
               <div style={{ textAlign: 'center', fontSize: '14px', margin: 0 }}>
-                <strong>📍 Bạn đang ở đây</strong>
+                <strong>📍 You are here</strong>
               </div>
             </Popup>
           </Marker>
@@ -223,12 +258,12 @@ const ParkingFinderMap = () => {
           if (!lat || !lon) return null;
 
           const tags = p.tags || {};
-          const name = tags.name || 'Bãi giữ xe tòa nhà/vỉa hè';
+          const name = tags.name || 'Building / Sidewalk Parking';
 
           // Xử lý xác định loại hình truy cập Public/Private
-          let accessInfo = "Public (Công cộng)";
+          let accessInfo = "Public";
           if (tags.access === 'private' || tags.parking === 'private' || tags.access === 'customers') {
-            accessInfo = "Private (Nội bộ / Khách hàng)";
+            accessInfo = "Private / Customers";
           } else if (tags.access) {
             accessInfo = tags.access; // Hiển thị nguyên gốc nếu có tag access khác
           }
@@ -243,21 +278,48 @@ const ParkingFinderMap = () => {
 
                   <div style={{ fontSize: '14px', color: '#555', display: 'flex', flexDirection: 'column', gap: '4px' }}>
                     <p style={{ margin: 0 }}>
-                      <strong>Truy cập:</strong> <span style={{ color: accessInfo.includes('Private') ? '#e74c3c' : '#27ae60', fontWeight: 'bold' }}>{accessInfo}</span>
+                      <strong>Access:</strong> <span style={{ color: accessInfo.includes('Private') ? '#e74c3c' : '#27ae60', fontWeight: 'bold' }}>{accessInfo}</span>
                     </p>
 
                     {tags.fee && (
                       <p style={{ margin: 0 }}>
-                        <strong>Phí:</strong> {tags.fee === 'yes' ? 'Có thu phí' : tags.fee === 'no' ? 'Miễn phí' : tags.fee}
+                        <strong>Fee:</strong> {tags.fee === 'yes' ? 'Yes' : tags.fee === 'no' ? 'Free' : tags.fee}
                       </p>
                     )}
 
                     {tags.capacity && (
                       <p style={{ margin: 0 }}>
-                        <strong>Sức chứa:</strong> {tags.capacity} xe
+                        <strong>Capacity:</strong> {tags.capacity} spaces
                       </p>
                     )}
                   </div>
+                  
+                  {/* Nút Kích hoạt chỉ đường */}
+                  <button 
+                    onClick={() => {
+                      if (userLocation) {
+                        setRoutingTarget([lat, lon]);
+                      } else {
+                        alert("Please enable 'Find parking' to get your location first!");
+                      }
+                    }}
+                    style={{
+                      marginTop: '12px',
+                      padding: '8px 12px',
+                      backgroundColor: '#2A85FF',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      width: '100%',
+                      fontWeight: 'bold',
+                      transition: 'background-color 0.2s'
+                    }}
+                    onMouseOver={(e) => e.target.style.backgroundColor = '#1C6DD0'}
+                    onMouseOut={(e) => e.target.style.backgroundColor = '#2A85FF'}
+                  >
+                    🗺️ Get directions
+                  </button>
                 </div>
               </Popup>
             </Marker>
