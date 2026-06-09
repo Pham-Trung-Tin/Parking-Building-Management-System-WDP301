@@ -4,6 +4,7 @@ import axios from 'axios';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import RoutingMachine from './RoutingMachine';
+import { useNavigate } from 'react-router-dom';
 
 // Fix lỗi mất icon mặc định của Leaflet khi build bằng React/Vite
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
@@ -81,13 +82,14 @@ const MapSync = ({ selectedId, markerRefs }) => {
 };
 
 const ParkingFinderMap = ({ onDataLoad, selectedParkingId, onSelectParking }) => {
+  const navigate = useNavigate();
   // Tâm bản đồ mặc định: Khu vực trung tâm (ví dụ: TP.HCM)
   const [center, setCenter] = useState([10.7769, 106.7009]);
   const [userLocation, setUserLocation] = useState(null);
   const [parkings, setParkings] = useState([]);
   const [loading, setLoading] = useState(false);
   const [routingTarget, setRoutingTarget] = useState(null); // Lưu tọa độ bãi xe muốn chỉ đường đến
-  
+
   // Lưu trữ các tham chiếu đến Marker để có thể điều khiển mở popup từ bên ngoài
   const markerRefs = React.useRef({});
 
@@ -96,7 +98,7 @@ const ParkingFinderMap = ({ onDataLoad, selectedParkingId, onSelectParking }) =>
     setLoading(true);
 
     // Câu lệnh OverpassQL: 
-    // - Tìm các node, way, relation có tag "amenity=parking"
+    // - Tìm các node, way, relation có tag "amenity"="parking"
     // - (around:1500, lat, lng): Bán kính 1500m (1.5km) xung quanh tọa độ hiện tại
     // - [out:json]: Định dạng trả về là JSON
     // - out center: Trả về tọa độ trung tâm cho các dạng way và relation để có thể đặt Marker
@@ -110,22 +112,46 @@ const ParkingFinderMap = ({ onDataLoad, selectedParkingId, onSelectParking }) =>
       out center;
     `;
 
-    try {
-      // Overpass API ưu tiên nhận POST request định dạng x-www-form-urlencoded hoặc text thô
-      const response = await axios.post('https://overpass-api.de/api/interpreter', query, {
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded'
-        }
-      });
+    // Danh sách các Overpass API endpoint dự phòng để thử nếu endpoint chính bị lỗi (như lỗi 504)
+    const endpoints = [
+      'https://overpass-api.de/api/interpreter',
+      'https://lz4.overpass-api.de/api/interpreter',
+      'https://z.overpass-api.de/api/interpreter',
+      'https://overpass.kumi.systems/api/interpreter',
+      'https://overpass.osm.ch/api/interpreter'
+    ];
 
-      const elements = response.data.elements || [];
-      setParkings(elements);
-      if (onDataLoad) onDataLoad(elements);
-    } catch (error) {
-      console.error("Lỗi khi gọi Overpass API lấy dữ liệu bãi xe:", error);
-    } finally {
-      setLoading(false);
+    let success = false;
+
+    for (const endpoint of endpoints) {
+      try {
+        // Overpass API ưu tiên nhận POST request định dạng x-www-form-urlencoded hoặc text thô
+        const response = await axios.post(endpoint, query, {
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded'
+          },
+          timeout: 15000 // Đặt timeout 15s để thử server khác nếu phản hồi quá lâu
+        });
+
+        const elements = response.data.elements || [];
+        setParkings(elements);
+        if (onDataLoad) onDataLoad(elements);
+
+        success = true;
+        break; // Nếu gọi thành công thì thoát vòng lặp
+      } catch (error) {
+        console.warn(`Lỗi khi gọi endpoint ${endpoint}:`, error.message);
+        // Tiếp tục vòng lặp để thử endpoint tiếp theo
+      }
     }
+
+    if (!success) {
+      console.error("Tất cả các Overpass API endpoints đều không khả dụng tại thời điểm này.");
+      // Tuỳ chọn: thông báo cho người dùng
+      // alert("Không thể tải dữ liệu bãi đỗ xe lúc này do sự cố kết nối tới máy chủ bản đồ.");
+    }
+
+    setLoading(false);
   };
 
   // Gọi API lần đầu khi component vừa render
@@ -207,7 +233,7 @@ const ParkingFinderMap = ({ onDataLoad, selectedParkingId, onSelectParking }) =>
           transition: 'all 0.3s ease'
         }}
       >
-        {loading ? '⏳ Đang quét...' : '📍 Find parking'}
+        {loading ? 'Finding...' : 'Find parking'}
       </button>
 
       {/* Nút hủy chỉ đường (hiển thị khi đang bật chế độ chỉ đường) */}
@@ -234,7 +260,7 @@ const ParkingFinderMap = ({ onDataLoad, selectedParkingId, onSelectParking }) =>
             transition: 'all 0.3s ease'
           }}
         >
-          ❌ Cancel directions
+          Cancel directions
         </button>
       )}
 
@@ -245,7 +271,7 @@ const ParkingFinderMap = ({ onDataLoad, selectedParkingId, onSelectParking }) =>
       >
         {/* Component rỗng xử lý logic flyTo */}
         <MapController center={center} />
-        
+
         {/* Component đồng bộ chọn bãi xe từ Sidebar */}
         <MapSync selectedId={selectedParkingId} markerRefs={markerRefs} />
 
@@ -264,7 +290,7 @@ const ParkingFinderMap = ({ onDataLoad, selectedParkingId, onSelectParking }) =>
           <Marker position={userLocation} icon={userIcon}>
             <Popup>
               <div style={{ textAlign: 'center', fontSize: '14px', margin: 0 }}>
-                <strong>📍 You are here</strong>
+                <strong>You are here</strong>
               </div>
             </Popup>
           </Marker>
@@ -290,9 +316,9 @@ const ParkingFinderMap = ({ onDataLoad, selectedParkingId, onSelectParking }) =>
           }
 
           return (
-            <Marker 
-              key={p.id} 
-              position={[lat, lon]} 
+            <Marker
+              key={p.id}
+              position={[lat, lon]}
               icon={parkingIcon}
               ref={(m) => {
                 if (m) {
@@ -328,9 +354,9 @@ const ParkingFinderMap = ({ onDataLoad, selectedParkingId, onSelectParking }) =>
                       </p>
                     )}
                   </div>
-                  
+
                   {/* Nút Kích hoạt chỉ đường */}
-                  <button 
+                  <button
                     onClick={() => {
                       if (userLocation) {
                         setRoutingTarget([lat, lon]);
@@ -353,7 +379,28 @@ const ParkingFinderMap = ({ onDataLoad, selectedParkingId, onSelectParking }) =>
                     onMouseOver={(e) => e.target.style.backgroundColor = '#1C6DD0'}
                     onMouseOut={(e) => e.target.style.backgroundColor = '#2A85FF'}
                   >
-                    🗺️ Get directions
+                    Get directions
+                  </button>
+
+                  {/* Nút Đặt chỗ */}
+                  <button
+                    onClick={() => navigate('/booking')}
+                    style={{
+                      marginTop: '8px',
+                      padding: '8px 12px',
+                      backgroundColor: '#4CAF50',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      width: '100%',
+                      fontWeight: 'bold',
+                      transition: 'background-color 0.2s'
+                    }}
+                    onMouseOver={(e) => e.target.style.backgroundColor = '#45a049'}
+                    onMouseOut={(e) => e.target.style.backgroundColor = '#4CAF50'}
+                  >
+                    Book a slot
                   </button>
                 </div>
               </Popup>
