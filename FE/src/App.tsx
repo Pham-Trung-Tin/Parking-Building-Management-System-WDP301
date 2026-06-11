@@ -14,6 +14,8 @@ import CheckoutPage from './pages/Customer/CheckoutPage';
 import CheckoutSuccessPage from './pages/Customer/CheckoutSuccessPage';
 import AdminPortal from './pages/Admin/AdminPortal';
 import StaffPage from './pages/Staff/StaffPage';
+import StaffExitPage from './pages/Staff/StaffExitPage';
+import StaffExceptionsPage from './pages/Staff/StaffExceptionsPage';
 import { GuestRoute, CustomerRoute, RequireAuthRoute, AdminRoute } from './router/ProtectedRoute';
 
 function App() {
@@ -34,6 +36,8 @@ function App() {
                     {/* Public customer pages */}
                     <Route path="/" element={<HomePage />} />
                     <Route path="/staff" element={<StaffPage />} />
+                    <Route path="/staff/exit" element={<StaffExitPage />} />
+                    <Route path="/staff/exceptions" element={<StaffExceptionsPage />} />
                     <Route path="/find-parking" element={<ParkingSpotPage />} />
 
                     {/* Authenticated customer pages */}
