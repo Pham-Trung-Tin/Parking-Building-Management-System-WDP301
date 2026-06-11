@@ -13,6 +13,7 @@ import SessionPage from './pages/Customer/SessionPage';
 import CheckoutPage from './pages/Customer/CheckoutPage';
 import CheckoutSuccessPage from './pages/Customer/CheckoutSuccessPage';
 import AdminPortal from './pages/Admin/AdminPortal';
+import StaffPage from './pages/Staff/StaffPage';
 import { GuestRoute, CustomerRoute, RequireAuthRoute, AdminRoute } from './router/ProtectedRoute';
 
 function App() {
@@ -32,6 +33,7 @@ function App() {
                 <Route element={<CustomerRoute />}>
                     {/* Public customer pages */}
                     <Route path="/" element={<HomePage />} />
+                    <Route path="/staff" element={<StaffPage />} />
                     <Route path="/find-parking" element={<ParkingSpotPage />} />
 
                     {/* Authenticated customer pages */}
