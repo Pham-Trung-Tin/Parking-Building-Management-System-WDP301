@@ -35,9 +35,6 @@ function App() {
                 <Route element={<CustomerRoute />}>
                     {/* Public customer pages */}
                     <Route path="/" element={<HomePage />} />
-                    <Route path="/staff" element={<StaffPage />} />
-                    <Route path="/staff/exit" element={<StaffExitPage />} />
-                    <Route path="/staff/exceptions" element={<StaffExceptionsPage />} />
                     <Route path="/find-parking" element={<ParkingSpotPage />} />
 
                     {/* Authenticated customer pages */}
@@ -53,6 +50,9 @@ function App() {
                 {/* 3. Admin-only Management Routes */}
                 <Route element={<AdminRoute />}>
                     <Route path="/admin" element={<AdminPortal />} />
+                    <Route path="/staff" element={<StaffPage />} />
+                    <Route path="/staff/exit" element={<StaffExitPage />} />
+                    <Route path="/staff/exceptions" element={<StaffExceptionsPage />} />
                 </Route>
             </Routes>
         </Router>

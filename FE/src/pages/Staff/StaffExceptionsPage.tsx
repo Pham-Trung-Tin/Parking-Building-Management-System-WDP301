@@ -10,8 +10,10 @@ import {
   Ticket,
   ChevronDown
 } from 'lucide-react';
+import useProfile from '../../hooks/useProfile';
 
 const StaffExceptionsPage = () => {
+  const { profile } = useProfile();
   return (
     <div className="flex h-screen bg-gray-50 font-sans text-gray-800">
       {/* Sidebar */}
@@ -43,12 +45,16 @@ const StaffExceptionsPage = () => {
         </div>
 
         <div className="p-6 border-t border-gray-200 flex items-center">
-          <div className="w-10 h-10 rounded-full bg-gray-900 flex items-center justify-center text-white mr-3">
-            <User size={20} />
+          <div className="w-10 h-10 rounded-full bg-gray-900 flex items-center justify-center text-white mr-3 overflow-hidden">
+            {profile?.avatarUrl ? (
+              <img src={profile.avatarUrl} alt={profile.fullName} className="w-full h-full object-cover" />
+            ) : (
+              <User size={20} />
+            )}
           </div>
           <div>
-            <p className="text-sm font-semibold text-gray-900">M. Thompson</p>
-            <p className="text-xs text-gray-500 uppercase">Duty Supervisor</p>
+            <p className="text-sm font-semibold text-gray-900">{profile?.fullName || 'Loading...'}</p>
+            <p className="text-xs text-gray-500 uppercase">{profile?.role ? profile.role.replace('_', ' ') : 'Staff'}</p>
           </div>
         </div>
       </div>

@@ -12,8 +12,11 @@ export const GuestRoute: React.FC = () => {
   if (token && userJson) {
     try {
       const user = JSON.parse(userJson);
-      if (['system_admin', 'parking_manager', 'parking_staff'].includes(user.role)) {
+      if (user.role === 'system_admin') {
         return <Navigate to="/admin" replace />;
+      }
+      if (['parking_manager', 'parking_staff'].includes(user.role)) {
+        return <Navigate to="/staff" replace />;
       }
       return <Navigate to="/" replace />;
     } catch {
@@ -34,8 +37,11 @@ export const CustomerRoute: React.FC = () => {
   if (userJson) {
     try {
       const user = JSON.parse(userJson);
-      if (['system_admin', 'parking_manager', 'parking_staff'].includes(user.role)) {
+      if (user.role === 'system_admin') {
         return <Navigate to="/admin" replace />;
+      }
+      if (['parking_manager', 'parking_staff'].includes(user.role)) {
+        return <Navigate to="/staff" replace />;
       }
     } catch {
       // Ignore
@@ -77,6 +83,10 @@ export const AdminRoute: React.FC = () => {
       const user = JSON.parse(userJson);
       if (!['system_admin', 'parking_manager', 'parking_staff'].includes(user.role)) {
         return <Navigate to="/" replace />;
+      }
+      // If staff tries to access exactly /admin, kick them to /staff
+      if (user.role === 'parking_staff' && window.location.pathname === '/admin') {
+        return <Navigate to="/staff" replace />;
       }
     } catch {
       return <Navigate to="/login" replace />;
