@@ -27,7 +27,7 @@ const IsoBuilding = ({ floors, selectedFloor, onSelect, isFloorAllowed }: {
     const strokeColor = (f: Floor) => selectedFloor?._id === f._id ? '#0f172a' : '#94a3b8';
     if (sorted.length === 0) return (
         <div style={{ height: 180, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: 13 }}>
-            Không có tầng
+            No floors available
         </div>
     );
     const totalH = sorted.length * (H + gap) + D + 30;
@@ -51,7 +51,7 @@ const IsoBuilding = ({ floors, selectedFloor, onSelect, isFloorAllowed }: {
                                 stroke={sel ? 'rgba(255,255,255,0.35)' : '#cbd5e1'} strokeWidth="0.8" />
                         ))}
                         <text x={startX + W / 2} y={baseY + D + H / 2 + 5} textAnchor="middle" fontSize="11" fontWeight="700" fill={sel ? '#ffffff' : '#475569'}>
-                            {f.name || `Tầng ${f.floorNumber}`}
+                            {f.name || `Floor ${f.floorNumber}`}
                         </text>
                         {sel && <text x={startX + W - 12} y={baseY + D + H / 2 + 5} textAnchor="middle" fontSize="13" fill="#ffffff">✓</text>}
                     </g>
@@ -95,7 +95,7 @@ const ZoneCard = ({ zone, selected, onSelect }: {
                     </svg>
                 )}
                 <span style={{ fontSize: 10, color: '#64748b', fontWeight: 500, marginLeft: 2 }}>
-                    {isCar && isMotor ? 'Cả hai' : isCar ? 'Ô tô' : isMotor ? 'Xe máy' : 'Cả hai'}
+                    {isCar && isMotor ? 'Both' : isCar ? 'Car' : isMotor ? 'Motorcycle' : 'Both'}
                 </span>
             </div>
         );
@@ -113,7 +113,7 @@ const ZoneCard = ({ zone, selected, onSelect }: {
                     <div className="zone-vehicle"><VehicleIcons /></div>
                 </div>
                 {selected && <div className="zone-check" style={{ background: '#0f172a' }}>✓</div>}
-                {isFull && <div className="zone-full-badge">Hết chỗ</div>}
+                {isFull && <div className="zone-full-badge">Full</div>}
             </div>
             <div className="zone-slot-info">
                 <div className="zone-slot-bar-bg">
@@ -121,7 +121,7 @@ const ZoneCard = ({ zone, selected, onSelect }: {
                 </div>
                 <div className="zone-slot-text">
                     <span style={{ color: barColor, fontWeight: 700 }}>{zone.availableSlots}</span>
-                    <span style={{ color: '#94a3b8' }}>/{zone.totalSlots} chỗ trống</span>
+                    <span style={{ color: '#94a3b8' }}>/{zone.totalSlots} available</span>
                 </div>
             </div>
         </div>
@@ -175,7 +175,7 @@ const SlotMapGrid = ({ slots, selectedSlotId, onSelect }: {
     if (rows.length === 0) return (
         <div style={{ textAlign: 'center', padding: '32px', color: '#94a3b8', fontSize: 13 }}>
             <div style={{ fontSize: 32, marginBottom: 8 }}>🅿️</div>
-            Không có ô đỗ nào trong khu này
+            No parking slots found in this zone
         </div>
     );
 
@@ -209,14 +209,14 @@ const SlotMapGrid = ({ slots, selectedSlotId, onSelect }: {
                 minWidth: 'max-content'
             }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ fontSize: 14, fontWeight: 800, color: '#ffffff', letterSpacing: '-0.3px' }}>Tối Ưu Hoá Vị Trí Bởi AI &amp; ANPR</span>
+                    <span style={{ fontSize: 14, fontWeight: 800, color: '#ffffff', letterSpacing: '-0.3px' }}>Position Optimized By AI & ANPR</span>
                     <span style={{ fontSize: 9, background: '#2563eb', color: '#fff', padding: '2px 5px', borderRadius: 4, fontWeight: 900 }}>AI</span>
                 </div>
                 
                 <div style={{ display: 'flex', gap: '12px 16px', flexWrap: 'wrap' }}>
-                    <LegendItem color="rgba(16, 185, 129, 0.05)" border="#10b981" label="Trống" />
-                    <LegendItem color="#2563eb" border="#2563eb" label="Đang chọn" icon={<span style={{ color: '#fff', fontSize: 10, fontWeight: 900 }}>✓</span>} />
-                    <LegendItem color="rgba(239, 68, 68, 0.05)" border="#ef4444" label="Đang đỗ" icon={
+                    <LegendItem color="rgba(16, 185, 129, 0.05)" border="#10b981" label="Available" />
+                    <LegendItem color="#2563eb" border="#2563eb" label="Selected" icon={<span style={{ color: '#fff', fontSize: 10, fontWeight: 900 }}>✓</span>} />
+                    <LegendItem color="rgba(239, 68, 68, 0.05)" border="#ef4444" label="Occupied" icon={
                         <svg viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" width="12" height="12">
                             <rect x="2" y="10" width="20" height="8" rx="2" />
                             <path d="M6 10l2-5h8l2 5" />
@@ -224,7 +224,7 @@ const SlotMapGrid = ({ slots, selectedSlotId, onSelect }: {
                             <circle cx="18" cy="18" r="1.5" />
                         </svg>
                     } />
-                    <LegendItem color="rgba(234, 179, 8, 0.05)" border="#eab308" label="Đã đặt" icon={
+                    <LegendItem color="rgba(234, 179, 8, 0.05)" border="#eab308" label="Reserved" icon={
                         <svg viewBox="0 0 24 24" fill="none" stroke="#eab308" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" width="11" height="11">
                             <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
                             <line x1="16" y1="2" x2="16" y2="6" />
@@ -232,12 +232,12 @@ const SlotMapGrid = ({ slots, selectedSlotId, onSelect }: {
                             <line x1="3" y1="10" x2="21" y2="10" />
                         </svg>
                     } />
-                    <LegendItem color="rgba(202, 138, 4, 0.05)" border="#ca8a04" label="Bảo trì" icon={
+                    <LegendItem color="rgba(202, 138, 4, 0.05)" border="#ca8a04" label="Maintenance" icon={
                         <svg viewBox="0 0 24 24" fill="none" stroke="#ca8a04" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" width="11" height="11">
                             <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
                         </svg>
                     } />
-                    <LegendItem color="rgba(100, 116, 139, 0.05)" border="#64748b" label="Khoá" icon={
+                    <LegendItem color="rgba(100, 116, 139, 0.05)" border="#64748b" label="Locked" icon={
                         <svg viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" width="11" height="11">
                             <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
                             <path d="M7 11V7a5 5 0 0 1 10 0v4" />
@@ -267,7 +267,7 @@ const SlotMapGrid = ({ slots, selectedSlotId, onSelect }: {
                     <div key={row} style={{ display: 'flex', flexDirection: 'column', width: '100%', minWidth: '700px' }}>
                         {/* Row Header */}
                         <div style={{ fontSize: 13, fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.15em', marginBottom: 12, paddingLeft: 8 }}>
-                            HÀNG {row}
+                            ROW {row}
                         </div>
 
                         {pairs.map((pair, pIdx) => (
@@ -397,12 +397,12 @@ const SlotMapGrid = ({ slots, selectedSlotId, onSelect }: {
                                     }} />
 
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'rgba(255,255,255,0.35)', fontSize: 10, fontWeight: 700, zIndex: 1, paddingLeft: 16 }}>
-                                        <span>Lối Vào</span>
+                                        <span>Entry</span>
                                         <span style={{ fontSize: 12 }}>↑</span>
                                     </div>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'rgba(255,255,255,0.35)', fontSize: 10, fontWeight: 700, zIndex: 1, paddingRight: 16 }}>
                                         <span style={{ fontSize: 12 }}>↓</span>
-                                        <span>Lối Ra</span>
+                                        <span>Exit</span>
                                     </div>
                                 </div>
 
@@ -566,11 +566,11 @@ const BookingPage = () => {
                 const list: VehicleType[] = Array.isArray(data) ? data : (data as any)?.data ?? [];
                 setVehicleTypes(list.filter(v => v.isActive && !v.isDeleted));
             } catch {
-                // Fallback sang 2 loại mặc định nếu API lỗi
+                // Fallback to 2 default types if API fails
                 setVehicleTypes([
-                    { _id: 'car', name: 'Ô tô', code: 'CAR', size: 'medium', isActive: true,
+                    { _id: 'car', name: 'Car', code: 'CAR', size: 'medium', isActive: true,
                       pricing: { hourlyRate: 10000, dailyRate: 80000 } },
-                    { _id: 'motorcycle', name: 'Xe máy', code: 'MOTORBIKE', size: 'small', isActive: true,
+                    { _id: 'motorcycle', name: 'Motorcycle', code: 'MOTORBIKE', size: 'small', isActive: true,
                       pricing: { hourlyRate: 5000, dailyRate: 40000 } },
                 ]);
             } finally {
@@ -591,7 +591,7 @@ const BookingPage = () => {
                 const list: Floor[] = Array.isArray(data) ? data : (data as any)?.data ?? [];
                 setFloors(list);
             } catch (err: any) {
-                setFloorsError(err?.message || 'Không thể tải dữ liệu tầng.');
+                setFloorsError(err?.message || 'Failed to load floor data.');
             } finally {
                 setFloorsLoading(false);
             }
@@ -625,7 +625,7 @@ const BookingPage = () => {
                 });
                 setZones(filtered);
             } catch (err: any) {
-                setZonesError(err?.message || 'Không thể tải dữ liệu khu đỗ.');
+                setZonesError(err?.message || 'Failed to load zone data.');
             } finally {
                 setZonesLoading(false);
             }
@@ -643,7 +643,7 @@ const BookingPage = () => {
                 const list: ParkingSlot[] = Array.isArray(data) ? data : (data as any)?.data ?? [];
                 setFloorSlots(list.filter(s => !s.isDeleted));
             } catch (err: any) {
-                setSlotsError(err?.message || 'Không thể tải bản đồ ô đỗ.');
+                setSlotsError(err?.message || 'Failed to load parking slot map.');
             } finally {
                 setSlotsLoading(false);
             }
@@ -909,7 +909,7 @@ const BookingPage = () => {
                 <Header />
 
                 <div className="bk-header">
-                    <h1>Đặt Chỗ Gửi Xe Thông Minh</h1>
+                    <h1>Smart Parking Booking</h1>
                     <span className="bk-header-sub">{parkingSpot.title}</span>
                 </div>
 
@@ -921,10 +921,10 @@ const BookingPage = () => {
                             <div className="bk-card">
                             <div className="bk-card-title">
                                 <span className={`bk-step-badge ${vehicleType ? 'done' : 'active'}`}>{vehicleType ? '✓' : '1'}</span>
-                                Chọn Loại Phương Tiện
+                                Select Vehicle Type
                             </div>
                             {vehicleTypesLoading ? (
-                                <div className="bk-loading"><div className="bk-spinner" /> Đang tải...</div>
+                                <div className="bk-loading"><div className="bk-spinner" /> Loading...</div>
                             ) : (
                                 <div className="bk-vehicle-row">
                                     {vehicleTypes.map(vt => {
@@ -977,17 +977,17 @@ const BookingPage = () => {
                         <div className="bk-card">
                             <div className="bk-card-title">
                                 <span className={`bk-step-badge ${entryDate && duration ? 'done' : 'active'}`}>{entryDate && duration ? '✓' : '2'}</span>
-                                Thời Gian Vào &amp; Thời Lượng
+                                Entry Time &amp; Duration
                             </div>
                             <div className="bk-time-grid">
                                 <div className="bk-field">
-                                    <label>Ngày &amp; Giờ Vào</label>
+                                    <label>Entry Date &amp; Time</label>
                                     <input type="datetime-local" value={entryDate} onChange={e => setEntryDate(e.target.value)} />
                                 </div>
                                 <div className="bk-field">
-                                    <label>Thời Lượng</label>
+                                    <label>Duration</label>
                                     <select value={duration} onChange={e => setDuration(Number(e.target.value))}>
-                                        {[1, 2, 3, 4, 5, 6, 8, 10, 12, 24].map(h => <option key={h} value={h}>{h} giờ</option>)}
+                                        {[1, 2, 3, 4, 5, 6, 8, 10, 12, 24].map(h => <option key={h} value={h}>{h} hour{h > 1 ? 's' : ''}</option>)}
                                     </select>
                                 </div>
                             </div>
@@ -996,7 +996,7 @@ const BookingPage = () => {
                                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#0f172a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                                         <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
                                     </svg>
-                                    Dự kiến ra: <strong>{fmtExit()}</strong>
+                                    Estimated exit: <strong>{fmtExit()}</strong>
                                 </div>
                             )}
                         </div>
@@ -1008,17 +1008,17 @@ const BookingPage = () => {
                             <div className="bk-card">
                             <div className="bk-card-title">
                                 <span className={`bk-step-badge ${selectedFloor ? 'done' : vehicleType ? 'active' : ''}`}>{selectedFloor ? '✓' : '3'}</span>
-                                Chọn Tầng
+                                Select Floor
                             </div>
                             {floorsLoading ? (
-                                <div className="bk-loading"><div className="bk-spinner" /> Đang tải...</div>
+                                <div className="bk-loading"><div className="bk-spinner" /> Loading...</div>
                             ) : floorsError ? (
-                                <div className="bk-error">⚠️ {floorsError}<br /><button className="bk-retry" onClick={() => window.location.reload()}>Thử lại</button></div>
+                                <div className="bk-error">⚠️ {floorsError}<br /><button className="bk-retry" onClick={() => window.location.reload()}>Retry</button></div>
                             ) : !vehicleType ? (
                                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 16px', textAlign: 'center', color: '#64748b', minHeight: 200 }}>
                                     <div style={{ fontSize: 32, marginBottom: 8 }}>🏢</div>
-                                    <div style={{ fontSize: 13, fontWeight: 700, color: '#475569', marginBottom: 4 }}>Vui lòng chọn phương tiện</div>
-                                    <div style={{ fontSize: 11, color: '#94a3b8', maxWidth: 220, lineHeight: 1.4 }}>Chọn loại phương tiện ở Bước 1 để hiển thị danh sách tầng.</div>
+                                    <div style={{ fontSize: 13, fontWeight: 700, color: '#475569', marginBottom: 4 }}>Please select a vehicle type</div>
+                                    <div style={{ fontSize: 11, color: '#94a3b8', maxWidth: 220, lineHeight: 1.4 }}>Select a vehicle type in Step 1 to display the floor list.</div>
                                 </div>
                             ) : (
                                 <div className="bk-floor-inner">
@@ -1027,7 +1027,7 @@ const BookingPage = () => {
                                     </div>
                                     <div className="bk-floor-list">
                                         {floors.length === 0 ? (
-                                            <div style={{ color: '#94a3b8', fontSize: 12 }}>Không có tầng</div>
+                                            <div style={{ color: '#94a3b8', fontSize: 12 }}>No floors available</div>
                                         ) : floors.map(f => {
                                             const isSel = selectedFloor?._id === f._id;
                                             const allowed = isFloorAllowed(f);
@@ -1043,15 +1043,15 @@ const BookingPage = () => {
                                                     }}
                                                 >
                                                     <div style={{ flex: 1, minWidth: 0 }}>
-                                                        <div style={{ fontSize: 12, fontWeight: 700 }}>{f.name || `Tầng ${f.floorNumber}`}</div>
+                                                        <div style={{ fontSize: 12, fontWeight: 700 }}>{f.name || `Floor ${f.floorNumber}`}</div>
                                                         <div style={{ fontSize: 9.5, color: isSel ? '#0f172a' : '#64748b', fontWeight: 500 }}>
                                                             {f.allowedVehicleTypes && f.allowedVehicleTypes.length > 0
                                                                 ? f.allowedVehicleTypes.map((vt: any) => vt.name || vt.code).join(', ')
-                                                                : f.vehicleType === 'motorcycle' ? 'Xe máy' : f.vehicleType === 'car' ? 'Ô tô' : 'Cả hai'}
+                                                                : f.vehicleType === 'motorcycle' ? 'Motorcycle' : f.vehicleType === 'car' ? 'Car' : 'Both'}
                                                         </div>
                                                     </div>
                                                     {isSel && <span className="bk-floor-check">✓</span>}
-                                                    <span className="bk-floor-slots">{f.availableSlots ?? f.totalSlots ?? '?'} chỗ</span>
+                                                    <span className="bk-floor-slots">{f.availableSlots ?? f.totalSlots ?? '?'} slots</span>
                                                 </div>
                                             );
                                         })}
@@ -1067,24 +1067,24 @@ const BookingPage = () => {
                                     <div className="bk-zone-header">
                                         <div className="bk-card-title" style={{ marginBottom: 0 }}>
                                             <span className={`bk-step-badge ${selectedZone ? 'done' : 'active'}`}>{selectedZone ? '✓' : '4'}</span>
-                                            Chọn Khu Đỗ ({selectedFloor.name || `Tầng ${selectedFloor.floorNumber}`})
+                                            Select Parking Zone ({selectedFloor.name || `Floor ${selectedFloor.floorNumber}`})
                                         </div>
                                         {!zonesLoading && zones.length > 0 && (
                                             <div className="bk-zone-stat">
-                                                <span>{zones.filter(z => z.availableSlots > 0).length}</span>/{zones.length} khu còn chỗ
+                                                <span>{zones.filter(z => z.availableSlots > 0).length}</span>/{zones.length} zones available
                                             </div>
                                         )}
                                     </div>
                                     {zonesLoading ? (
-                                        <div className="bk-loading"><div className="bk-spinner" /> Đang tải khu đỗ...</div>
+                                        <div className="bk-loading"><div className="bk-spinner" /> Loading zones...</div>
                                     ) : zonesError ? (
                                         <div className="bk-error">⚠️ {zonesError}<br />
-                                            <button className="bk-retry" onClick={() => setSelectedFloor({ ...selectedFloor })}>Thử lại</button>
+                                            <button className="bk-retry" onClick={() => setSelectedFloor({ ...selectedFloor })}>Retry</button>
                                         </div>
                                     ) : zones.length === 0 ? (
                                         <div style={{ textAlign: 'center', padding: '24px 20px', color: '#94a3b8' }}>
                                             <div style={{ fontSize: 30, marginBottom: 8 }}>🏢</div>
-                                            <div style={{ fontSize: 13, fontWeight: 700, color: '#64748b' }}>Không có khu đỗ nào</div>
+                                            <div style={{ fontSize: 13, fontWeight: 700, color: '#64748b' }}>No parking zones found</div>
                                         </div>
                                     ) : (
                                         <div className="zone-grid">
@@ -1097,7 +1097,7 @@ const BookingPage = () => {
                             ) : (
                                 <div className="bk-zone-card" style={{ opacity: 0.45, textAlign: 'center', padding: '28px', color: '#94a3b8' }}>
                                     <div style={{ fontSize: 28, marginBottom: 8 }}>🏢</div>
-                                    <div style={{ fontSize: 13, fontWeight: 600 }}>Chọn tầng để xem khu đỗ</div>
+                                    <div style={{ fontSize: 13, fontWeight: 600 }}>Select a floor to view parking zones</div>
                                 </div>
                             )}
                         </div>
@@ -1109,12 +1109,12 @@ const BookingPage = () => {
                                     <div className="bk-map-header">
                                         <div className="bk-card-title" style={{ marginBottom: 0 }}>
                                             <span className={`bk-step-badge ${selectedSlot ? 'done' : 'active'}`}>{selectedSlot ? '✓' : '5'}</span>
-                                            Chọn Ô Đỗ — {selectedZone.name} ({selectedZone.code})
+                                            Select Slot — {selectedZone.name} ({selectedZone.code})
                                         </div>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                                             {!slotsLoading && (
                                                 <div className={`bk-map-stat ${availableZoneSlots <= 5 ? 'warn' : ''}`}>
-                                                    {availableZoneSlots} ô trống / {zoneSlots.length} tổng
+                                                    {availableZoneSlots} available / {zoneSlots.length} total
                                                 </div>
                                             )}
                                         </div>
@@ -1123,10 +1123,10 @@ const BookingPage = () => {
                                     {/* (Legend is now rendered inside SlotMapGrid) */}
 
                                     {slotsLoading ? (
-                                        <div className="bk-loading"><div className="bk-spinner" /> Đang tải bản đồ ô đỗ...</div>
+                                        <div className="bk-loading"><div className="bk-spinner" /> Loading slot map...</div>
                                     ) : slotsError ? (
                                         <div className="bk-error">⚠️ {slotsError}<br />
-                                            <button className="bk-retry" onClick={() => setSelectedFloor({ ...selectedFloor! })}>Thử lại</button>
+                                            <button className="bk-retry" onClick={() => setSelectedFloor({ ...selectedFloor! })}>Retry</button>
                                         </div>
                                     ) : (
                                         <>
@@ -1142,13 +1142,13 @@ const BookingPage = () => {
                                                     <div className="slot-detail fade-up">
                                                         <div className="slot-detail-code">{selectedSlot.slotCode}</div>
                                                         <div className="slot-detail-info">
-                                                            <div>Hàng {selectedSlot.position?.row ?? '?'} · Cột {selectedSlot.position?.column ?? '?'}</div>
-                                                            <div style={{ color: '#0f172a' }}>✓ Sẵn sàng đặt</div>
+                                                            <div>Row {selectedSlot.position?.row ?? '?'} · Column {selectedSlot.position?.column ?? '?'}</div>
+                                                            <div style={{ color: '#0f172a' }}>✓ Ready to book</div>
                                                         </div>
                                                         <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                                                             {selectedSlot.features?.hasEVCharger && <span className="slot-feature-badge">⚡ EV</span>}
                                                             {selectedSlot.features?.isVIP && <span className="slot-feature-badge">⭐ VIP</span>}
-                                                            {selectedSlot.features?.isHandicapped && <span className="slot-feature-badge">♿ Khuyết tật</span>}
+                                                            {selectedSlot.features?.isHandicapped && <span className="slot-feature-badge">♿ Accessible</span>}
                                                             {selectedSlot.features?.hasCCTV && <span className="slot-feature-badge">📷 CCTV</span>}
                                                             {getVehicleTypeName(selectedSlot.vehicleType) && (
                                                                 <span className="slot-feature-badge">🚗 {getVehicleTypeName(selectedSlot.vehicleType)}</span>
@@ -1157,7 +1157,7 @@ const BookingPage = () => {
                                                         <button
                                                             style={{ marginLeft: 8, background: 'none', border: '1.5px solid #bfdbfe', borderRadius: 7, padding: '4px 10px', color: '#3b82f6', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
                                                             onClick={() => setSelectedSlot(null)}
-                                                        >Bỏ chọn</button>
+                                                        >Deselect</button>
                                                     </div>
 
                                                     {/* Confirm button under Slot Map Details */}
@@ -1182,7 +1182,7 @@ const BookingPage = () => {
                                                             onMouseOver={e => { e.currentTarget.style.background = '#1e293b'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
                                                             onMouseOut={e => { e.currentTarget.style.background = '#0f172a'; e.currentTarget.style.transform = 'translateY(0)'; }}
                                                         >
-                                                            Xác nhận đặt chỗ
+                                                            Confirm Booking
                                                         </button>
                                                     </div>
                                                 </>
@@ -1193,8 +1193,8 @@ const BookingPage = () => {
                             ) : (
                                 <div className="bk-map-card" style={{ opacity: 0.45, textAlign: 'center', padding: '32px', color: '#94a3b8' }}>
                                     <div style={{ fontSize: 36, marginBottom: 10 }}>🅿️</div>
-                                    <div style={{ fontSize: 13, fontWeight: 700, color: '#64748b', marginBottom: 4 }}>Chọn khu đỗ để xem bản đồ ô đỗ</div>
-                                    <div style={{ fontSize: 11, color: '#94a3b8' }}>Bản đồ hiển thị trạng thái realtime từng ô đỗ</div>
+                                    <div style={{ fontSize: 13, fontWeight: 700, color: '#64748b', marginBottom: 4 }}>Select a parking zone to view the slot map</div>
+                                    <div style={{ fontSize: 11, color: '#94a3b8' }}>The map shows the real-time status of each parking slot</div>
                                 </div>
                             )}
                         </div>
@@ -1234,43 +1234,43 @@ const BookingPage = () => {
                             <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#dbeafe', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                 <span style={{ fontSize: 18 }}>🅿️</span>
                             </div>
-                            <h2 style={{ fontSize: 18, fontWeight: 800, color: '#0f172a' }}>Xác Nhận Đặt Chỗ</h2>
+                            <h2 style={{ fontSize: 18, fontWeight: 800, color: '#0f172a' }}>Confirm Booking</h2>
                         </div>
 
                         <div style={{ background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0', padding: '16px', display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 24 }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                                <span style={{ color: '#64748b', fontWeight: 500 }}>Điểm đỗ:</span>
+                                <span style={{ color: '#64748b', fontWeight: 500 }}>Parking location:</span>
                                 <strong style={{ color: '#0f172a', textAlign: 'right' }}>{parkingSpot.title}</strong>
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                                <span style={{ color: '#64748b', fontWeight: 500 }}>Vị trí ô đỗ:</span>
+                                <span style={{ color: '#64748b', fontWeight: 500 }}>Slot position:</span>
                                 <strong style={{ color: '#0f172a' }}>
-                                    {selectedFloor?.name || `Tầng ${selectedFloor?.floorNumber}`} · {selectedZone?.name} · <span style={{ color: '#2563eb' }}>{selectedSlot?.slotCode}</span>
+                                    {selectedFloor?.name || `Floor ${selectedFloor?.floorNumber}`} · {selectedZone?.name} · <span style={{ color: '#2563eb' }}>{selectedSlot?.slotCode}</span>
                                 </strong>
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                                <span style={{ color: '#64748b', fontWeight: 500 }}>Loại phương tiện:</span>
+                                <span style={{ color: '#64748b', fontWeight: 500 }}>Vehicle type:</span>
                                 <strong style={{ color: '#0f172a' }}>{vehicleType?.name}</strong>
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                                <span style={{ color: '#64748b', fontWeight: 500 }}>Thời gian vào:</span>
+                                <span style={{ color: '#64748b', fontWeight: 500 }}>Entry time:</span>
                                 <strong style={{ color: '#0f172a' }}>
-                                    {new Date(entryDate).toLocaleDateString('vi-VN')} {new Date(entryDate).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                                    {new Date(entryDate).toLocaleDateString('en-US')} {new Date(entryDate).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
                                 </strong>
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                                <span style={{ color: '#64748b', fontWeight: 500 }}>Thời gian ra (dự kiến):</span>
+                                <span style={{ color: '#64748b', fontWeight: 500 }}>Estimated exit time:</span>
                                 <strong style={{ color: '#0f172a' }}>{fmtExit()}</strong>
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                                <span style={{ color: '#64748b', fontWeight: 500 }}>Thời lượng:</span>
-                                <strong style={{ color: '#0f172a' }}>{duration} giờ</strong>
+                                <span style={{ color: '#64748b', fontWeight: 500 }}>Duration:</span>
+                                <strong style={{ color: '#0f172a' }}>{duration} hour{duration > 1 ? 's' : ''}</strong>
                             </div>
                             
                             <div style={{ height: '1px', background: '#e2e8f0', margin: '4px 0' }} />
                             
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                                <span style={{ color: '#0f172a', fontWeight: 700, fontSize: 14 }}>Ước tính tạm tính:</span>
+                                <span style={{ color: '#0f172a', fontWeight: 700, fontSize: 14 }}>Estimated total:</span>
                                 <strong style={{ color: '#16a34a', fontSize: 20, fontWeight: 900 }}>
                                     {new Intl.NumberFormat('vi-VN').format(estimatedPrice)}đ
                                 </strong>
@@ -1295,7 +1295,7 @@ const BookingPage = () => {
                                 onMouseOver={e => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.borderColor = '#94a3b8'; }}
                                 onMouseOut={e => { e.currentTarget.style.background = '#ffffff'; e.currentTarget.style.borderColor = '#cbd5e1'; }}
                             >
-                                Hủy bỏ
+                                Cancel
                             </button>
                             <button
                                 onClick={() => {
@@ -1318,7 +1318,7 @@ const BookingPage = () => {
                                 onMouseOver={e => { e.currentTarget.style.background = '#1e293b'; }}
                                 onMouseOut={e => { e.currentTarget.style.background = '#0f172a'; }}
                             >
-                                Xác nhận đặt
+                                Confirm
                             </button>
                         </div>
                     </div>
