@@ -18,17 +18,17 @@ const formatPlate = (v: string) => v.toUpperCase().replace(/[^A-Z0-9-]/gi, '');
 const fmtVND = (n: number) => new Intl.NumberFormat('vi-VN').format(Math.round(n)) + ' ₫';
 const fmtDateTime = (iso: string) => {
     const d = new Date(iso);
-    return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+    return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 };
 
 // ─── Step Definitions ────────────────────────────────────────────────────────
 const STEPS = [
-    { id: 1, label: 'Vehicle Type',   icon: '🚗' },
-    { id: 2, label: 'License Plate',  icon: '🪪' },
-    { id: 3, label: 'Date & Time',    icon: '📅' },
-    { id: 4, label: 'Select Floor',   icon: '🏢' },
-    { id: 5, label: 'Select Zone',    icon: '📍' },
-    { id: 6, label: 'Select Slot',    icon: '🅿️'  },
+    { id: 1, label: 'Vehicle Type', icon: '🚗' },
+    { id: 2, label: 'License Plate', icon: '🪪' },
+    { id: 3, label: 'Date & Time', icon: '📅' },
+    { id: 4, label: 'Select Floor', icon: '🏢' },
+    { id: 5, label: 'Select Zone', icon: '📍' },
+    { id: 6, label: 'Select Slot', icon: '🅿️' },
 ];
 
 // ─── Vehicle B&W SVG Icon ───────────────────────────────────────────────────
@@ -112,10 +112,10 @@ const IsoBuilding = ({ floors, selectedFloor, onSelect, isFloorAllowed }: {
     isFloorAllowed?: (f: Floor) => boolean;
 }) => {
     const sorted = [...floors].sort((a, b) => b.floorNumber - a.floorNumber);
-    const W = 200, H = 48, D = 28, startX = 60, startY = 20, gap = 6;
-    const face  = (f: Floor) => selectedFloor?._id === f._id ? '#1e40af' : '#ffffff';
-    const side  = (f: Floor) => selectedFloor?._id === f._id ? '#1d4ed8' : '#f1f5f9';
-    const top   = (f: Floor) => selectedFloor?._id === f._id ? '#93c5fd' : '#ffffff';
+    const W = 200, H = 48, D = 28, startX = 60, startY = 20, gap = 22;
+    const face = (f: Floor) => selectedFloor?._id === f._id ? '#1e40af' : '#ffffff';
+    const side = (f: Floor) => selectedFloor?._id === f._id ? '#1d4ed8' : '#f1f5f9';
+    const top = (f: Floor) => selectedFloor?._id === f._id ? '#93c5fd' : '#ffffff';
     const stroke = (f: Floor) => selectedFloor?._id === f._id ? '#1e40af' : '#cbd5e1';
     if (sorted.length === 0) return (
         <div style={{ height: 180, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: 13, flexDirection: 'column', gap: 8 }}>
@@ -130,30 +130,42 @@ const IsoBuilding = ({ floors, selectedFloor, onSelect, isFloorAllowed }: {
                 const baseY = startY + idx * (H + gap);
                 const sel = selectedFloor?._id === f._id;
                 const allowed = isFloorAllowed ? isFloorAllowed(f) : true;
-                const frontPts = `${startX},${baseY+D} ${startX+W},${baseY+D} ${startX+W},${baseY+D+H} ${startX},${baseY+D+H}`;
-                const topPts   = `${startX},${baseY+D} ${startX+W},${baseY+D} ${startX+W+D},${baseY} ${startX+D},${baseY}`;
-                const sidePts  = `${startX+W},${baseY+D} ${startX+W+D},${baseY} ${startX+W+D},${baseY+H} ${startX+W},${baseY+D+H}`;
+                const frontPts = `${startX},${baseY + D} ${startX + W},${baseY + D} ${startX + W},${baseY + D + H} ${startX},${baseY + D + H}`;
+                const topPts = `${startX},${baseY + D} ${startX + W},${baseY + D} ${startX + W + D},${baseY} ${startX + D},${baseY}`;
+                const sidePts = `${startX + W},${baseY + D} ${startX + W + D},${baseY} ${startX + W + D},${baseY + H} ${startX + W},${baseY + D + H}`;
+                const floorLabel = f.name || `Floor ${f.floorNumber < 0 ? 'B' + Math.abs(f.floorNumber) : f.floorNumber}`;
                 return (
                     <g key={f._id} onClick={() => allowed && onSelect(f)}
-                       style={{ cursor: allowed ? 'pointer' : 'not-allowed', opacity: allowed ? 1 : 0.3, transition: 'all 0.2s' }}>
-                        <polygon points={topPts}   fill={top(f)}  stroke={stroke(f)} strokeWidth="1.2" />
+                        style={{ cursor: allowed ? 'pointer' : 'not-allowed', opacity: allowed ? 1 : 0.45, transition: 'all 0.2s' }}>
+                        <polygon points={topPts} fill={top(f)} stroke={stroke(f)} strokeWidth="1.2" />
                         <polygon points={frontPts} fill={face(f)} stroke={stroke(f)} strokeWidth="1.2" />
-                        <polygon points={sidePts}  fill={side(f)} stroke={stroke(f)} strokeWidth="1.2" />
-                        {[0,1,2].map(w => (
-                            <rect key={w} x={startX+20+w*58} y={baseY+D+12} width={36} height={22} rx="3"
+                        <polygon points={sidePts} fill={side(f)} stroke={stroke(f)} strokeWidth="1.2" />
+                        {[0, 1, 2].map(w => (
+                            <rect key={w} x={startX + 20 + w * 58} y={baseY + D + 12} width={36} height={22} rx="3"
                                 fill={sel ? 'rgba(255,255,255,0.2)' : 'rgba(241,245,249,0.9)'}
                                 stroke={sel ? 'rgba(255,255,255,0.4)' : '#e2e8f0'} strokeWidth="0.8" />
                         ))}
-                        <text x={startX+W/2} y={baseY+D+H/2+5} textAnchor="middle" fontSize="12" fontWeight="700"
-                              fill={sel ? '#ffffff' : '#475569'}>
-                            {f.name || `Floor ${f.floorNumber}`}
-                        </text>
-                        {sel && <text x={startX+W-16} y={baseY+D+H/2+5} textAnchor="middle" fontSize="14" fill="#ffffff">✓</text>}
-                        {!allowed && <text x={startX+W/2} y={baseY+D+H/2+5} textAnchor="middle" fontSize="11" fill="#ef4444">Unavailable</text>}
+                        {allowed ? (
+                            <text x={startX + W / 2} y={baseY + D + H / 2 + 5} textAnchor="middle" fontSize="12" fontWeight="700"
+                                fill={sel ? '#ffffff' : '#475569'}>
+                                {floorLabel}
+                            </text>
+                        ) : (
+                            <>
+                                <text x={startX + W / 2} y={baseY + D + H / 2 - 2} textAnchor="middle" fontSize="11" fontWeight="700"
+                                    fill="#475569">
+                                    {floorLabel}
+                                </text>
+                                <text x={startX + W / 2} y={baseY + D + H / 2 + 11} textAnchor="middle" fontSize="8" fontWeight="800" fill="#ef4444" letterSpacing="0.5px">
+                                    UNAVAILABLE
+                                </text>
+                            </>
+                        )}
+                        {sel && <text x={startX + W - 16} y={baseY + D + H / 2 + 5} textAnchor="middle" fontSize="14" fill="#ffffff">✓</text>}
                     </g>
                 );
             })}
-            <ellipse cx={startX+W/2+D/2} cy={startY+sorted.length*(H+gap)+D+10} rx={W/2+18} ry="9" fill="rgba(0,0,0,0.06)" />
+            <ellipse cx={startX + W / 2 + D / 2} cy={startY + sorted.length * (H + gap) + D + 10} rx={W / 2 + 18} ry="9" fill="rgba(0,0,0,0.06)" />
         </svg>
     );
 };
@@ -170,23 +182,23 @@ const SlotMapGrid = ({ slots, selectedSlot, onSelect, vehicleType }: {
         if (rowCmp !== 0) return rowCmp;
         return (a.position?.column ?? 0) - (b.position?.column ?? 0);
     });
-    const byRow = sorted.reduce((acc: Record<number,ParkingSlot[]>, s) => {
+    const byRow = sorted.reduce((acc: Record<number, ParkingSlot[]>, s) => {
         const r = s.position?.row ?? 0;
         if (!acc[r]) acc[r] = [];
         acc[r].push(s);
         return acc;
     }, {});
-    const rows = Object.entries(byRow).sort(([a],[b]) => Number(a)-Number(b));
+    const rows = Object.entries(byRow).sort(([a], [b]) => Number(a) - Number(b));
 
     const statusStyle = (s: ParkingSlot, isSelected: boolean) => {
         if (isSelected) return { bg: '#2563eb', border: '#1d4ed8', text: '#fff', label: 'Selected' };
         switch (s.status) {
-            case 'available':    return { bg: '#f0fdf4', border: '#86efac', text: '#15803d', label: 'Available' };
-            case 'occupied':     return { bg: '#fef2f2', border: '#fca5a5', text: '#b91c1c', label: 'Occupied' };
-            case 'reserved':     return { bg: '#eff6ff', border: '#93c5fd', text: '#1d4ed8', label: 'Reserved' };
-            case 'maintenance':  return { bg: '#fefce8', border: '#fde047', text: '#854d0e', label: 'Maintenance' };
-            case 'locked':       return { bg: '#f8fafc', border: '#cbd5e1', text: '#94a3b8', label: 'Locked' };
-            default:             return { bg: '#f8fafc', border: '#e2e8f0', text: '#94a3b8', label: s.status };
+            case 'available': return { bg: '#f0fdf4', border: '#86efac', text: '#15803d', label: 'Available' };
+            case 'occupied': return { bg: '#fef2f2', border: '#fca5a5', text: '#b91c1c', label: 'Occupied' };
+            case 'reserved': return { bg: '#eff6ff', border: '#93c5fd', text: '#1d4ed8', label: 'Reserved' };
+            case 'maintenance': return { bg: '#fefce8', border: '#fde047', text: '#854d0e', label: 'Maintenance' };
+            case 'locked': return { bg: '#f8fafc', border: '#cbd5e1', text: '#94a3b8', label: 'Locked' };
+            default: return { bg: '#f8fafc', border: '#e2e8f0', text: '#94a3b8', label: s.status };
         }
     };
 
@@ -203,11 +215,11 @@ const SlotMapGrid = ({ slots, selectedSlot, onSelect, vehicleType }: {
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 20, padding: '12px 0', borderBottom: '1px solid #f1f5f9' }}>
                 {[
                     { label: 'Available', bg: '#f0fdf4', border: '#86efac', text: '#15803d' },
-                    { label: 'Selected',  bg: '#2563eb', border: '#1d4ed8', text: '#fff' },
-                    { label: 'Occupied',  bg: '#fef2f2', border: '#fca5a5', text: '#b91c1c' },
-                    { label: 'Reserved',  bg: '#eff6ff', border: '#93c5fd', text: '#1d4ed8' },
-                    { label: 'Maintenance',bg: '#fefce8', border: '#fde047', text: '#854d0e'},
-                    { label: 'Locked',    bg: '#f8fafc', border: '#cbd5e1', text: '#94a3b8' },
+                    { label: 'Selected', bg: '#2563eb', border: '#1d4ed8', text: '#fff' },
+                    { label: 'Occupied', bg: '#fef2f2', border: '#fca5a5', text: '#b91c1c' },
+                    { label: 'Reserved', bg: '#eff6ff', border: '#93c5fd', text: '#1d4ed8' },
+                    { label: 'Maintenance', bg: '#fefce8', border: '#fde047', text: '#854d0e' },
+                    { label: 'Locked', bg: '#f8fafc', border: '#cbd5e1', text: '#94a3b8' },
                 ].map(l => (
                     <div key={l.label} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: '#475569' }}>
                         <div style={{ width: 14, height: 14, borderRadius: 3, background: l.bg, border: `1.5px solid ${l.border}` }} />
@@ -299,8 +311,8 @@ const SlotMapGrid = ({ slots, selectedSlot, onSelect, vehicleType }: {
 
 // ─── Main Booking Page ────────────────────────────────────────────────────────
 const BookingPage = () => {
-    const navigate   = useNavigate();
-    const location   = useLocation();
+    const navigate = useNavigate();
+    const location = useLocation();
     const parkingSpot = location.state?.spot || { title: 'Bitexco Financial Tower Parking', price: 50000 };
 
     // ── Step state ──
@@ -308,37 +320,51 @@ const BookingPage = () => {
 
     // ── Step 1: License Plate ──
     const [licensePlate, setLicensePlate] = useState('');
-    const [plateError, setPlateError]     = useState('');
+    const [plateError, setPlateError] = useState('');
 
     // ── Step 2: Vehicle Type ──
-    const [vehicleType, setVehicleType]     = useState<VehicleType | null>(null);
-    const [vehicleTypes, setVehicleTypes]   = useState<VehicleType[]>([]);
+    const [vehicleType, setVehicleType] = useState<VehicleType | null>(null);
+    const [vehicleTypes, setVehicleTypes] = useState<VehicleType[]>([]);
     const [vehicleTypesLoading, setVehicleTypesLoading] = useState(false);
 
     // ── Step 3: Date & Time ──
     const [entryDate, setEntryDate] = useState(() => new Date().toISOString().slice(0, 16));
-    const [duration, setDuration]   = useState(2);
+    const [duration, setDuration] = useState(2);
 
     // ── Step 4: Floor ──
-    const [floors, setFloors]           = useState<Floor[]>([]);
+    const [floors, setFloors] = useState<Floor[]>([]);
     const [floorsLoading, setFloorsLoading] = useState(false);
-    const [floorsError, setFloorsError]   = useState<string | null>(null);
+    const [floorsError, setFloorsError] = useState<string | null>(null);
     const [selectedFloor, setSelectedFloor] = useState<Floor | null>(null);
 
     // ── Step 5: Zone ──
-    const [zones, setZones]             = useState<Zone[]>([]);
+    const [zones, setZones] = useState<Zone[]>([]);
     const [zonesLoading, setZonesLoading] = useState(false);
-    const [zonesError, setZonesError]   = useState<string | null>(null);
+    const [zonesError, setZonesError] = useState<string | null>(null);
     const [selectedZone, setSelectedZone] = useState<Zone | null>(null);
 
     // ── Step 6: Slot ──
-    const [floorSlots, setFloorSlots]   = useState<ParkingSlot[]>([]);
+    const [floorSlots, setFloorSlots] = useState<ParkingSlot[]>([]);
     const [slotsLoading, setSlotsLoading] = useState(false);
-    const [slotsError, setSlotsError]   = useState<string | null>(null);
+    const [slotsError, setSlotsError] = useState<string | null>(null);
     const [selectedSlot, setSelectedSlot] = useState<ParkingSlot | null>(null);
 
     // ── Confirm Modal ──
     const [showConfirmModal, setShowConfirmModal] = useState(false);
+
+    // ── Motorbike Toast Notice ──
+    const [showMotorbikeToast, setShowMotorbikeToast] = useState(true);
+    const isMotorbike = useMemo(() => {
+        if (!vehicleType) return false;
+        const code = vehicleType.code?.toUpperCase() || '';
+        return code.includes('MOTOR') || code.includes('MOTO') || code.includes('SCOOTER') || code.includes('MAY');
+    }, [vehicleType]);
+
+    useEffect(() => {
+        if (currentStep === 4) {
+            setShowMotorbikeToast(true);
+        }
+    }, [currentStep]);
 
     // ─── isFloorAllowed helper ──────────────────────────────────────────────
     const isFloorAllowed = (floor: Floor) => {
@@ -473,7 +499,7 @@ const BookingPage = () => {
 
     const fmtExit = () => {
         const d = exitTime;
-        return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+        return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
     };
 
     const vehicleIcon = (code: string) => {
@@ -795,7 +821,19 @@ const BookingPage = () => {
                     border-color: #2563eb; background: linear-gradient(135deg, #eff6ff, #dbeafe);
                     box-shadow: 0 4px 16px rgba(37,99,235,0.15);
                 }
-                .floor-item.disabled { opacity: 0.35; cursor: not-allowed; }
+                .floor-item.disabled {
+                    background: #f8fafc;
+                    border-color: #e2e8f0;
+                    cursor: not-allowed;
+                    opacity: 0.65;
+                }
+                .floor-item.disabled .floor-item-name {
+                    color: #475569;
+                }
+                .floor-item.disabled .floor-num {
+                    background: #e2e8f0;
+                    color: #94a3b8;
+                }
                 .floor-num {
                     width: 32px; height: 32px; border-radius: 8px;
                     background: #f1f5f9; color: #475569;
@@ -989,7 +1027,7 @@ const BookingPage = () => {
                                             <div key={vt._id}
                                                 className={`vt-card ${vehicleType?._id === vt._id ? 'sel' : ''}`}
                                                 onClick={() => setVehicleType(vt)}>
-                                                 <div style={{
+                                                <div style={{
                                                     width: 60, height: 60,
                                                     background: vehicleType?._id === vt._id ? '#f0f4ff' : '#ffffff',
                                                     border: `1.5px solid ${vehicleType?._id === vt._id ? '#bfdbfe' : '#e2e8f0'}`,
@@ -1000,7 +1038,7 @@ const BookingPage = () => {
                                                     transition: 'all 0.2s',
                                                 }}>
                                                     <VehicleSvgIcon code={vt.code} size={38} />
-                                                 </div>
+                                                </div>
                                                 <div className="vt-name">{vt.name}</div>
                                                 <div className="vt-price">{fmtVND(vt.pricing?.hourlyRate ?? 0)}/hr</div>
                                                 {vehicleType?._id === vt._id && (
@@ -1080,7 +1118,7 @@ const BookingPage = () => {
                                     )}
 
                                     <div className="lp-hint">
-                                        Format: <strong>51A-12345</strong> (car) or <strong>59T1-12345</strong> (motorcycle)<br/>
+                                        Format: <strong>51A-12345</strong> (car) or <strong>59T1-12345</strong> (motorcycle)<br />
                                         This will be linked to your parking session.
                                     </div>
                                 </div>
@@ -1101,69 +1139,303 @@ const BookingPage = () => {
                         )}
 
                         {/* ── STEP 3: Date & Time ── */}
-                        {currentStep === 3 && (
+                        {currentStep === 3 && (() => {
+                            const now          = new Date();
+                            const todayStr     = now.toISOString().slice(0, 10);
+                            const selectedDate = entryDate.slice(0, 10);
+                            const selHour      = parseInt(entryDate.slice(11, 13)) || 0;
+                            const selMin       = parseInt(entryDate.slice(14, 16)) || 0;
+
+                            // Build next 7 day options
+                            const dayOptions = Array.from({ length: 7 }, (_, i) => {
+                                const d = new Date(now);
+                                d.setDate(d.getDate() + i);
+                                const iso = d.toISOString().slice(0, 10);
+                                const labels = ['Today', 'Tomorrow'];
+                                const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+                                return {
+                                    val: iso,
+                                    line1: labels[i] ?? dayNames[d.getDay()],
+                                    line2: `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`,
+                                };
+                            });
+
+                            // Build time slots every 30 min
+                            const timeSlots: { label: string; h: number; m: number; disabled: boolean }[] = [];
+                            for (let h = 0; h < 24; h++) {
+                                for (const m of [0, 30]) {
+                                    const isToday = selectedDate === todayStr;
+                                    const disabled = isToday && (h < now.getHours() || (h === now.getHours() && m <= now.getMinutes()));
+                                    timeSlots.push({
+                                        label: `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`,
+                                        h, m, disabled,
+                                    });
+                                }
+                            }
+
+                            const setSlot = (h: number, m: number) => {
+                                setEntryDate(`${selectedDate}T${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`);
+                            };
+                            const setDay = (dateStr: string) => {
+                                setEntryDate(`${dateStr}T${String(selHour).padStart(2,'0')}:${String(selMin).padStart(2,'0')}`);
+                            };
+
+                            const exitDt = new Date(new Date(entryDate).getTime() + duration * 3600000);
+                            const fmtT   = (d: Date) => `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+                            const fmtD   = (d: Date) => `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
+
+                            const DURATION_OPTIONS = [
+                                { label: '1h',     val: 1  },
+                                { label: '2h',     val: 2  },
+                                { label: '3h',     val: 3  },
+                                { label: '4h',     val: 4  },
+                                { label: '6h',     val: 6  },
+                                { label: '8h',     val: 8  },
+                                { label: '12h',    val: 12 },
+                                { label: 'All day',val: 24 },
+                            ];
+                            const isCustomDur = !DURATION_OPTIONS.find(o => o.val === duration);
+
+                            return (
                             <div className="bk-card">
                                 <div className="bk-step-header">
                                     <div className="bk-step-icon">📅</div>
                                     <div>
-                                        <div className="bk-step-title">Entry Date & Time</div>
-                                        <div className="bk-step-sub">Step 3 of 6 — When do you plan to park?</div>
+                                        <div className="bk-step-title">When do you want to park?</div>
+                                        <div className="bk-step-sub">Step 3 of 6 — Pick date, arrival time & duration</div>
                                     </div>
                                 </div>
 
-                                <div className="dt-grid">
-                                    <div className="dt-field" style={{ gridColumn: '1 / -1' }}>
-                                        <label className="dt-label">Entry Date & Time</label>
-                                        <input
-                                            id="entry-datetime"
-                                            type="datetime-local"
-                                            className="dt-input"
-                                            value={entryDate}
-                                            min={new Date().toISOString().slice(0,16)}
-                                            onChange={e => setEntryDate(e.target.value)}
-                                        />
-                                    </div>
-                                    <div className="dt-field" style={{ gridColumn: '1 / -1' }}>
-                                        <label className="dt-label">Duration</label>
-                                        <div className="duration-pills">
-                                            {[1, 2, 3, 4, 6, 8, 12, 24].map(h => (
-                                                <button key={h}
-                                                    className={`dur-pill ${duration === h ? 'sel' : ''}`}
-                                                    onClick={() => setDuration(h)}>
-                                                    {h}h
+                                {/* ── 1. DATE ── */}
+                                <div style={{ marginBottom: 28 }}>
+                                    <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>📆 Date</div>
+                                    <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4, scrollbarWidth: 'none' }}>
+                                        {dayOptions.map(opt => {
+                                            const isSel = selectedDate === opt.val;
+                                            return (
+                                                <button key={opt.val} onClick={() => setDay(opt.val)}
+                                                    style={{
+                                                        flexShrink: 0,
+                                                        minWidth: 68,
+                                                        padding: '12px 10px',
+                                                        border: `2px solid ${isSel ? '#2563eb' : '#e2e8f0'}`,
+                                                        borderRadius: 14,
+                                                        background: isSel ? 'linear-gradient(135deg,#2563eb,#1d4ed8)' : 'white',
+                                                        color: isSel ? 'white' : '#374151',
+                                                        cursor: 'pointer',
+                                                        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                                                        transition: 'all 0.2s cubic-bezier(0.34,1.56,0.64,1)',
+                                                        boxShadow: isSel ? '0 6px 16px rgba(37,99,235,0.35)' : '0 1px 4px rgba(0,0,0,0.05)',
+                                                        transform: isSel ? 'scale(1.05)' : 'scale(1)',
+                                                    }}>
+                                                    <span style={{ fontSize: 12, fontWeight: 700, opacity: isSel ? 1 : 0.6 }}>{opt.line1}</span>
+                                                    <span style={{ fontSize: 15, fontWeight: 900 }}>{opt.line2}</span>
                                                 </button>
-                                            ))}
-                                        </div>
-                                        <input
-                                            id="duration-custom"
-                                            type="number" min="1" max="72"
-                                            className="dt-input"
-                                            value={duration}
-                                            onChange={e => setDuration(Math.max(1, parseInt(e.target.value) || 1))}
-                                            style={{ marginTop: 10, width: '140px' }}
-                                        />
+                                            );
+                                        })}
+                                        {/* Hidden custom date behind a styled button */}
+                                        <label style={{
+                                            flexShrink: 0, minWidth: 68, padding: '12px 10px',
+                                            border: '2px dashed #e2e8f0', borderRadius: 14, cursor: 'pointer',
+                                            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                                            color: '#94a3b8', position: 'relative', background: '#fafbfc',
+                                        }}>
+                                            <span style={{ fontSize: 18 }}>＋</span>
+                                            <span style={{ fontSize: 11, fontWeight: 700 }}>More</span>
+                                            <input type="date" value={selectedDate} min={todayStr}
+                                                onChange={e => setDay(e.target.value)}
+                                                style={{ position: 'absolute', inset: 0, opacity: 0, width: '100%', height: '100%', cursor: 'pointer' }} />
+                                        </label>
                                     </div>
                                 </div>
 
-                                <div className="dt-exit-info">
-                                    <div className="dt-exit-icon">🏁</div>
-                                    <div>
-                                        <div className="dt-exit-label">Estimated Exit</div>
-                                        <div className="dt-exit-value">{fmtExit()}</div>
+                                {/* ── 2. ARRIVAL TIME — Dual Drum Spinner ── */}
+                                <div style={{ marginBottom: 28 }}>
+                                    <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 16 }}>
+                                        🕐 Arrival Time
+                                        <span style={{ fontSize: 13, fontWeight: 800, color: '#2563eb', marginLeft: 10, letterSpacing: 0, textTransform: 'none' }}>
+                                            {String(selHour).padStart(2,'0')}:{String(selMin).padStart(2,'0')}
+                                        </span>
                                     </div>
+
+                                    {/* Drum spinner container */}
+                                    <div style={{
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0,
+                                        background: 'linear-gradient(135deg,#f8fafc,#f1f5f9)',
+                                        borderRadius: 22, border: '1.5px solid #e2e8f0',
+                                        padding: '16px 24px',
+                                        boxShadow: '0 4px 20px rgba(0,0,0,0.06)',
+                                    }}>
+                                        {/* ── HOUR drum ── */}
+                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0, flex: 1 }}>
+                                            <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Hour</div>
+                                            <button
+                                                onClick={() => setSlot((selHour - 1 + 24) % 24, selMin)}
+                                                style={{ width: 48, height: 36, border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}>
+                                                <svg width="18" height="12" viewBox="0 0 18 12" fill="none"><path d="M1 10L9 2L17 10" stroke="#94a3b8" strokeWidth="2.5" strokeLinecap="round"/></svg>
+                                            </button>
+                                            {/* prev */}
+                                            <div style={{ height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, fontWeight: 900, color: '#d1d5db', opacity: 0.5, letterSpacing: -1 }}>
+                                                {String((selHour - 1 + 24) % 24).padStart(2,'0')}
+                                            </div>
+                                            {/* selected — highlight */}
+                                            <div style={{
+                                                height: 60, width: 90, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                fontSize: 44, fontWeight: 900, color: '#1e293b', letterSpacing: -2,
+                                                background: 'white', borderRadius: 16,
+                                                border: '2.5px solid #2563eb',
+                                                boxShadow: '0 6px 20px rgba(37,99,235,0.18)',
+                                                transition: 'all 0.2s',
+                                            }}>
+                                                {String(selHour).padStart(2,'0')}
+                                            </div>
+                                            {/* next */}
+                                            <div style={{ height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, fontWeight: 900, color: '#d1d5db', opacity: 0.5, letterSpacing: -1 }}>
+                                                {String((selHour + 1) % 24).padStart(2,'0')}
+                                            </div>
+                                            <button
+                                                onClick={() => setSlot((selHour + 1) % 24, selMin)}
+                                                style={{ width: 48, height: 36, border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}>
+                                                <svg width="18" height="12" viewBox="0 0 18 12" fill="none"><path d="M1 2L9 10L17 2" stroke="#94a3b8" strokeWidth="2.5" strokeLinecap="round"/></svg>
+                                            </button>
+                                        </div>
+
+                                        {/* colon */}
+                                        <div style={{ fontSize: 44, fontWeight: 900, color: '#1e293b', padding: '0 4px', lineHeight: 1, marginTop: 8 }}>:</div>
+
+                                        {/* ── MINUTE drum ── */}
+                                        {(() => {
+                                            const MINS = [0, 15, 30, 45];
+                                            const selIdx = MINS.indexOf(selMin) === -1 ? 0 : MINS.indexOf(selMin);
+                                            const prevMin = MINS[(selIdx - 1 + MINS.length) % MINS.length];
+                                            const nextMin = MINS[(selIdx + 1) % MINS.length];
+                                            return (
+                                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0, flex: 1 }}>
+                                                    <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Min</div>
+                                                    <button
+                                                        onClick={() => setSlot(selHour, prevMin)}
+                                                        style={{ width: 48, height: 36, border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}>
+                                                        <svg width="18" height="12" viewBox="0 0 18 12" fill="none"><path d="M1 10L9 2L17 10" stroke="#94a3b8" strokeWidth="2.5" strokeLinecap="round"/></svg>
+                                                    </button>
+                                                    <div style={{ height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, fontWeight: 900, color: '#d1d5db', opacity: 0.5, letterSpacing: -1 }}>
+                                                        {String(prevMin).padStart(2,'0')}
+                                                    </div>
+                                                    <div style={{
+                                                        height: 60, width: 90, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                        fontSize: 44, fontWeight: 900, color: '#1e293b', letterSpacing: -2,
+                                                        background: 'white', borderRadius: 16,
+                                                        border: '2.5px solid #2563eb',
+                                                        boxShadow: '0 6px 20px rgba(37,99,235,0.18)',
+                                                        transition: 'all 0.2s',
+                                                    }}>
+                                                        {String(selMin).padStart(2,'0')}
+                                                    </div>
+                                                    <div style={{ height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, fontWeight: 900, color: '#d1d5db', opacity: 0.5, letterSpacing: -1 }}>
+                                                        {String(nextMin).padStart(2,'0')}
+                                                    </div>
+                                                    <button
+                                                        onClick={() => setSlot(selHour, nextMin)}
+                                                        style={{ width: 48, height: 36, border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}>
+                                                        <svg width="18" height="12" viewBox="0 0 18 12" fill="none"><path d="M1 2L9 10L17 2" stroke="#94a3b8" strokeWidth="2.5" strokeLinecap="round"/></svg>
+                                                    </button>
+                                                </div>
+                                            );
+                                        })()}
+                                    </div>
+                                    <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 10, textAlign: 'center', fontWeight: 500 }}>
+                                        Tap ▲▼ to adjust hour & minute
+                                    </div>
+                                </div>
+
+
+                                {/* ── 3. DURATION ── */}
+                                <div style={{ marginBottom: 24 }}>
+                                    <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>⏳ Duration</div>
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+                                        {DURATION_OPTIONS.map(opt => {
+                                            const isSel = duration === opt.val && !isCustomDur;
+                                            return (
+                                                <button key={opt.val} onClick={() => setDuration(opt.val)}
+                                                    style={{
+                                                        padding: '14px 20px',
+                                                        border: `2px solid ${isSel ? '#2563eb' : '#e2e8f0'}`,
+                                                        borderRadius: 14,
+                                                        background: isSel ? 'linear-gradient(135deg,#2563eb,#1d4ed8)' : 'white',
+                                                        color: isSel ? 'white' : '#374151',
+                                                        fontWeight: isSel ? 800 : 700,
+                                                        fontSize: 15,
+                                                        cursor: 'pointer',
+                                                        transition: 'all 0.2s cubic-bezier(0.34,1.56,0.64,1)',
+                                                        boxShadow: isSel ? '0 6px 18px rgba(37,99,235,0.35)' : '0 1px 4px rgba(0,0,0,0.05)',
+                                                        transform: isSel ? 'scale(1.06)' : 'scale(1)',
+                                                    }}>
+                                                    {opt.label}
+                                                </button>
+                                            );
+                                        })}
+                                        {/* Custom stepper */}
+                                        <div style={{
+                                            display: 'flex', alignItems: 'center', gap: 0,
+                                            border: `2px solid ${isCustomDur ? '#2563eb' : '#e2e8f0'}`,
+                                            borderRadius: 14, overflow: 'hidden', background: isCustomDur ? '#eff6ff' : 'white',
+                                        }}>
+                                            <button onClick={() => setDuration(d => Math.max(1, d - 1))}
+                                                style={{ width: 38, height: 52, border: 'none', background: 'transparent', fontSize: 20, fontWeight: 900, color: '#1e293b', cursor: 'pointer' }}>−</button>
+                                            <div style={{ padding: '0 8px', textAlign: 'center', borderLeft: '1.5px solid #e2e8f0', borderRight: '1.5px solid #e2e8f0', minWidth: 52 }}>
+                                                <div style={{ fontSize: 18, fontWeight: 900, color: isCustomDur ? '#2563eb' : '#64748b', lineHeight: 1 }}>{duration}</div>
+                                                <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 600 }}>hr</div>
+                                            </div>
+                                            <button onClick={() => setDuration(d => Math.min(72, d + 1))}
+                                                style={{ width: 38, height: 52, border: 'none', background: 'transparent', fontSize: 20, fontWeight: 900, color: '#1e293b', cursor: 'pointer' }}>+</button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* ── 4. SUMMARY CARD ── */}
+                                <div style={{
+                                    background: 'linear-gradient(135deg,#0f172a,#1e293b)',
+                                    borderRadius: 20, padding: '18px 22px',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                    gap: 12,
+                                }}>
+                                    <div>
+                                        <div style={{ fontSize: 10, color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>🅿️ Your Parking</div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                            <div style={{ textAlign: 'center' }}>
+                                                <div style={{ fontSize: 22, fontWeight: 900, color: '#60a5fa', letterSpacing: -0.5 }}>{fmtT(new Date(entryDate))}</div>
+                                                <div style={{ fontSize: 10, color: '#475569', marginTop: 1 }}>{fmtD(new Date(entryDate))}</div>
+                                            </div>
+                                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, flex: 1 }}>
+                                                <div style={{ fontSize: 11, color: '#64748b', fontWeight: 700 }}>{duration}h</div>
+                                                <div style={{ height: 2, background: 'linear-gradient(90deg,#60a5fa,#34d399)', borderRadius: 1, width: '100%' }} />
+                                            </div>
+                                            <div style={{ textAlign: 'center' }}>
+                                                <div style={{ fontSize: 22, fontWeight: 900, color: '#34d399', letterSpacing: -0.5 }}>{fmtT(exitDt)}</div>
+                                                <div style={{ fontSize: 10, color: '#475569', marginTop: 1 }}>{fmtD(exitDt)}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {vehicleType && (
+                                        <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                                            <div style={{ fontSize: 10, color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Est. Cost</div>
+                                            <div style={{ fontSize: 20, fontWeight: 900, color: '#fbbf24', letterSpacing: -0.5 }}>
+                                                {new Intl.NumberFormat('vi-VN').format(Math.round((vehicleType.pricing?.hourlyRate ?? 0) * duration))}₫
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
 
                                 <div className="bk-nav">
                                     <button className="bk-btn-back" onClick={handleBack}>← Back</button>
-                                    <button
-                                        id="step3-next-btn"
-                                        className="bk-btn-next"
-                                        onClick={handleNext}>
+                                    <button id="step3-next-btn" className="bk-btn-next" onClick={handleNext}>
                                         Continue → Select Floor
                                     </button>
                                 </div>
                             </div>
-                        )}
+                            );
+                        })()}
+
+
 
                         {/* ── STEP 4: Floor ── */}
                         {currentStep === 4 && (
@@ -1184,17 +1456,34 @@ const BookingPage = () => {
                                     <div className="floor-layout">
                                         {/* List */}
                                         <div className="floor-list">
-                                            {[...floors].sort((a,b) => a.floorNumber - b.floorNumber).map(f => {
+                                            {[...floors].sort((a, b) => a.floorNumber - b.floorNumber).map(f => {
                                                 const allowed = isFloorAllowed(f);
                                                 return (
                                                     <div key={f._id}
                                                         className={`floor-item ${selectedFloor?._id === f._id ? 'sel' : ''} ${!allowed ? 'disabled' : ''}`}
                                                         onClick={() => allowed && setSelectedFloor(f)}>
-                                                        <div className="floor-num">{f.floorNumber}</div>
-                                                        <div>
+                                                        <div className="floor-num">{f.floorNumber < 0 ? `B${Math.abs(f.floorNumber)}` : f.floorNumber}</div>
+                                                        <div style={{ flex: 1 }}>
                                                             <div className="floor-item-name">{f.name || `Floor ${f.floorNumber}`}</div>
-                                                            <div className="floor-item-slots">
-                                                                {f.availableSlots ?? '?'} available
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px', flexWrap: 'wrap' }}>
+                                                                <span className="floor-item-slots">
+                                                                    {f.availableSlots ?? '?'} available
+                                                                </span>
+                                                                {isMotorbike && allowed && (
+                                                                    <span style={{
+                                                                        fontSize: '10px',
+                                                                        fontWeight: 700,
+                                                                        color: '#16a34a',
+                                                                        background: '#dcfce7',
+                                                                        padding: '2px 8px',
+                                                                        borderRadius: '20px',
+                                                                        display: 'inline-flex',
+                                                                        alignItems: 'center',
+                                                                        gap: '3px'
+                                                                    }}>
+                                                                        🏍️ Allowed
+                                                                    </span>
+                                                                )}
                                                             </div>
                                                         </div>
                                                         {selectedFloor?._id === f._id && <span style={{ marginLeft: 'auto', color: '#2563eb', fontWeight: 900 }}>✓</span>}
@@ -1474,6 +1763,57 @@ const BookingPage = () => {
                             </button>
                         </div>
                     </div>
+                </div>
+            )}
+            {/* ── Motorbike Toast Notice ── */}
+            {currentStep === 4 && isMotorbike && showMotorbikeToast && (
+                <div style={{
+                    position: 'fixed',
+                    bottom: '24px',
+                    right: '24px',
+                    maxWidth: '360px',
+                    background: 'rgba(255, 255, 255, 0.95)',
+                    backdropFilter: 'blur(10px)',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '16px',
+                    padding: '16px',
+                    boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
+                    zIndex: 1000,
+                    display: 'flex',
+                    gap: '12px',
+                    animation: 'toastSlideIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) both',
+                }}>
+                    <style>{`
+                        @keyframes toastSlideIn {
+                            from { transform: translateY(20px) scale(0.95); opacity: 0; }
+                            to { transform: translateY(0) scale(1); opacity: 1; }
+                        }
+                    `}</style>
+                    <span style={{ fontSize: '22px', flexShrink: 0 }}>🏍️</span>
+                    <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: '13px', fontWeight: 800, color: '#0f172a', marginBottom: '2px' }}>
+                            Motorbike Parking Rules
+                        </div>
+                        <div style={{ fontSize: '11px', color: '#475569', lineHeight: 1.4 }}>
+                            Motorbikes are only allowed on designated floors (highlighted below). Other floors will be locked.
+                        </div>
+                    </div>
+                    <button 
+                        onClick={() => setShowMotorbikeToast(false)}
+                        style={{
+                            background: 'transparent',
+                            border: 'none',
+                            color: '#94a3b8',
+                            fontSize: '16px',
+                            fontWeight: 'bold',
+                            cursor: 'pointer',
+                            padding: '0 4px',
+                            alignSelf: 'flex-start',
+                            lineHeight: 1,
+                        }}
+                    >
+                        ×
+                    </button>
                 </div>
             )}
         </>
