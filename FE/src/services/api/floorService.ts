@@ -5,6 +5,7 @@ export interface Floor {
     name: string;
     floorNumber: number;
     vehicleType: 'motorcycle' | 'car' | 'both';
+    allowedVehicleTypes?: any[];
     totalSlots: number;
     availableSlots: number;
     status: 'active' | 'inactive' | 'maintenance';

@@ -13,10 +13,11 @@ const getVehicleTypeName = (vt: ParkingSlot['vehicleType']): string =>
     typeof vt === 'string' ? '' : (vt as any)?.name ?? '';
 
 // ─── Isometric Building ──────────────────────────────────────────────────────
-const IsoBuilding = ({ floors, selectedFloor, onSelect }: {
+const IsoBuilding = ({ floors, selectedFloor, onSelect, isFloorAllowed }: {
     floors: Floor[];
     selectedFloor: Floor | null;
     onSelect: (f: Floor) => void;
+    isFloorAllowed?: (f: Floor) => boolean;
 }) => {
     const sorted = [...floors].sort((a, b) => b.floorNumber - a.floorNumber);
     const W = 180, H = 44, D = 26, startX = 70, startY = 20, gap = 4;
@@ -35,11 +36,12 @@ const IsoBuilding = ({ floors, selectedFloor, onSelect }: {
             {sorted.map((f, idx) => {
                 const baseY = startY + idx * (H + gap);
                 const sel = selectedFloor?._id === f._id;
+                const allowed = isFloorAllowed ? isFloorAllowed(f) : true;
                 const frontPts = `${startX},${baseY + D} ${startX + W},${baseY + D} ${startX + W},${baseY + D + H} ${startX},${baseY + D + H}`;
                 const topPts = `${startX},${baseY + D} ${startX + W},${baseY + D} ${startX + W + D},${baseY} ${startX + D},${baseY}`;
                 const sidePts = `${startX + W},${baseY + D} ${startX + W + D},${baseY} ${startX + W + D},${baseY + H} ${startX + W},${baseY + D + H}`;
                 return (
-                    <g key={f._id} onClick={() => onSelect(f)} style={{ cursor: 'pointer' }}>
+                    <g key={f._id} onClick={() => allowed && onSelect(f)} style={{ cursor: allowed ? 'pointer' : 'not-allowed', opacity: allowed ? 1 : 0.35, transition: 'all 0.2s' }}>
                         <polygon points={topPts} fill={top(f)} stroke={strokeColor(f)} strokeWidth="1" />
                         <polygon points={frontPts} fill={face(f)} stroke={strokeColor(f)} strokeWidth="1" />
                         <polygon points={sidePts} fill={side(f)} stroke={strokeColor(f)} strokeWidth="1" />
@@ -520,6 +522,16 @@ const BookingPage = () => {
 
     const [vehicleType, setVehicleType] = useState<VehicleType | null>(null);
     const [showConfirmModal, setShowConfirmModal] = useState(false);
+
+    // Helper to check if a floor allows the selected vehicle type
+    const isFloorAllowed = (floor: Floor) => {
+        if (!vehicleType) return true;
+        if (!floor.allowedVehicleTypes || floor.allowedVehicleTypes.length === 0) return true;
+        return floor.allowedVehicleTypes.some((vt: any) => {
+            const vtId = typeof vt === 'string' ? vt : vt?._id ?? vt?.code;
+            return vtId === vehicleType._id || vtId === vehicleType.code;
+        });
+    };
 
     // Vehicle Types from API
     const [vehicleTypes, setVehicleTypes] = useState<VehicleType[]>([]);
@@ -1011,19 +1023,31 @@ const BookingPage = () => {
                             ) : (
                                 <div className="bk-floor-inner">
                                     <div style={{ flexShrink: 0 }}>
-                                        <IsoBuilding floors={floors} selectedFloor={selectedFloor} onSelect={f => setSelectedFloor(f)} />
+                                        <IsoBuilding floors={floors} selectedFloor={selectedFloor} onSelect={f => isFloorAllowed(f) && setSelectedFloor(f)} isFloorAllowed={isFloorAllowed} />
                                     </div>
                                     <div className="bk-floor-list">
                                         {floors.length === 0 ? (
                                             <div style={{ color: '#94a3b8', fontSize: 12 }}>Không có tầng</div>
                                         ) : floors.map(f => {
                                             const isSel = selectedFloor?._id === f._id;
+                                            const allowed = isFloorAllowed(f);
                                             return (
-                                                <div key={f._id} className={`bk-floor-item ${isSel ? 'sel' : ''}`} onClick={() => setSelectedFloor(f)}>
+                                                <div 
+                                                    key={f._id} 
+                                                    className={`bk-floor-item ${isSel ? 'sel' : ''}`} 
+                                                    onClick={() => allowed && setSelectedFloor(f)}
+                                                    style={{
+                                                        opacity: allowed ? 1 : 0.45,
+                                                        cursor: allowed ? 'pointer' : 'not-allowed',
+                                                        transition: 'all 0.2s'
+                                                    }}
+                                                >
                                                     <div style={{ flex: 1, minWidth: 0 }}>
                                                         <div style={{ fontSize: 12, fontWeight: 700 }}>{f.name || `Tầng ${f.floorNumber}`}</div>
                                                         <div style={{ fontSize: 9.5, color: isSel ? '#0f172a' : '#64748b', fontWeight: 500 }}>
-                                                            {f.vehicleType === 'motorcycle' ? 'Xe máy' : f.vehicleType === 'car' ? 'Ô tô' : 'Cả hai'}
+                                                            {f.allowedVehicleTypes && f.allowedVehicleTypes.length > 0
+                                                                ? f.allowedVehicleTypes.map((vt: any) => vt.name || vt.code).join(', ')
+                                                                : f.vehicleType === 'motorcycle' ? 'Xe máy' : f.vehicleType === 'car' ? 'Ô tô' : 'Cả hai'}
                                                         </div>
                                                     </div>
                                                     {isSel && <span className="bk-floor-check">✓</span>}
