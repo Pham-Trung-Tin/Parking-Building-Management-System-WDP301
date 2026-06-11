@@ -476,6 +476,17 @@ const BookingPage = () => {
             };
 
             // Save to localStorage
+            const existingRaw = localStorage.getItem('myTickets');
+            let ticketsList = [];
+            if (existingRaw) {
+                try {
+                    ticketsList = JSON.parse(existingRaw);
+                } catch (e) {
+                    ticketsList = [];
+                }
+            }
+            const updatedTicketsList = [bookingDetails, ...ticketsList];
+            localStorage.setItem('myTickets', JSON.stringify(updatedTicketsList));
             localStorage.setItem('activeBooking', JSON.stringify(bookingDetails));
 
             // Notify header
@@ -660,7 +671,7 @@ const BookingPage = () => {
                 .bk-stepper-wrap {
                     background: white;
                     border-bottom: 1px solid #e2e8f0;
-                    padding: 20px 24px 0;
+                    padding: 12px 24px 0;
                     position: sticky;
                     top: 72px;
                     z-index: 30;
@@ -672,7 +683,8 @@ const BookingPage = () => {
                     display: flex;
                     align-items: flex-start;
                     overflow-x: auto;
-                    padding-bottom: 0;
+                    padding-top: 8px;
+                    padding-bottom: 8px;
                     scrollbar-width: none;
                 }
                 .bk-stepper::-webkit-scrollbar { display: none; }
