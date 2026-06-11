@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { 
   LogIn, 
   LogOut, 
@@ -14,6 +14,14 @@ import useProfile from '../../hooks/useProfile';
 
 const StaffExceptionsPage = () => {
   const { profile } = useProfile();
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('user');
+    navigate('/login');
+  };
+
   return (
     <div className="flex h-screen bg-gray-50 font-sans text-gray-800">
       {/* Sidebar */}
@@ -44,18 +52,27 @@ const StaffExceptionsPage = () => {
           </nav>
         </div>
 
-        <div className="p-6 border-t border-gray-200 flex items-center">
-          <div className="w-10 h-10 rounded-full bg-gray-900 flex items-center justify-center text-white mr-3 overflow-hidden">
-            {profile?.avatarUrl ? (
-              <img src={profile.avatarUrl} alt={profile.fullName} className="w-full h-full object-cover" />
-            ) : (
-              <User size={20} />
-            )}
+        <div className="p-6 border-t border-gray-200 flex items-center justify-between">
+          <div className="flex items-center overflow-hidden">
+            <div className="w-10 h-10 rounded-full bg-gray-900 flex items-center justify-center text-white mr-3 shrink-0 overflow-hidden">
+              {profile?.avatarUrl ? (
+                <img src={profile.avatarUrl} alt={profile.fullName} className="w-full h-full object-cover" />
+              ) : (
+                <User size={20} />
+              )}
+            </div>
+            <div className="overflow-hidden pr-2">
+              <p className="text-sm font-semibold text-gray-900 truncate" title={profile?.fullName}>{profile?.fullName || 'Loading...'}</p>
+              <p className="text-[10px] text-gray-500 uppercase truncate">{profile?.role ? profile.role.replace('_', ' ') : 'Staff'}</p>
+            </div>
           </div>
-          <div>
-            <p className="text-sm font-semibold text-gray-900">{profile?.fullName || 'Loading...'}</p>
-            <p className="text-xs text-gray-500 uppercase">{profile?.role ? profile.role.replace('_', ' ') : 'Staff'}</p>
-          </div>
+          <button 
+            onClick={handleLogout}
+            className="p-2 text-red-600 bg-red-50 hover:bg-red-100 hover:text-red-700 rounded-md transition-colors shrink-0"
+            title="Logout"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
         </div>
       </div>
 
