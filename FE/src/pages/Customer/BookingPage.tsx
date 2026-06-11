@@ -6,13 +6,105 @@ import zoneService, { Zone } from '../../services/api/zoneService';
 import parkingSlotService, { ParkingSlot } from '../../services/api/parkingSlotService';
 import vehicleTypeService, { VehicleType } from '../../services/api/vehicleTypeService';
 
-// ─── Helpers ────────────────────────────────────────────────────────────────
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 const getZoneId = (z: ParkingSlot['zone']): string =>
     typeof z === 'string' ? z : (z as any)?._id ?? '';
-const getVehicleTypeName = (vt: ParkingSlot['vehicleType']): string =>
-    typeof vt === 'string' ? '' : (vt as any)?.name ?? '';
 
-// ─── Isometric Building ──────────────────────────────────────────────────────
+// Vietnamese license plate validation
+const LP_REGEX = /^[0-9]{2}[A-Z]{1,2}-[0-9]{4,5}$|^[0-9]{2}-[A-Z][0-9]{4,5}$/i;
+const formatPlate = (v: string) => v.toUpperCase().replace(/[^A-Z0-9-]/gi, '');
+
+// Format helpers
+const fmtVND = (n: number) => new Intl.NumberFormat('vi-VN').format(Math.round(n)) + ' ₫';
+const fmtDateTime = (iso: string) => {
+    const d = new Date(iso);
+    return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+};
+
+// ─── Step Definitions ────────────────────────────────────────────────────────
+const STEPS = [
+    { id: 1, label: 'Vehicle Type',   icon: '🚗' },
+    { id: 2, label: 'License Plate',  icon: '🪪' },
+    { id: 3, label: 'Date & Time',    icon: '📅' },
+    { id: 4, label: 'Select Floor',   icon: '🏢' },
+    { id: 5, label: 'Select Zone',    icon: '📍' },
+    { id: 6, label: 'Select Slot',    icon: '🅿️'  },
+];
+
+// ─── Vehicle B&W SVG Icon ───────────────────────────────────────────────────
+const VehicleSvgIcon = ({ code, size = 96 }: { code: string; size?: number }) => {
+    const c = code.toUpperCase();
+    const stroke = '#0f172a';
+    const sw = '2';
+    const lc = 'round';
+    const lj = 'round';
+
+    // Bicycle
+    if (c.includes('BICYCLE') || c.includes('BIKE') || (c.includes('DAP') && !c.includes('DIEN'))) return (
+        <svg viewBox="0 0 48 48" width={size} height={size} fill="none" stroke={stroke} strokeWidth={sw} strokeLinecap={lc as any} strokeLinejoin={lj as any}>
+            <circle cx="12" cy="34" r="9" />
+            <circle cx="36" cy="34" r="9" />
+            <circle cx="24" cy="12" r="3" />
+            <path d="M12 34 L20 16 L28 16" />
+            <path d="M12 34 L28 22 L36 34" />
+            <path d="M20 16 L36 34" />
+            <path d="M22 12 L30 12" />
+        </svg>
+    );
+
+    // Electric bicycle / scooter
+    if (c.includes('ELECTRIC') || c.includes('DIEN') || c.includes('EV')) return (
+        <svg viewBox="0 0 48 48" width={size} height={size} fill="none" stroke={stroke} strokeWidth={sw} strokeLinecap={lc as any} strokeLinejoin={lj as any}>
+            <circle cx="12" cy="34" r="8" />
+            <circle cx="36" cy="34" r="8" />
+            <path d="M12 34 L20 16 L28 16" />
+            <path d="M20 16 L36 34" />
+            <path d="M12 34 L28 22 L36 34" />
+            {/* Lightning bolt */}
+            <path d="M26 8 L22 18 L27 18 L23 28" strokeWidth="2.2" />
+        </svg>
+    );
+
+    // Motorcycle / motorbike
+    if (c.includes('MOTOR') || c.includes('MOTO') || c.includes('SCOOTER') || c.includes('MAY')) return (
+        <svg viewBox="0 0 48 48" width={size} height={size} fill="none" stroke={stroke} strokeWidth={sw} strokeLinecap={lc as any} strokeLinejoin={lj as any}>
+            <circle cx="10" cy="32" r="8" />
+            <circle cx="38" cy="32" r="8" />
+            <path d="M10 32 C14 20 20 16 26 16" />
+            <path d="M26 16 L32 16 L38 24 L38 32" />
+            <path d="M18 24 L30 24 L34 32" />
+            <path d="M24 16 L26 10 L32 10" />
+            <path d="M18 24 L14 28" />
+        </svg>
+    );
+
+    // Truck / tải
+    if (c.includes('TRUCK') || c.includes('TAI') || c.includes('LORRY') || c.includes('VAN')) return (
+        <svg viewBox="0 0 48 48" width={size} height={size} fill="none" stroke={stroke} strokeWidth={sw} strokeLinecap={lc as any} strokeLinejoin={lj as any}>
+            <rect x="2" y="14" width="28" height="20" rx="2" />
+            <path d="M30 20 L44 20 L46 34 L30 34" />
+            <path d="M30 20 L36 14 L44 14 L44 20" />
+            <circle cx="10" cy="36" r="4" />
+            <circle cx="36" cy="36" r="4" />
+            <line x1="2" y1="22" x2="30" y2="22" />
+        </svg>
+    );
+
+    // Default: Car / sedan
+    return (
+        <svg viewBox="0 0 48 48" width={size} height={size} fill="none" stroke={stroke} strokeWidth={sw} strokeLinecap={lc as any} strokeLinejoin={lj as any}>
+            <rect x="3" y="22" width="42" height="16" rx="3" />
+            <path d="M8 22 L13 12 L35 12 L40 22" />
+            <circle cx="12" cy="38" r="4" />
+            <circle cx="36" cy="38" r="4" />
+            <rect x="14" y="14" width="10" height="8" rx="1.5" />
+            <rect x="25" y="14" width="10" height="8" rx="1.5" />
+            <line x1="3" y1="29" x2="45" y2="29" />
+        </svg>
+    );
+};
+
+// ─── Isometric Building (reused) ─────────────────────────────────────────────
 const IsoBuilding = ({ floors, selectedFloor, onSelect, isFloorAllowed }: {
     floors: Floor[];
     selectedFloor: Floor | null;
@@ -20,493 +112,184 @@ const IsoBuilding = ({ floors, selectedFloor, onSelect, isFloorAllowed }: {
     isFloorAllowed?: (f: Floor) => boolean;
 }) => {
     const sorted = [...floors].sort((a, b) => b.floorNumber - a.floorNumber);
-    const W = 180, H = 44, D = 26, startX = 70, startY = 20, gap = 4;
-    const face = (f: Floor) => selectedFloor?._id === f._id ? '#0f172a' : '#ffffff';
-    const side = (f: Floor) => selectedFloor?._id === f._id ? '#334155' : '#f8fafc';
-    const top  = (f: Floor) => selectedFloor?._id === f._id ? '#e2e8f0' : '#ffffff';
-    const strokeColor = (f: Floor) => selectedFloor?._id === f._id ? '#0f172a' : '#94a3b8';
+    const W = 200, H = 48, D = 28, startX = 60, startY = 20, gap = 6;
+    const face  = (f: Floor) => selectedFloor?._id === f._id ? '#1e40af' : '#ffffff';
+    const side  = (f: Floor) => selectedFloor?._id === f._id ? '#1d4ed8' : '#f1f5f9';
+    const top   = (f: Floor) => selectedFloor?._id === f._id ? '#93c5fd' : '#ffffff';
+    const stroke = (f: Floor) => selectedFloor?._id === f._id ? '#1e40af' : '#cbd5e1';
     if (sorted.length === 0) return (
-        <div style={{ height: 180, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: 13 }}>
+        <div style={{ height: 180, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: 13, flexDirection: 'column', gap: 8 }}>
+            <span style={{ fontSize: 32 }}>🏗️</span>
             No floors available
         </div>
     );
     const totalH = sorted.length * (H + gap) + D + 30;
     return (
-        <svg viewBox={`0 0 ${startX + W + D + 20} ${totalH}`} width="100%" style={{ maxWidth: 280 }}>
+        <svg viewBox={`0 0 ${startX + W + D + 20} ${totalH}`} width="100%" style={{ maxWidth: 320 }}>
             {sorted.map((f, idx) => {
                 const baseY = startY + idx * (H + gap);
                 const sel = selectedFloor?._id === f._id;
                 const allowed = isFloorAllowed ? isFloorAllowed(f) : true;
-                const frontPts = `${startX},${baseY + D} ${startX + W},${baseY + D} ${startX + W},${baseY + D + H} ${startX},${baseY + D + H}`;
-                const topPts = `${startX},${baseY + D} ${startX + W},${baseY + D} ${startX + W + D},${baseY} ${startX + D},${baseY}`;
-                const sidePts = `${startX + W},${baseY + D} ${startX + W + D},${baseY} ${startX + W + D},${baseY + H} ${startX + W},${baseY + D + H}`;
+                const frontPts = `${startX},${baseY+D} ${startX+W},${baseY+D} ${startX+W},${baseY+D+H} ${startX},${baseY+D+H}`;
+                const topPts   = `${startX},${baseY+D} ${startX+W},${baseY+D} ${startX+W+D},${baseY} ${startX+D},${baseY}`;
+                const sidePts  = `${startX+W},${baseY+D} ${startX+W+D},${baseY} ${startX+W+D},${baseY+H} ${startX+W},${baseY+D+H}`;
                 return (
-                    <g key={f._id} onClick={() => allowed && onSelect(f)} style={{ cursor: allowed ? 'pointer' : 'not-allowed', opacity: allowed ? 1 : 0.35, transition: 'all 0.2s' }}>
-                        <polygon points={topPts} fill={top(f)} stroke={strokeColor(f)} strokeWidth="1" />
-                        <polygon points={frontPts} fill={face(f)} stroke={strokeColor(f)} strokeWidth="1" />
-                        <polygon points={sidePts} fill={side(f)} stroke={strokeColor(f)} strokeWidth="1" />
-                        {[0, 1, 2].map(w => (
-                            <rect key={w} x={startX + 18 + w * 52} y={baseY + D + 12} width={32} height={18} rx="2"
-                                fill={sel ? 'rgba(255,255,255,0.15)' : 'rgba(241,245,249,0.8)'}
-                                stroke={sel ? 'rgba(255,255,255,0.35)' : '#cbd5e1'} strokeWidth="0.8" />
+                    <g key={f._id} onClick={() => allowed && onSelect(f)}
+                       style={{ cursor: allowed ? 'pointer' : 'not-allowed', opacity: allowed ? 1 : 0.3, transition: 'all 0.2s' }}>
+                        <polygon points={topPts}   fill={top(f)}  stroke={stroke(f)} strokeWidth="1.2" />
+                        <polygon points={frontPts} fill={face(f)} stroke={stroke(f)} strokeWidth="1.2" />
+                        <polygon points={sidePts}  fill={side(f)} stroke={stroke(f)} strokeWidth="1.2" />
+                        {[0,1,2].map(w => (
+                            <rect key={w} x={startX+20+w*58} y={baseY+D+12} width={36} height={22} rx="3"
+                                fill={sel ? 'rgba(255,255,255,0.2)' : 'rgba(241,245,249,0.9)'}
+                                stroke={sel ? 'rgba(255,255,255,0.4)' : '#e2e8f0'} strokeWidth="0.8" />
                         ))}
-                        <text x={startX + W / 2} y={baseY + D + H / 2 + 5} textAnchor="middle" fontSize="11" fontWeight="700" fill={sel ? '#ffffff' : '#475569'}>
+                        <text x={startX+W/2} y={baseY+D+H/2+5} textAnchor="middle" fontSize="12" fontWeight="700"
+                              fill={sel ? '#ffffff' : '#475569'}>
                             {f.name || `Floor ${f.floorNumber}`}
                         </text>
-                        {sel && <text x={startX + W - 12} y={baseY + D + H / 2 + 5} textAnchor="middle" fontSize="13" fill="#ffffff">✓</text>}
+                        {sel && <text x={startX+W-16} y={baseY+D+H/2+5} textAnchor="middle" fontSize="14" fill="#ffffff">✓</text>}
+                        {!allowed && <text x={startX+W/2} y={baseY+D+H/2+5} textAnchor="middle" fontSize="11" fill="#ef4444">Unavailable</text>}
                     </g>
                 );
             })}
-            <ellipse cx={startX + W / 2 + D / 2} cy={startY + sorted.length * (H + gap) + D + 10} rx={W / 2 + 16} ry="8" fill="rgba(0,0,0,0.05)" />
+            <ellipse cx={startX+W/2+D/2} cy={startY+sorted.length*(H+gap)+D+10} rx={W/2+18} ry="9" fill="rgba(0,0,0,0.06)" />
         </svg>
     );
 };
 
-// ─── Zone Card ───────────────────────────────────────────────────────────────
-const ZoneCard = ({ zone, selected, onSelect }: {
-    zone: Zone; selected: boolean; onSelect: (z: Zone) => void;
+// ─── SlotMapGrid (reused) ─────────────────────────────────────────────────────
+const SlotMapGrid = ({ slots, selectedSlot, onSelect, vehicleType }: {
+    slots: ParkingSlot[]; selectedSlot: ParkingSlot | null;
+    onSelect: (s: ParkingSlot) => void; vehicleType: VehicleType | null;
 }) => {
-    const pct = zone.totalSlots > 0 ? Math.round((zone.availableSlots / zone.totalSlots) * 100) : 0;
-    const isFull = zone.availableSlots === 0;
-    const isLow = zone.availableSlots <= 5 && !isFull;
-    const barColor = isFull ? '#ef4444' : isLow ? '#f59e0b' : '#0f172a';
-    
-    const VehicleIcons = () => {
-        const t = zone.allowedVehicleTypes || [];
-        const isCar = t.includes('car');
-        const isMotor = t.includes('motorcycle');
-        
-        return (
-            <div style={{ display: 'flex', gap: 4, alignItems: 'center', color: '#64748b', marginTop: 2 }}>
-                {isCar && (
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" width="13" height="13">
-                        <rect x="2" y="10" width="20" height="8" rx="2" />
-                        <path d="M6 10l2-5h8l2 5" />
-                        <circle cx="6" cy="18" r="1.5" />
-                        <circle cx="18" cy="18" r="1.5" />
-                    </svg>
-                )}
-                {isMotor && (
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" width="13" height="13">
-                        <circle cx="5" cy="16" r="2.5" />
-                        <circle cx="19" cy="16" r="2.5" />
-                        <path d="M12 8l2 4h5" />
-                        <path d="M8 16h6l2-6H9l-1 2" />
-                    </svg>
-                )}
-                <span style={{ fontSize: 10, color: '#64748b', fontWeight: 500, marginLeft: 2 }}>
-                    {isCar && isMotor ? 'Both' : isCar ? 'Car' : isMotor ? 'Motorcycle' : 'Both'}
-                </span>
-            </div>
-        );
+    const sorted = [...slots].sort((a, b) => {
+        const rA = a.position?.row ?? '';
+        const rB = b.position?.row ?? '';
+        const rowCmp = String(rA).localeCompare(String(rB));
+        if (rowCmp !== 0) return rowCmp;
+        return (a.position?.column ?? 0) - (b.position?.column ?? 0);
+    });
+    const byRow = sorted.reduce((acc: Record<number,ParkingSlot[]>, s) => {
+        const r = s.position?.row ?? 0;
+        if (!acc[r]) acc[r] = [];
+        acc[r].push(s);
+        return acc;
+    }, {});
+    const rows = Object.entries(byRow).sort(([a],[b]) => Number(a)-Number(b));
+
+    const statusStyle = (s: ParkingSlot, isSelected: boolean) => {
+        if (isSelected) return { bg: '#2563eb', border: '#1d4ed8', text: '#fff', label: 'Selected' };
+        switch (s.status) {
+            case 'available':    return { bg: '#f0fdf4', border: '#86efac', text: '#15803d', label: 'Available' };
+            case 'occupied':     return { bg: '#fef2f2', border: '#fca5a5', text: '#b91c1c', label: 'Occupied' };
+            case 'reserved':     return { bg: '#eff6ff', border: '#93c5fd', text: '#1d4ed8', label: 'Reserved' };
+            case 'maintenance':  return { bg: '#fefce8', border: '#fde047', text: '#854d0e', label: 'Maintenance' };
+            case 'locked':       return { bg: '#f8fafc', border: '#cbd5e1', text: '#94a3b8', label: 'Locked' };
+            default:             return { bg: '#f8fafc', border: '#e2e8f0', text: '#94a3b8', label: s.status };
+        }
     };
 
-    return (
-        <div className={`zone-card ${selected ? 'sel' : ''} ${isFull ? 'full' : ''}`}
-            onClick={() => !isFull && onSelect(zone)} style={{ cursor: isFull ? 'not-allowed' : 'pointer' }}>
-            <div className="zone-card-top">
-                <div className="zone-badge" style={{ background: selected ? '#0f172a' : '#f1f5f9', color: selected ? '#fff' : '#475569' }}>
-                    {zone.code}
-                </div>
-                <div className="zone-info">
-                    <div className="zone-name">{zone.name}</div>
-                    <div className="zone-vehicle"><VehicleIcons /></div>
-                </div>
-                {selected && <div className="zone-check" style={{ background: '#0f172a' }}>✓</div>}
-                {isFull && <div className="zone-full-badge">Full</div>}
-            </div>
-            <div className="zone-slot-info">
-                <div className="zone-slot-bar-bg">
-                    <div className="zone-slot-bar-fill" style={{ width: `${pct}%`, background: barColor }} />
-                </div>
-                <div className="zone-slot-text">
-                    <span style={{ color: barColor, fontWeight: 700 }}>{zone.availableSlots}</span>
-                    <span style={{ color: '#94a3b8' }}>/{zone.totalSlots} available</span>
-                </div>
-            </div>
-        </div>
-    );
-};
-
-// ─── Legend Item ─────────────────────────────────────────────────────────────
-const LegendItem = ({ color, border, label, icon }: { color: string; border?: string; label: string; icon?: React.ReactNode }) => (
-    <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 600, color: '#e2e8f0' }}>
-        <span style={{
-            width: 20,
-            height: 20,
-            borderRadius: 4,
-            background: color,
-            border: `1.5px solid ${border || color}`,
-            flexShrink: 0,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-        }}>
-            {icon}
-        </span>
-        {label}
-    </span>
-);
-
-// ─── Parking Slot Map Grid ───────────────────────────────────────────────────
-const SlotMapGrid = ({ slots, selectedSlotId, onSelect }: {
-    slots: ParkingSlot[];
-    selectedSlotId: string | null;
-    onSelect: (s: ParkingSlot) => void;
-}) => {
-    // Group by row → then column
-    const rows = useMemo(() => {
-        const rowMap: Record<string, ParkingSlot[]> = {};
-        slots.forEach(s => {
-            const row = s.position?.row ?? s.slotCode[0] ?? 'A';
-            if (!rowMap[row]) rowMap[row] = [];
-            rowMap[row].push(s);
-        });
-        // Sort rows alphabetically, sort slots within row by column
-        const sorted: { row: string; slots: ParkingSlot[] }[] = Object.entries(rowMap)
-            .sort(([a], [b]) => a.localeCompare(b))
-            .map(([row, s]) => ({
-                row,
-                slots: [...s].sort((a, b) => (a.position?.column ?? 0) - (b.position?.column ?? 0)),
-            }));
-        return sorted;
-    }, [slots]);
-
-    if (rows.length === 0) return (
-        <div style={{ textAlign: 'center', padding: '32px', color: '#94a3b8', fontSize: 13 }}>
-            <div style={{ fontSize: 32, marginBottom: 8 }}>🅿️</div>
-            No parking slots found in this zone
+    if (slots.length === 0) return (
+        <div style={{ textAlign: 'center', padding: '48px 0', color: '#94a3b8' }}>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>🅿️</div>
+            <div style={{ fontWeight: 600 }}>No slots in this zone</div>
         </div>
     );
 
     return (
-        <div style={{
-            background: 'radial-gradient(circle at center, #1b202d 0%, #0d121c 100%)', // Dark realistic asphalt
-            borderRadius: 16,
-            border: '1px solid #1f2937',
-            padding: '24px',
-            color: '#fff',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 28,
-            overflowX: 'auto',
-            position: 'relative',
-            boxShadow: 'inset 0 0 40px rgba(0,0,0,0.8)'
-        }}>
-            {/* Glassmorphic Floating Legend Card */}
-            <div style={{
-                background: 'rgba(255, 255, 255, 0.08)',
-                backdropFilter: 'blur(20px)',
-                WebkitBackdropFilter: 'blur(20px)',
-                borderRadius: '16px',
-                border: '1px solid rgba(255, 255, 255, 0.15)',
-                padding: '16px 24px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 12,
-                boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.3)',
-                alignSelf: 'flex-start',
-                minWidth: 'max-content'
-            }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ fontSize: 14, fontWeight: 800, color: '#ffffff', letterSpacing: '-0.3px' }}>Position Optimized By AI & ANPR</span>
-                    <span style={{ fontSize: 9, background: '#2563eb', color: '#fff', padding: '2px 5px', borderRadius: 4, fontWeight: 900 }}>AI</span>
-                </div>
-                
-                <div style={{ display: 'flex', gap: '12px 16px', flexWrap: 'wrap' }}>
-                    <LegendItem color="rgba(16, 185, 129, 0.05)" border="#10b981" label="Available" />
-                    <LegendItem color="#2563eb" border="#2563eb" label="Selected" icon={<span style={{ color: '#fff', fontSize: 10, fontWeight: 900 }}>✓</span>} />
-                    <LegendItem color="rgba(239, 68, 68, 0.05)" border="#ef4444" label="Occupied" icon={
-                        <svg viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" width="12" height="12">
-                            <rect x="2" y="10" width="20" height="8" rx="2" />
-                            <path d="M6 10l2-5h8l2 5" />
-                            <circle cx="6" cy="18" r="1.5" />
-                            <circle cx="18" cy="18" r="1.5" />
-                        </svg>
-                    } />
-                    <LegendItem color="rgba(234, 179, 8, 0.05)" border="#eab308" label="Reserved" icon={
-                        <svg viewBox="0 0 24 24" fill="none" stroke="#eab308" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" width="11" height="11">
-                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                            <line x1="16" y1="2" x2="16" y2="6" />
-                            <line x1="8" y1="2" x2="8" y2="6" />
-                            <line x1="3" y1="10" x2="21" y2="10" />
-                        </svg>
-                    } />
-                    <LegendItem color="rgba(202, 138, 4, 0.05)" border="#ca8a04" label="Maintenance" icon={
-                        <svg viewBox="0 0 24 24" fill="none" stroke="#ca8a04" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" width="11" height="11">
-                            <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
-                        </svg>
-                    } />
-                    <LegendItem color="rgba(100, 116, 139, 0.05)" border="#64748b" label="Locked" icon={
-                        <svg viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" width="11" height="11">
-                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                        </svg>
-                    } />
-                </div>
+        <div>
+            {/* Legend */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 20, padding: '12px 0', borderBottom: '1px solid #f1f5f9' }}>
+                {[
+                    { label: 'Available', bg: '#f0fdf4', border: '#86efac', text: '#15803d' },
+                    { label: 'Selected',  bg: '#2563eb', border: '#1d4ed8', text: '#fff' },
+                    { label: 'Occupied',  bg: '#fef2f2', border: '#fca5a5', text: '#b91c1c' },
+                    { label: 'Reserved',  bg: '#eff6ff', border: '#93c5fd', text: '#1d4ed8' },
+                    { label: 'Maintenance',bg: '#fefce8', border: '#fde047', text: '#854d0e'},
+                    { label: 'Locked',    bg: '#f8fafc', border: '#cbd5e1', text: '#94a3b8' },
+                ].map(l => (
+                    <div key={l.label} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: '#475569' }}>
+                        <div style={{ width: 14, height: 14, borderRadius: 3, background: l.bg, border: `1.5px solid ${l.border}` }} />
+                        {l.label}
+                    </div>
+                ))}
             </div>
-
-            {/* Parking Layout Rows */}
-            {rows.map(({ row, slots: rowSlots }) => {
-                // Chunk rowSlots into pairs of top/bottom rows (max 10 slots each)
-                const slotRows: ParkingSlot[][] = [];
-                for (let i = 0; i < rowSlots.length; i += 10) {
-                    slotRows.push(rowSlots.slice(i, i + 10));
-                }
-
-                // Group slotRows into pairs
-                const pairs: { top: ParkingSlot[]; bottom?: ParkingSlot[] }[] = [];
-                for (let i = 0; i < slotRows.length; i += 2) {
-                    pairs.push({
-                        top: slotRows[i],
-                        bottom: slotRows[i + 1]
-                    });
-                }
-
+            {/* Road lanes */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, padding: '0 8px' }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#10b981', letterSpacing: 1, textTransform: 'uppercase' }}>← Entry</span>
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#ef4444', letterSpacing: 1, textTransform: 'uppercase' }}>Exit →</span>
+            </div>
+            {rows.map(([rowKey, rowSlots]) => {
+                const mid = Math.ceil(rowSlots.length / 2);
+                const top = rowSlots.slice(0, mid);
+                const bot = rowSlots.slice(mid);
                 return (
-                    <div key={row} style={{ display: 'flex', flexDirection: 'column', width: '100%', minWidth: '700px' }}>
-                        {/* Row Header */}
-                        <div style={{ fontSize: 13, fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.15em', marginBottom: 12, paddingLeft: 8 }}>
-                            ROW {row}
-                        </div>
-
-                        {pairs.map((pair, pIdx) => (
-                            <div key={pIdx} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%', margin: '12px 0' }}>
-                                {/* Top slots (face down) */}
-                                <div style={{ display: 'flex', gap: 8, justifyContent: 'center', alignItems: 'flex-end', width: '100%' }}>
-                                    {/* Real Slots */}
-                                    {pair.top.map(slot => {
-                                        const isSel = selectedSlotId === slot._id;
-                                        const isAvail = slot.status === 'available';
-                                        const isOccupied = slot.status === 'occupied';
-                                        const isReserved = slot.status === 'reserved';
-                                        const isMaint = slot.status === 'maintenance';
-                                        const isLocked = slot.status === 'locked';
-
-                                        let textColor = 'rgba(255,255,255,0.7)';
-                                        if (isOccupied) textColor = '#ef4444';
-                                        if (isReserved || isMaint) textColor = '#fbbf24';
-                                        if (isLocked) textColor = '#64748b';
-
-                                        const borderStyle = isSel ? {
-                                            borderTop: '2px solid #2563eb',
-                                            borderLeft: '2px solid #2563eb',
-                                            borderRight: '2px solid #2563eb',
-                                            borderBottom: 'none',
-                                            boxShadow: '0 -2px 10px rgba(37,99,235,0.4)',
-                                        } : {
-                                            borderTop: '1.5px solid rgba(255,255,255,0.25)',
-                                            borderLeft: '1.5px solid rgba(255,255,255,0.25)',
-                                            borderRight: '1.5px solid rgba(255,255,255,0.25)',
-                                            borderBottom: 'none'
-                                        };
-
+                    <div key={rowKey} style={{ marginBottom: 16 }}>
+                        <div style={{ overflowX: 'auto', paddingBottom: 4 }}>
+                            {/* Top row */}
+                            <div style={{ display: 'flex', gap: 6, marginBottom: 6, minWidth: 'max-content' }}>
+                                {top.map(slot => {
+                                    const isSelected = selectedSlot?._id === slot._id;
+                                    const canSelect = slot.status === 'available';
+                                    const vtName = typeof slot.vehicleType === 'string' ? '' : (slot.vehicleType as any)?.name ?? '';
+                                    const style = statusStyle(slot, isSelected);
+                                    return (
+                                        <button key={slot._id}
+                                            onClick={() => canSelect && onSelect(slot)}
+                                            disabled={!canSelect}
+                                            title={`${slot.slotCode} — ${style.label}${vtName ? ' · ' + vtName : ''}`}
+                                            style={{
+                                                width: 52, height: 80, borderRadius: 8, border: `2px solid ${style.border}`,
+                                                background: style.bg, cursor: canSelect ? 'pointer' : 'not-allowed',
+                                                display: 'flex', flexDirection: 'column', alignItems: 'center',
+                                                justifyContent: 'center', gap: 3, padding: '4px 2px',
+                                                transition: 'all 0.15s', transform: isSelected ? 'scale(1.05)' : 'scale(1)',
+                                                boxShadow: isSelected ? '0 4px 16px rgba(37,99,235,0.4)' : '0 1px 4px rgba(0,0,0,0.06)',
+                                            }}>
+                                            <span style={{ fontSize: 9, fontWeight: 800, color: style.text, letterSpacing: 0.3, textAlign: 'center', lineHeight: 1.2 }}>
+                                                {slot.slotCode}
+                                            </span>
+                                            {slot.features?.hasEVCharger && <span style={{ fontSize: 11 }}>⚡</span>}
+                                            {slot.status === 'locked' && <span style={{ fontSize: 10 }}>🔒</span>}
+                                            {isSelected && <span style={{ fontSize: 13 }}>✓</span>}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                            {/* Road stripe */}
+                            <div style={{ height: 18, background: 'repeating-linear-gradient(90deg,#f59e0b 0,#f59e0b 20px,transparent 20px,transparent 40px)', borderRadius: 4, opacity: 0.25, margin: '0 2px' }} />
+                            {/* Bottom row */}
+                            {bot.length > 0 && (
+                                <div style={{ display: 'flex', gap: 6, marginTop: 6, minWidth: 'max-content' }}>
+                                    {bot.map(slot => {
+                                        const isSelected = selectedSlot?._id === slot._id;
+                                        const canSelect = slot.status === 'available';
+                                        const style = statusStyle(slot, isSelected);
                                         return (
-                                            <button
-                                                key={slot._id}
-                                                disabled={!isAvail && !isSel}
-                                                onClick={() => isAvail && onSelect(slot)}
-                                                title={`${slot.slotCode} — ${slot.status}`}
+                                            <button key={slot._id}
+                                                onClick={() => canSelect && onSelect(slot)}
+                                                disabled={!canSelect}
+                                                title={`${slot.slotCode} — ${style.label}`}
                                                 style={{
-                                                    width: 48,
-                                                    height: 76,
-                                                    ...borderStyle,
-                                                    background: isSel ? 'rgba(37, 99, 235, 0.15)' : isLocked ? 'rgba(255,255,255,0.01)' : 'rgba(255, 255, 255, 0.03)',
-                                                    cursor: isAvail ? 'pointer' : 'not-allowed',
-                                                    display: 'flex',
-                                                    flexDirection: 'column',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'space-between',
-                                                    padding: '8px 2px',
-                                                    transition: 'all 0.2s',
-                                                    position: 'relative',
-                                                    outline: 'none',
-                                                    borderRadius: 0,
-                                                }}
-                                            >
-                                                <span style={{ fontSize: 10, fontWeight: 800, color: isSel ? '#2563eb' : textColor, fontFamily: 'monospace' }}>
-                                                    {slot.slotCode.replace(/^[^-]+-/, '')}
+                                                    width: 52, height: 80, borderRadius: 8, border: `2px solid ${style.border}`,
+                                                    background: style.bg, cursor: canSelect ? 'pointer' : 'not-allowed',
+                                                    display: 'flex', flexDirection: 'column', alignItems: 'center',
+                                                    justifyContent: 'center', gap: 3, padding: '4px 2px',
+                                                    transition: 'all 0.15s', transform: isSelected ? 'scale(1.05)' : 'scale(1)',
+                                                    boxShadow: isSelected ? '0 4px 16px rgba(37,99,235,0.4)' : '0 1px 4px rgba(0,0,0,0.06)',
+                                                }}>
+                                                <span style={{ fontSize: 9, fontWeight: 800, color: style.text, letterSpacing: 0.3, textAlign: 'center', lineHeight: 1.2 }}>
+                                                    {slot.slotCode}
                                                 </span>
-                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1, position: 'relative' }}>
-                                                    {isSel ? (
-                                                        <div style={{ width: 18, height: 18, borderRadius: '50%', background: '#10b981', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 900, boxShadow: '0 2px 4px rgba(0,0,0,0.3)' }}>✓</div>
-                                                    ) : isOccupied ? (
-                                                        <>
-                                                            <div style={{ position: 'absolute', top: -14, right: -12, width: 6, height: 6, borderRadius: '50%', background: '#10b981' }} />
-                                                            <svg viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" width="18" height="18">
-                                                                <rect x="2" y="10" width="20" height="8" rx="2" />
-                                                                <path d="M6 10l2-5h8l2 5" />
-                                                                <circle cx="6" cy="18" r="1.5" />
-                                                                <circle cx="18" cy="18" r="1.5" />
-                                                            </svg>
-                                                        </>
-                                                    ) : isReserved ? (
-                                                        <svg viewBox="0 0 24 24" fill="none" stroke="#eab308" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" width="16" height="16">
-                                                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                                                            <line x1="16" y1="2" x2="16" y2="6" />
-                                                            <line x1="8" y1="2" x2="8" y2="6" />
-                                                            <line x1="3" y1="10" x2="21" y2="10" />
-                                                        </svg>
-                                                    ) : isMaint ? (
-                                                        <svg viewBox="0 0 24 24" fill="none" stroke="#ca8a04" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" width="16" height="16">
-                                                            <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
-                                                        </svg>
-                                                    ) : isLocked ? (
-                                                        <svg viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" width="15" height="15">
-                                                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                                                            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                                                        </svg>
-                                                    ) : slot.features?.hasEVCharger ? (
-                                                        <span style={{ fontSize: 10, color: '#10b981', lineHeight: 1 }}>⚡</span>
-                                                    ) : null}
-                                                </div>
+                                                {slot.features?.hasEVCharger && <span style={{ fontSize: 11 }}>⚡</span>}
+                                                {isSelected && <span style={{ fontSize: 13 }}>✓</span>}
                                             </button>
                                         );
                                     })}
-
-                                    {/* Pad empty spacing slots */}
-                                    {pair.top.length < 10 && Array.from({ length: 10 - pair.top.length }).map((_, i) => (
-                                        <div key={`empty-top-${i}`} style={{ width: 48, height: 76 }} />
-                                    ))}
                                 </div>
-
-                                {/* Horizontal Driveway */}
-                                <div style={{
-                                    height: 44,
-                                    background: '#090d14',
-                                    borderTop: '1px dashed rgba(255,255,255,0.12)',
-                                    borderBottom: '1px dashed rgba(255,255,255,0.12)',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'space-between',
-                                    position: 'relative',
-                                    margin: '8px 0',
-                                    width: '100%',
-                                    borderRadius: '4px'
-                                }}>
-                                    {/* Dashed Center Road Line */}
-                                    <div style={{
-                                        position: 'absolute',
-                                        top: '50%',
-                                        left: 0,
-                                        right: 0,
-                                        height: 0,
-                                        borderTop: '1.8px dashed rgba(255,255,255,0.18)',
-                                        transform: 'translateY(-50%)',
-                                        pointerEvents: 'none'
-                                    }} />
-
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'rgba(255,255,255,0.35)', fontSize: 10, fontWeight: 700, zIndex: 1, paddingLeft: 16 }}>
-                                        <span>Entry</span>
-                                        <span style={{ fontSize: 12 }}>↑</span>
-                                    </div>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'rgba(255,255,255,0.35)', fontSize: 10, fontWeight: 700, zIndex: 1, paddingRight: 16 }}>
-                                        <span style={{ fontSize: 12 }}>↓</span>
-                                        <span>Exit</span>
-                                    </div>
-                                </div>
-
-                                {/* Bottom slots (face up) */}
-                                {pair.bottom && (
-                                    <div style={{ display: 'flex', gap: 8, justifyContent: 'center', alignItems: 'flex-start', width: '100%' }}>
-                                        {/* Real Slots */}
-                                        {pair.bottom.map(slot => {
-                                            const isSel = selectedSlotId === slot._id;
-                                            const isAvail = slot.status === 'available';
-                                            const isOccupied = slot.status === 'occupied';
-                                            const isReserved = slot.status === 'reserved';
-                                            const isMaint = slot.status === 'maintenance';
-                                            const isLocked = slot.status === 'locked';
-
-                                            let textColor = 'rgba(255,255,255,0.7)';
-                                            if (isOccupied) textColor = '#ef4444';
-                                            if (isReserved || isMaint) textColor = '#fbbf24';
-                                            if (isLocked) textColor = '#64748b';
-
-                                            const borderStyle = isSel ? {
-                                                borderBottom: '2px solid #2563eb',
-                                                borderLeft: '2px solid #2563eb',
-                                                borderRight: '2px solid #2563eb',
-                                                borderTop: 'none',
-                                                boxShadow: '0 2px 10px rgba(37,99,235,0.4)',
-                                            } : {
-                                                borderBottom: '1.5px solid rgba(255,255,255,0.25)',
-                                                borderLeft: '1.5px solid rgba(255,255,255,0.25)',
-                                                borderRight: '1.5px solid rgba(255,255,255,0.25)',
-                                                borderTop: 'none'
-                                            };
-
-                                            return (
-                                                <button
-                                                    key={slot._id}
-                                                    disabled={!isAvail && !isSel}
-                                                    onClick={() => isAvail && onSelect(slot)}
-                                                    title={`${slot.slotCode} — ${slot.status}`}
-                                                    style={{
-                                                        width: 48,
-                                                        height: 76,
-                                                        ...borderStyle,
-                                                        background: isSel ? 'rgba(37, 99, 235, 0.15)' : isLocked ? 'rgba(255,255,255,0.01)' : 'rgba(255, 255, 255, 0.03)',
-                                                        cursor: isAvail ? 'pointer' : 'not-allowed',
-                                                        display: 'flex',
-                                                        flexDirection: 'column-reverse',
-                                                        alignItems: 'center',
-                                                        justifyContent: 'space-between',
-                                                        padding: '8px 2px',
-                                                        transition: 'all 0.2s',
-                                                        position: 'relative',
-                                                        outline: 'none',
-                                                        borderRadius: 0,
-                                                    }}
-                                                >
-                                                    <span style={{ fontSize: 10, fontWeight: 800, color: isSel ? '#2563eb' : textColor, fontFamily: 'monospace' }}>
-                                                        {slot.slotCode.replace(/^[^-]+-/, '')}
-                                                    </span>
-                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1, position: 'relative' }}>
-                                                        {isSel ? (
-                                                            <div style={{ width: 18, height: 18, borderRadius: '50%', background: '#10b981', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 900, boxShadow: '0 2px 4px rgba(0,0,0,0.3)' }}>✓</div>
-                                                        ) : isOccupied ? (
-                                                            <>
-                                                                <div style={{ position: 'absolute', top: -14, right: -12, width: 6, height: 6, borderRadius: '50%', background: '#10b981' }} />
-                                                                <svg viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" width="18" height="18">
-                                                                    <rect x="2" y="10" width="20" height="8" rx="2" />
-                                                                    <path d="M6 10l2-5h8l2 5" />
-                                                                    <circle cx="6" cy="18" r="1.5" />
-                                                                    <circle cx="18" cy="18" r="1.5" />
-                                                                </svg>
-                                                            </>
-                                                        ) : isReserved ? (
-                                                            <svg viewBox="0 0 24 24" fill="none" stroke="#eab308" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" width="16" height="16">
-                                                                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                                                                <line x1="16" y1="2" x2="16" y2="6" />
-                                                                <line x1="8" y1="2" x2="8" y2="6" />
-                                                                <line x1="3" y1="10" x2="21" y2="10" />
-                                                            </svg>
-                                                        ) : isMaint ? (
-                                                            <svg viewBox="0 0 24 24" fill="none" stroke="#ca8a04" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" width="16" height="16">
-                                                                <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
-                                                            </svg>
-                                                        ) : isLocked ? (
-                                                            <svg viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" width="15" height="15">
-                                                                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                                                                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                                                            </svg>
-                                                        ) : slot.features?.hasEVCharger ? (
-                                                            <span style={{ fontSize: 10, color: '#10b981', lineHeight: 1 }}>⚡</span>
-                                                        ) : null}
-                                                    </div>
-                                                </button>
-                                            );
-                                        })}
-
-                                        {/* Pad empty spacing slots */}
-                                        {pair.bottom.length < 10 && Array.from({ length: 10 - pair.bottom.length }).map((_, i) => (
-                                            <div key={`empty-bottom-${i}`} style={{ width: 48, height: 76 }} />
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                        ))}
+                            )}
+                        </div>
                     </div>
                 );
             })}
@@ -514,16 +297,50 @@ const SlotMapGrid = ({ slots, selectedSlotId, onSelect }: {
     );
 };
 
-// ─── Main Page ───────────────────────────────────────────────────────────────
+// ─── Main Booking Page ────────────────────────────────────────────────────────
 const BookingPage = () => {
-    const navigate = useNavigate();
-    const location = useLocation();
+    const navigate   = useNavigate();
+    const location   = useLocation();
     const parkingSpot = location.state?.spot || { title: 'Bitexco Financial Tower Parking', price: 50000 };
 
-    const [vehicleType, setVehicleType] = useState<VehicleType | null>(null);
+    // ── Step state ──
+    const [currentStep, setCurrentStep] = useState(1);
+
+    // ── Step 1: License Plate ──
+    const [licensePlate, setLicensePlate] = useState('');
+    const [plateError, setPlateError]     = useState('');
+
+    // ── Step 2: Vehicle Type ──
+    const [vehicleType, setVehicleType]     = useState<VehicleType | null>(null);
+    const [vehicleTypes, setVehicleTypes]   = useState<VehicleType[]>([]);
+    const [vehicleTypesLoading, setVehicleTypesLoading] = useState(false);
+
+    // ── Step 3: Date & Time ──
+    const [entryDate, setEntryDate] = useState(() => new Date().toISOString().slice(0, 16));
+    const [duration, setDuration]   = useState(2);
+
+    // ── Step 4: Floor ──
+    const [floors, setFloors]           = useState<Floor[]>([]);
+    const [floorsLoading, setFloorsLoading] = useState(false);
+    const [floorsError, setFloorsError]   = useState<string | null>(null);
+    const [selectedFloor, setSelectedFloor] = useState<Floor | null>(null);
+
+    // ── Step 5: Zone ──
+    const [zones, setZones]             = useState<Zone[]>([]);
+    const [zonesLoading, setZonesLoading] = useState(false);
+    const [zonesError, setZonesError]   = useState<string | null>(null);
+    const [selectedZone, setSelectedZone] = useState<Zone | null>(null);
+
+    // ── Step 6: Slot ──
+    const [floorSlots, setFloorSlots]   = useState<ParkingSlot[]>([]);
+    const [slotsLoading, setSlotsLoading] = useState(false);
+    const [slotsError, setSlotsError]   = useState<string | null>(null);
+    const [selectedSlot, setSelectedSlot] = useState<ParkingSlot | null>(null);
+
+    // ── Confirm Modal ──
     const [showConfirmModal, setShowConfirmModal] = useState(false);
 
-    // Helper to check if a floor allows the selected vehicle type
+    // ─── isFloorAllowed helper ──────────────────────────────────────────────
     const isFloorAllowed = (floor: Floor) => {
         if (!vehicleType) return true;
         if (!floor.allowedVehicleTypes || floor.allowedVehicleTypes.length === 0) return true;
@@ -533,160 +350,120 @@ const BookingPage = () => {
         });
     };
 
-    // Vehicle Types from API
-    const [vehicleTypes, setVehicleTypes] = useState<VehicleType[]>([]);
-    const [vehicleTypesLoading, setVehicleTypesLoading] = useState(false);
-    const [selectedFloor, setSelectedFloor] = useState<Floor | null>(null);
-    const [selectedZone, setSelectedZone] = useState<Zone | null>(null);
-    const [selectedSlot, setSelectedSlot] = useState<ParkingSlot | null>(null);
-    const [entryDate, setEntryDate] = useState(() => new Date().toISOString().slice(0, 16));
-    const [duration, setDuration] = useState(2);
-
-    // Floors
-    const [floors, setFloors] = useState<Floor[]>([]);
-    const [floorsLoading, setFloorsLoading] = useState(false);
-    const [floorsError, setFloorsError] = useState<string | null>(null);
-
-    // Zones
-    const [zones, setZones] = useState<Zone[]>([]);
-    const [zonesLoading, setZonesLoading] = useState(false);
-    const [zonesError, setZonesError] = useState<string | null>(null);
-
-    // Parking Slots (floor map)
-    const [floorSlots, setFloorSlots] = useState<ParkingSlot[]>([]);
-    const [slotsLoading, setSlotsLoading] = useState(false);
-    const [slotsError, setSlotsError] = useState<string | null>(null);
-
-    // Fetch vehicle types from API
+    // ─── Data fetching ──────────────────────────────────────────────────────
     useEffect(() => {
-        const fetchVehicleTypes = async () => {
-            setVehicleTypesLoading(true);
-            try {
-                const data = await vehicleTypeService.getAll();
-                const list: VehicleType[] = Array.isArray(data) ? data : (data as any)?.data ?? [];
-                setVehicleTypes(list.filter(v => v.isActive && !v.isDeleted));
-            } catch {
-                // Fallback to 2 default types if API fails
-                setVehicleTypes([
-                    { _id: 'car', name: 'Car', code: 'CAR', size: 'medium', isActive: true,
-                      pricing: { hourlyRate: 10000, dailyRate: 80000 } },
-                    { _id: 'motorcycle', name: 'Motorcycle', code: 'MOTORBIKE', size: 'small', isActive: true,
-                      pricing: { hourlyRate: 5000, dailyRate: 40000 } },
-                ]);
-            } finally {
-                setVehicleTypesLoading(false);
-            }
-        };
-        fetchVehicleTypes();
+        setVehicleTypesLoading(true);
+        vehicleTypeService.getAll()
+            .then((data: any) => {
+                const list: VehicleType[] = Array.isArray(data) ? data : data?.data ?? [];
+                setVehicleTypes(list.filter((v: VehicleType) => v.isActive && !v.isDeleted));
+            })
+            .catch(() => setVehicleTypes([
+                { _id: 'car', name: 'Car', code: 'CAR', size: 'medium', isActive: true, pricing: { hourlyRate: 10000, dailyRate: 80000 } },
+                { _id: 'motorcycle', name: 'Motorcycle', code: 'MOTORBIKE', size: 'small', isActive: true, pricing: { hourlyRate: 5000, dailyRate: 40000 } },
+            ]))
+            .finally(() => setVehicleTypesLoading(false));
     }, []);
 
-    // Fetch floors
     useEffect(() => {
-        const fetch = async () => {
-            setFloorsLoading(true); setFloorsError(null);
-            try {
-                const params: any = { status: 'active' };
-                if (parkingSpot._id) params.parkingLot = parkingSpot._id;
-                const data = await floorService.getFloors(params);
-                const list: Floor[] = Array.isArray(data) ? data : (data as any)?.data ?? [];
-                setFloors(list);
-            } catch (err: any) {
-                setFloorsError(err?.message || 'Failed to load floor data.');
-            } finally {
-                setFloorsLoading(false);
-            }
-        };
-        fetch();
+        setFloorsLoading(true); setFloorsError(null);
+        const params: any = { status: 'active' };
+        if (parkingSpot._id) params.parkingLot = parkingSpot._id;
+        floorService.getFloors(params)
+            .then((data: any) => setFloors(Array.isArray(data) ? data : data?.data ?? []))
+            .catch((err: any) => setFloorsError(err?.message || 'Failed to load floors'))
+            .finally(() => setFloorsLoading(false));
     }, [parkingSpot._id]);
 
-    // Fetch zones khi chọn floor
     useEffect(() => {
         if (!selectedFloor) { setZones([]); setSelectedZone(null); setFloorSlots([]); setSelectedSlot(null); return; }
-        const fetch = async () => {
-            setZonesLoading(true); setZonesError(null);
-            setSelectedZone(null); setSelectedSlot(null); setFloorSlots([]);
-            try {
-                const params: any = { floor: selectedFloor._id };
-                if (parkingSpot._id) params.parkingLot = parkingSpot._id;
-                const data = await zoneService.getZones(params);
-                const list: Zone[] = Array.isArray(data) ? data : (data as any)?.data ?? [];
-                // Lọc zone theo loại xe đã chọn (nếu zone có cấu hình allowedVehicleTypes)
-                const filtered = list.filter(z => {
-                    if (!z.isDeleted && z.status === 'active') {
-                        if (!vehicleType) return true;
-                        if (!z.allowedVehicleTypes || z.allowedVehicleTypes.length === 0) return true;
-                        // allowedVehicleTypes có thể là mảng _id strings hoặc objects
-                        return z.allowedVehicleTypes.some((vt: any) => {
-                            const vtId = typeof vt === 'string' ? vt : vt?._id ?? vt?.code;
-                            return vtId === vehicleType._id || vtId === vehicleType.code;
-                        });
-                    }
-                    return false;
-                });
-                setZones(filtered);
-            } catch (err: any) {
-                setZonesError(err?.message || 'Failed to load zone data.');
-            } finally {
-                setZonesLoading(false);
-            }
-        };
-        fetch();
+        setZonesLoading(true); setZonesError(null);
+        setSelectedZone(null); setSelectedSlot(null); setFloorSlots([]);
+        const params: any = { floor: selectedFloor._id };
+        if (parkingSpot._id) params.parkingLot = parkingSpot._id;
+        zoneService.getZones(params)
+            .then((data: any) => {
+                const list: Zone[] = Array.isArray(data) ? data : data?.data ?? [];
+                setZones(list.filter(z => {
+                    if (z.isDeleted || z.status !== 'active') return false;
+                    if (!vehicleType || !z.allowedVehicleTypes?.length) return true;
+                    return z.allowedVehicleTypes.some((vt: any) => {
+                        const vtId = typeof vt === 'string' ? vt : vt?._id ?? vt?.code;
+                        return vtId === vehicleType._id || vtId === vehicleType.code;
+                    });
+                }));
+            })
+            .catch((err: any) => setZonesError(err?.message || 'Failed to load zones'))
+            .finally(() => setZonesLoading(false));
     }, [selectedFloor]);
 
-    // Fetch floor slot map khi chọn floor (để chuẩn bị slot map cho step 5)
     useEffect(() => {
         if (!selectedFloor) return;
-        const fetch = async () => {
-            setSlotsLoading(true); setSlotsError(null);
-            try {
-                const data = await parkingSlotService.getFloorMap(selectedFloor._id);
-                const list: ParkingSlot[] = Array.isArray(data) ? data : (data as any)?.data ?? [];
-                setFloorSlots(list.filter(s => !s.isDeleted));
-            } catch (err: any) {
-                setSlotsError(err?.message || 'Failed to load parking slot map.');
-            } finally {
-                setSlotsLoading(false);
-            }
-        };
-        fetch();
+        setSlotsLoading(true); setSlotsError(null);
+        parkingSlotService.getFloorMap(selectedFloor._id)
+            .then((data: any) => setFloorSlots((Array.isArray(data) ? data : data?.data ?? []).filter((s: ParkingSlot) => !s.isDeleted)))
+            .catch((err: any) => setSlotsError(err?.message || 'Failed to load slots'))
+            .finally(() => setSlotsLoading(false));
     }, [selectedFloor]);
 
-    // Reset zone/slot khi đổi vehicle
     useEffect(() => {
         setSelectedFloor(null); setSelectedZone(null);
         setFloorSlots([]); setSelectedSlot(null); setZones([]);
     }, [vehicleType]);
 
-    // Reset slot khi đổi zone
-    useEffect(() => {
-        setSelectedSlot(null);
-    }, [selectedZone]);
+    useEffect(() => { setSelectedSlot(null); }, [selectedZone]);
 
-    // Slots filtered by selected zone
+    // ─── Derived ────────────────────────────────────────────────────────────
     const zoneSlots = useMemo(() => {
         if (!selectedZone) return [];
         return floorSlots.filter(s => getZoneId(s.zone) === selectedZone._id);
     }, [floorSlots, selectedZone]);
 
-    const availableZoneSlots = zoneSlots.filter(s => s.status === 'available').length;
-
     const exitTime = new Date(new Date(entryDate).getTime() + duration * 3600000);
-    const stepsDone = [!!vehicleType, true, !!selectedFloor, !!selectedZone, !!selectedSlot].filter(Boolean).length;
-
-    // Giá cước từ vehicleType đã chọn
     const hourlyRate = vehicleType?.pricing?.hourlyRate ?? 0;
     const estimatedPrice = hourlyRate * duration;
 
+    // ─── Navigation ─────────────────────────────────────────────────────────
+    const canProceed = (step: number): boolean => {
+        switch (step) {
+            case 1: return !!vehicleType;
+            case 2: return licensePlate.trim().length >= 4;
+            case 3: return !!entryDate && duration >= 1;
+            case 4: return !!selectedFloor;
+            case 5: return !!selectedZone;
+            case 6: return !!selectedSlot;
+            default: return false;
+        }
+    };
+
+    const handleNext = () => {
+        if (currentStep === 2) {
+            const cleaned = formatPlate(licensePlate);
+            setLicensePlate(cleaned);
+            if (cleaned.length < 4) { setPlateError('Please enter a valid license plate number'); return; }
+            setPlateError('');
+        }
+        if (currentStep < 6) setCurrentStep(s => s + 1);
+        else setShowConfirmModal(true);
+    };
+
+    const handleBack = () => {
+        if (currentStep > 1) setCurrentStep(s => s - 1);
+        else navigate(-1);
+    };
+
     const handleReserve = () => {
         if (!vehicleType || !selectedFloor || !selectedZone || !selectedSlot) return;
+        setShowConfirmModal(false);
         navigate('/session', {
             state: {
                 spot: parkingSpot,
-                vehicleType,               // full VehicleType object (có pricing, _id, code)
+                vehicleType,
                 vehicleTypeId: vehicleType._id,
                 floor: selectedFloor,
                 zone: selectedZone,
                 slot: selectedSlot,
+                licensePlate: formatPlate(licensePlate),
                 entryDate,
                 duration,
                 estimatedPrice,
@@ -699,626 +476,1001 @@ const BookingPage = () => {
         return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
     };
 
+    const vehicleIcon = (code: string) => {
+        const c = code.toUpperCase();
+        if (c.includes('TRUCK') || c.includes('LORRY')) return '🚛';
+        if (c.includes('BIKE') || c.includes('BICYCLE')) return '🚲';
+        if (c.includes('ELECTRIC')) return '⚡';
+        if (c.includes('MOTOR') || c.includes('MOTO') || c.includes('SCOOTER')) return '🏍️';
+        return '🚗';
+    };
+
     return (
         <>
             <style>{`
-                @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+                @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
                 * { box-sizing: border-box; margin: 0; padding: 0; }
 
-                .bk-page {
+                .bk-root {
                     min-height: 100vh;
-                    background: #f0f4f8;
+                    background: linear-gradient(160deg, #f0f4ff 0%, #f8fafc 50%, #f0fdf4 100%);
                     font-family: 'Inter', 'Segoe UI', sans-serif;
-                    color: #1e293b;
-                    padding-bottom: 90px;
+                    color: #0f172a;
                 }
-                .bk-header {
-                    background: #fff;
+
+                /* ── Stepper bar ── */
+                .bk-stepper-wrap {
+                    background: white;
                     border-bottom: 1px solid #e2e8f0;
-                    padding: 18px 32px;
-                    display: flex;
-                    align-items: baseline;
-                    justify-content: space-between;
+                    padding: 20px 24px 0;
+                    position: sticky;
+                    top: 72px;
+                    z-index: 30;
+                    box-shadow: 0 2px 12px rgba(0,0,0,0.04);
                 }
-                .bk-header h1 { font-size: 22px; font-weight: 800; color: #0f172a; letter-spacing: -0.4px; }
-                .bk-header-sub { font-size: 13px; color: #64748b; font-weight: 500; }
+                .bk-stepper {
+                    max-width: 900px;
+                    margin: 0 auto;
+                    display: flex;
+                    align-items: flex-start;
+                    overflow-x: auto;
+                    padding-bottom: 0;
+                    scrollbar-width: none;
+                }
+                .bk-stepper::-webkit-scrollbar { display: none; }
+                .bk-step {
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    flex: 1;
+                    min-width: 80px;
+                    position: relative;
+                    padding-bottom: 16px;
+                }
+                .bk-step::after {
+                    content: '';
+                    position: absolute;
+                    top: 18px;
+                    left: calc(50% + 18px);
+                    right: calc(-50% + 18px);
+                    height: 2px;
+                    background: #e2e8f0;
+                    transition: background 0.3s;
+                }
+                .bk-step:last-child::after { display: none; }
+                .bk-step.completed::after { background: #2563eb; }
+                .bk-step-circle {
+                    width: 36px; height: 36px;
+                    border-radius: 50%;
+                    display: flex; align-items: center; justify-content: center;
+                    font-size: 13px; font-weight: 800;
+                    transition: all 0.3s cubic-bezier(0.34,1.56,0.64,1);
+                    border: 2px solid #e2e8f0;
+                    background: white;
+                    color: #94a3b8;
+                    position: relative;
+                    z-index: 1;
+                    flex-shrink: 0;
+                }
+                .bk-step.active .bk-step-circle {
+                    background: #2563eb;
+                    border-color: #2563eb;
+                    color: white;
+                    box-shadow: 0 0 0 4px rgba(37,99,235,0.15);
+                    transform: scale(1.15);
+                }
+                .bk-step.completed .bk-step-circle {
+                    background: #10b981;
+                    border-color: #10b981;
+                    color: white;
+                }
+                .bk-step-label {
+                    margin-top: 8px;
+                    font-size: 10px;
+                    font-weight: 600;
+                    color: #94a3b8;
+                    text-align: center;
+                    letter-spacing: 0.02em;
+                    text-transform: uppercase;
+                    white-space: nowrap;
+                    transition: color 0.2s;
+                }
+                .bk-step.active .bk-step-label { color: #2563eb; font-weight: 700; }
+                .bk-step.completed .bk-step-label { color: #10b981; }
 
-                .bk-body { max-width: 1140px; margin: 0 auto; padding: 24px 20px 0; }
-
-                /* Top columns layout */
-                .bk-top-row {
+                /* ── Page layout ── */
+                .bk-body {
+                    max-width: 900px;
+                    margin: 0 auto;
+                    padding: 32px 20px 100px;
                     display: grid;
-                    grid-template-columns: 320px 1fr;
-                    gap: 12px;
-                    margin-bottom: 12px;
+                    grid-template-columns: 1fr 300px;
+                    gap: 24px;
                     align-items: start;
                 }
-                .bk-top-col-left {
-                    display: flex;
-                    flex-direction: column;
-                    gap: 12px;
-                }
-                .bk-top-col-right {
-                    display: flex;
-                    flex-direction: column;
-                    gap: 12px;
-                }
-                @media (max-width: 900px) {
-                    .bk-top-row {
-                        grid-template-columns: 1fr;
-                    }
+                @media (max-width: 768px) {
+                    .bk-body { grid-template-columns: 1fr; }
+                    .bk-summary { display: none; }
                 }
 
-                /* Cards */
+                /* ── Step content card ── */
                 .bk-card {
-                    background: #fff;
+                    background: white;
+                    border-radius: 20px;
+                    border: 1px solid #e8edf4;
+                    padding: 32px;
+                    box-shadow: 0 4px 24px rgba(0,0,0,0.06);
+                    animation: stepIn 0.35s cubic-bezier(0.22,1,0.36,1) both;
+                }
+                @keyframes stepIn {
+                    from { opacity: 0; transform: translateY(20px) scale(0.98); }
+                    to   { opacity: 1; transform: translateY(0) scale(1); }
+                }
+                .bk-step-header {
+                    display: flex; align-items: center; gap: 14px; margin-bottom: 28px;
+                }
+                .bk-step-icon {
+                    width: 52px; height: 52px;
+                    background: linear-gradient(135deg, #eff6ff, #dbeafe);
                     border-radius: 14px;
-                    border: 1px solid #e2e8f0;
+                    display: flex; align-items: center; justify-content: center;
+                    font-size: 24px;
+                    border: 1px solid #bfdbfe;
+                }
+                .bk-step-title { font-size: 20px; font-weight: 800; color: #0f172a; letter-spacing: -0.3px; }
+                .bk-step-sub { font-size: 13px; color: #64748b; font-weight: 500; margin-top: 2px; }
+
+                /* ── Navigation buttons ── */
+                .bk-nav {
+                    display: flex; gap: 12px; margin-top: 32px; justify-content: space-between;
+                }
+                .bk-btn-back {
+                    padding: 14px 24px;
+                    border: 1.5px solid #e2e8f0;
+                    border-radius: 12px;
+                    background: white;
+                    color: #475569;
+                    font-size: 14px; font-weight: 700;
+                    cursor: pointer;
+                    display: flex; align-items: center; gap: 8px;
+                    transition: all 0.2s;
+                }
+                .bk-btn-back:hover { border-color: #94a3b8; background: #f8fafc; }
+                .bk-btn-next {
+                    flex: 1;
+                    padding: 14px 24px;
+                    border: none;
+                    border-radius: 12px;
+                    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+                    color: white;
+                    font-size: 15px; font-weight: 800;
+                    cursor: pointer;
+                    display: flex; align-items: center; justify-content: center; gap: 8px;
+                    transition: all 0.25s cubic-bezier(0.34,1.56,0.64,1);
+                    box-shadow: 0 6px 20px rgba(37,99,235,0.35);
+                    letter-spacing: 0.02em;
+                }
+                .bk-btn-next:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 10px 28px rgba(37,99,235,0.45); }
+                .bk-btn-next:disabled { opacity: 0.4; cursor: not-allowed; transform: none; box-shadow: none; }
+                .bk-btn-next:active:not(:disabled) { transform: scale(0.98); }
+
+                /* ── Step 1: License Plate ── */
+                .lp-hero {
+                    text-align: center;
+                    padding: 8px 0 24px;
+                }
+                .lp-hero-icon { font-size: 80px; margin-bottom: 12px; line-height: 1; }
+                .lp-input-wrap {
+                    position: relative;
+                    margin: 0 auto;
+                    max-width: 320px;
+                }
+                .lp-plate-input {
+                    width: 100%;
                     padding: 18px 20px;
-                    box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+                    font-size: 24px;
+                    font-weight: 900;
+                    text-align: center;
+                    letter-spacing: 0.14em;
+                    font-family: 'Courier New', monospace;
+                    border: 3px solid #e2e8f0;
+                    border-radius: 14px;
+                    background: #f8fafc;
+                    color: #0f172a;
+                    outline: none;
+                    text-transform: uppercase;
+                    transition: all 0.25s;
                 }
-                .bk-card-title {
-                    display: flex; align-items: center; gap: 10px;
-                    margin-bottom: 16px; font-size: 13px; font-weight: 700; color: #374151;
+                .lp-plate-input:focus { border-color: #2563eb; background: white; box-shadow: 0 0 0 4px rgba(37,99,235,0.12); }
+                .lp-plate-input.error { border-color: #ef4444; background: #fef2f2; box-shadow: 0 0 0 4px rgba(239,68,68,0.1); }
+                .lp-plate-preview {
+                    margin-top: 20px;
+                    padding: 14px 24px;
+                    background: linear-gradient(135deg, #1e293b, #334155);
+                    border-radius: 12px;
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 12px;
+                    color: white;
+                    font-weight: 900;
+                    font-size: 22px;
+                    letter-spacing: 0.1em;
+                    font-family: monospace;
+                    box-shadow: 0 8px 28px rgba(15,23,42,0.35);
+                    border: 2px solid rgba(255,255,255,0.1);
                 }
-                .bk-step-badge {
-                    width: 22px; height: 22px; border-radius: 50%;
-                    background: #e2e8f0; display: flex; align-items: center;
-                    justify-content: center; font-size: 11px; font-weight: 800; color: #64748b; flex-shrink: 0;
+                .lp-flag { font-size: 20px; }
+                .lp-hint {
+                    font-size: 12px; color: #94a3b8; font-weight: 500;
+                    margin-top: 12px; line-height: 1.6;
                 }
-                .bk-step-badge.active { background: #0f172a; color: #fff; }
-                .bk-step-badge.done   { background: #0f172a; color: #fff; }
+                .lp-error { font-size: 13px; color: #ef4444; font-weight: 600; margin-top: 8px; text-align: center; }
 
-                /* Vehicle */
-                .bk-vehicle-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-                .bk-vehicle-btn {
-                    border: 1.5px solid #e2e8f0; border-radius: 10px; background: #f8fafc;
-                    padding: 14px 10px; display: flex; flex-direction: column; align-items: center;
-                    gap: 8px; cursor: pointer; transition: all 0.2s; position: relative;
+                /* ── Step 2: Vehicle Types ── */
+                .vt-grid {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+                    gap: 12px;
                 }
-                .bk-vehicle-btn:hover { border-color: #cbd5e1; background: #f8fafc; }
-                .bk-vehicle-btn.sel { border-color: #0f172a; background: #f8fafc; }
-                .bk-vehicle-btn svg { color: #475569; }
-                .bk-vehicle-btn.sel svg { color: #0f172a; }
-                .bk-vehicle-label { font-size: 12px; font-weight: 600; color: #374151; }
-                .bk-vehicle-btn.sel .bk-vehicle-label { color: #0f172a; }
-                .bk-vehicle-check {
-                    position: absolute; top: 7px; right: 7px;
-                    width: 18px; height: 18px; background: #0f172a; border-radius: 50%;
-                    display: flex; align-items: center; justify-content: center; color: #fff; font-size: 10px;
+                .vt-card {
+                    border: 2px solid #e2e8f0;
+                    border-radius: 16px;
+                    padding: 20px 12px;
+                    cursor: pointer;
+                    text-align: center;
+                    transition: all 0.2s cubic-bezier(0.34,1.56,0.64,1);
+                    background: white;
+                }
+                .vt-card:hover { border-color: #93c5fd; transform: translateY(-2px); box-shadow: 0 6px 16px rgba(37,99,235,0.12); }
+                .vt-card.sel {
+                    border-color: #2563eb;
+                    background: linear-gradient(135deg, #eff6ff, #dbeafe);
+                    box-shadow: 0 6px 20px rgba(37,99,235,0.2);
+                    transform: translateY(-3px) scale(1.02);
+                }
+                .vt-icon { font-size: 36px; margin-bottom: 10px; line-height: 1; }
+                .vt-name { font-size: 13px; font-weight: 800; color: #1e293b; margin-bottom: 4px; }
+                .vt-price { font-size: 11px; color: #64748b; font-weight: 600; }
+                .vt-check {
+                    width: 22px; height: 22px;
+                    background: #2563eb; border-radius: 50%;
+                    display: flex; align-items: center; justify-content: center;
+                    color: white; font-size: 12px; font-weight: 900;
+                    margin: 8px auto 0;
                 }
 
-                /* Time */
-                .bk-time-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
-                .bk-field label { display: block; font-size: 10px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 5px; }
-                .bk-field input, .bk-field select {
-                    width: 100%; padding: 9px 11px; border: 1.5px solid #e2e8f0; border-radius: 8px;
-                    font-size: 13px; font-weight: 600; color: #1e293b; background: #f8fafc; outline: none; transition: border-color 0.2s;
+                /* ── Step 3: Date/Time ── */
+                .dt-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+                @media (max-width: 480px) { .dt-grid { grid-template-columns: 1fr; } }
+                .dt-field { display: flex; flex-direction: column; gap: 8px; }
+                .dt-label {
+                    font-size: 11px; font-weight: 700; color: #64748b;
+                    text-transform: uppercase; letter-spacing: 0.08em;
                 }
-                .bk-field input:focus, .bk-field select:focus { border-color: #0f172a; background: #fff; }
-                .bk-exit-info {
-                    display: flex; align-items: center; gap: 8px; background: #f8fafc;
-                    border: 1px solid #e2e8f0; border-radius: 8px; padding: 9px 13px;
-                    font-size: 12px; font-weight: 600; color: #0f172a;
+                .dt-input {
+                    padding: 14px 16px; border: 2px solid #e2e8f0; border-radius: 12px;
+                    font-size: 14px; font-weight: 600; color: #0f172a;
+                    background: #f8fafc; outline: none; transition: all 0.2s; width: 100%;
                 }
+                .dt-input:focus { border-color: #2563eb; background: white; box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
+                .duration-pills { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+                .dur-pill {
+                    padding: 9px 18px; border: 2px solid #e2e8f0; border-radius: 20px;
+                    font-size: 13px; font-weight: 700; cursor: pointer;
+                    transition: all 0.2s; background: white; color: #475569;
+                }
+                .dur-pill:hover { border-color: #93c5fd; color: #1d4ed8; }
+                .dur-pill.sel {
+                    border-color: #2563eb; background: #2563eb; color: white;
+                    box-shadow: 0 4px 12px rgba(37,99,235,0.3);
+                }
+                .dt-exit-info {
+                    margin-top: 20px; padding: 16px 20px;
+                    background: linear-gradient(135deg, #f0fdf4, #dcfce7);
+                    border: 1.5px solid #86efac; border-radius: 14px;
+                    display: flex; align-items: center; gap: 12px;
+                }
+                .dt-exit-icon { font-size: 24px; }
+                .dt-exit-label { font-size: 11px; color: #15803d; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 2px; }
+                .dt-exit-value { font-size: 17px; font-weight: 900; color: #166534; }
 
-                /* Floor */
-                .bk-floor-inner { display: flex; gap: 14px; align-items: flex-start; }
-                .bk-floor-list { flex: 1; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-                .bk-floor-item {
-                    display: flex; align-items: center; gap: 8px; padding: 8px 12px;
-                    border: 1.5px solid #e2e8f0; border-radius: 8px; cursor: pointer;
-                    transition: all 0.18s; background: #fff; font-size: 12px; font-weight: 600; color: #374151;
+                /* ── Step 4: Floor ── */
+                .floor-layout {
+                    display: grid;
+                    grid-template-columns: auto 1fr;
+                    gap: 24px;
+                    align-items: start;
                 }
-                .bk-floor-item:hover { border-color: #cbd5e1; background: #f8fafc; }
-                .bk-floor-item.sel { border-color: #0f172a; background: #f8fafc; color: #0f172a; }
-                .bk-floor-slots {
-                    margin-left: auto; background: #475569; color: #fff;
-                    font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 20px; white-space: nowrap;
+                @media (max-width: 520px) { .floor-layout { grid-template-columns: 1fr; } }
+                .floor-list { display: flex; flex-direction: column; gap: 8px; }
+                .floor-item {
+                    padding: 12px 18px; border: 2px solid #e2e8f0;
+                    border-radius: 12px; cursor: pointer;
+                    display: flex; align-items: center; gap: 12px;
+                    transition: all 0.2s; background: white;
+                    min-width: 160px;
                 }
-                .bk-floor-check { color: #0f172a; font-size: 13px; font-weight: 800; margin-left: 2px; }
+                .floor-item:hover:not(.disabled) { border-color: #93c5fd; background: #f0f9ff; }
+                .floor-item.sel {
+                    border-color: #2563eb; background: linear-gradient(135deg, #eff6ff, #dbeafe);
+                    box-shadow: 0 4px 16px rgba(37,99,235,0.15);
+                }
+                .floor-item.disabled { opacity: 0.35; cursor: not-allowed; }
+                .floor-num {
+                    width: 32px; height: 32px; border-radius: 8px;
+                    background: #f1f5f9; color: #475569;
+                    display: flex; align-items: center; justify-content: center;
+                    font-size: 13px; font-weight: 900; flex-shrink: 0;
+                }
+                .floor-item.sel .floor-num { background: #2563eb; color: white; }
+                .floor-item-name { font-size: 13px; font-weight: 700; color: #1e293b; }
+                .floor-item-slots { font-size: 11px; color: #64748b; font-weight: 500; }
 
-                /* Zone card */
-                .bk-zone-card {
-                    background: #fff; border-radius: 14px; border: 1px solid #e2e8f0;
-                    padding: 18px 20px; box-shadow: 0 1px 4px rgba(0,0,0,0.04); margin-bottom: 0;
-                }
-                .bk-zone-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 8px; }
-                .bk-zone-stat { font-size: 11px; font-weight: 600; color: #64748b; background: #f1f5f9; padding: 4px 10px; border-radius: 20px; }
-                .bk-zone-stat span { color: #0f172a; font-weight: 800; }
-                .zone-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
+                /* ── Step 5: Zone ── */
+                .zone-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 14px; }
                 .zone-card {
-                    border: 1.5px solid #e2e8f0; border-radius: 10px; padding: 12px 14px;
-                    background: #fff; transition: all 0.2s; position: relative; overflow: hidden;
+                    border: 2px solid #e2e8f0; border-radius: 16px;
+                    padding: 18px; background: white; cursor: pointer;
+                    transition: all 0.2s cubic-bezier(0.34,1.56,0.64,1);
                 }
-                .zone-card:hover:not(.full) { border-color: #cbd5e1; background: #f8fafc; box-shadow: 0 4px 12px rgba(15,23,42,0.06); transform: translateY(-1px); }
-                .zone-card.sel { border-color: #0f172a; background: #f8fafc; box-shadow: 0 4px 16px rgba(15,23,42,0.12); }
-                .zone-card.full { background: #f9fafb; opacity: 0.65; }
-                .zone-card-top { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+                .zone-card:hover:not(.full) { border-color: #93c5fd; transform: translateY(-2px); box-shadow: 0 6px 16px rgba(37,99,235,0.12); }
+                .zone-card.sel { border-color: #2563eb; background: linear-gradient(135deg, #eff6ff, #dbeafe); box-shadow: 0 6px 20px rgba(37,99,235,0.2); transform: translateY(-3px); }
+                .zone-card.full { opacity: 0.5; cursor: not-allowed; }
+                .zone-card-top { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 12px; }
                 .zone-badge {
-                    width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center;
-                    justify-content: center; font-size: 11px; font-weight: 800; flex-shrink: 0;
+                    padding: 4px 12px; border-radius: 6px;
+                    font-size: 11px; font-weight: 800; letter-spacing: 0.05em;
+                    background: #f1f5f9; color: #475569;
                 }
-                .zone-info { flex: 1; min-width: 0; }
-                .zone-name { font-size: 13px; font-weight: 700; color: #1e293b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-                .zone-card.sel .zone-name { color: #0f172a; }
-                .zone-vehicle { font-size: 10px; color: #64748b; margin-top: 2px; font-weight: 500; }
-                .zone-check { width: 20px; height: 20px; background: #0f172a; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 11px; font-weight: 800; flex-shrink: 0; }
-                .zone-full-badge { background: #fee2e2; color: #dc2626; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 20px; flex-shrink: 0; }
-                .zone-slot-info { display: flex; flex-direction: column; gap: 4px; }
-                .zone-slot-bar-bg { height: 5px; border-radius: 5px; background: #f1f5f9; overflow: hidden; }
-                .zone-slot-bar-fill { height: 100%; border-radius: 5px; transition: width 0.4s ease; }
-                .zone-slot-text { font-size: 11px; display: flex; gap: 3px; }
+                .zone-card.sel .zone-badge { background: #2563eb; color: white; }
+                .zone-name { font-size: 14px; font-weight: 800; color: #1e293b; margin-bottom: 2px; }
+                .zone-full-badge {
+                    padding: 3px 10px; background: #fef2f2; border: 1px solid #fca5a5;
+                    border-radius: 6px; font-size: 11px; font-weight: 700; color: #b91c1c;
+                }
+                .zone-check {
+                    width: 22px; height: 22px; border-radius: 50%;
+                    display: flex; align-items: center; justify-content: center;
+                    color: white; font-size: 12px; font-weight: 900;
+                }
+                .zone-slot-bar-bg {
+                    height: 6px; background: #f1f5f9; border-radius: 99px;
+                    margin: 10px 0 6px; overflow: hidden;
+                }
+                .zone-slot-bar-fill { height: 100%; border-radius: 99px; transition: width 0.4s ease; }
+                .zone-slot-text { font-size: 12px; display: flex; gap: 4px; font-weight: 600; }
 
-                /* Slot map card (Step 5) */
-                .bk-map-card {
-                    background: #fff; border-radius: 14px; border: 1px solid #e2e8f0;
-                    padding: 18px 20px; box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+                /* ── Summary sidebar ── */
+                .bk-summary {
+                    position: sticky;
+                    top: 160px;
                 }
-                .bk-map-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; flex-wrap: wrap; gap: 10px; }
-                .bk-map-legend { display: flex; gap: 14px; flex-wrap: wrap; }
-                .bk-map-stat {
-                    font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 20px;
-                    background: #f8fafc; color: #475569; border: 1px solid #cbd5e1;
+                .summary-card {
+                    background: white; border-radius: 20px;
+                    border: 1px solid #e8edf4; padding: 24px;
+                    box-shadow: 0 4px 24px rgba(0,0,0,0.06);
                 }
-                .bk-map-stat.warn { background: #fff7ed; color: #c2410c; border-color: #fed7aa; }
+                .summary-title {
+                    font-size: 14px; font-weight: 800; color: #0f172a;
+                    margin-bottom: 20px; display: flex; align-items: center; gap: 8px;
+                    padding-bottom: 14px; border-bottom: 1px solid #f1f5f9;
+                }
+                .sum-row {
+                    display: flex; justify-content: space-between;
+                    align-items: flex-start; padding: 10px 0;
+                    border-bottom: 1px dashed #f1f5f9; font-size: 13px;
+                }
+                .sum-row:last-child { border-bottom: none; }
+                .sum-label { color: #64748b; font-weight: 500; }
+                .sum-value { color: #0f172a; font-weight: 700; text-align: right; max-width: 55%; font-size: 12px; }
+                .sum-empty { color: #cbd5e1; font-style: italic; }
+                .sum-total {
+                    margin-top: 16px; padding: 16px;
+                    background: linear-gradient(135deg, #eff6ff, #dbeafe);
+                    border: 1.5px solid #bfdbfe; border-radius: 14px;
+                    display: flex; justify-content: space-between; align-items: center;
+                }
+                .sum-total-label { font-size: 13px; font-weight: 700; color: #1d4ed8; }
+                .sum-total-value { font-size: 20px; font-weight: 900; color: #1e40af; letter-spacing: -0.5px; }
 
-                /* Loading / error */
-                .bk-loading { display: flex; align-items: center; justify-content: center; padding: 28px; gap: 10px; color: #64748b; font-size: 12px; font-weight: 600; }
-                .bk-spinner { width: 20px; height: 20px; border: 2.5px solid #e2e8f0; border-top-color: #0f172a; border-radius: 50%; animation: bk-spin 0.7s linear infinite; }
-                @keyframes bk-spin { to { transform: rotate(360deg); } }
-                .bk-error { text-align: center; padding: 20px; color: #ef4444; font-size: 12px; font-weight: 600; }
-                .bk-retry { margin-top: 8px; background: none; border: 1.5px solid #ef4444; border-radius: 6px; padding: 5px 14px; color: #ef4444; font-weight: 700; cursor: pointer; font-size: 12px; }
+                /* ── Loading spinner ── */
+                .bk-loading { display: flex; align-items: center; gap: 10px; padding: 40px 0; color: #64748b; font-weight: 600; font-size: 14px; justify-content: center; flex-direction: column; }
+                .bk-spin { width: 32px; height: 32px; border: 3px solid #dbeafe; border-top-color: #2563eb; border-radius: 50%; animation: spin 0.8s linear infinite; }
+                @keyframes spin { to { transform: rotate(360deg); } }
+                .bk-error { padding: 20px; background: #fef2f2; border: 1px solid #fca5a5; border-radius: 12px; color: #b91c1c; font-weight: 600; font-size: 13px; text-align: center; }
 
-                /* Footer */
-                .bk-footer {
-                    position: fixed; bottom: 0; left: 0; right: 0; background: #fff;
-                    border-top: 1px solid #e2e8f0; padding: 14px 32px; display: flex;
-                    align-items: center; gap: 20px; z-index: 100; box-shadow: 0 -4px 16px rgba(0,0,0,0.06);
+                /* ── Confirm Modal ── */
+                .modal-overlay {
+                    position: fixed; inset: 0; background: rgba(15,23,42,0.6);
+                    backdrop-filter: blur(6px); z-index: 999;
+                    display: flex; align-items: center; justify-content: center; padding: 20px;
+                    animation: fadeIn 0.2s ease;
                 }
-                .bk-footer-steps { display: flex; flex-direction: column; gap: 4px; min-width: 200px; }
-                .bk-footer-label { font-size: 12px; font-weight: 700; color: #1e293b; }
-                .bk-footer-bar { height: 4px; border-radius: 4px; background: #e2e8f0; overflow: hidden; width: 180px; }
-                .bk-footer-bar-fill { height: 100%; border-radius: 4px; background: #0f172a; transition: width 0.4s ease; }
-                .bk-footer-summary { flex: 1; font-size: 13px; font-weight: 600; color: #475569; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-                .bk-footer-bullet { color: #94a3b8; }
-                .bk-confirm-btn { padding: 13px 32px; border: none; border-radius: 10px; font-size: 14px; font-weight: 800; cursor: pointer; transition: all 0.2s; white-space: nowrap; }
-                .bk-confirm-btn.ready { background: #0f172a; color: #fff; box-shadow: 0 4px 14px rgba(15,23,42,0.3); }
-                .bk-confirm-btn.ready:hover { background: #1e293b; transform: translateY(-1px); box-shadow: 0 6px 20px rgba(15,23,42,0.4); }
-                .bk-confirm-btn.disabled { background: #f1f5f9; color: #94a3b8; cursor: not-allowed; }
+                @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+                .modal-box {
+                    background: white; border-radius: 24px; padding: 32px; width: 100%;
+                    max-width: 520px; max-height: 90vh; overflow-y: auto;
+                    box-shadow: 0 24px 80px rgba(0,0,0,0.3);
+                    animation: slideUp 0.35s cubic-bezier(0.34,1.56,0.64,1) both;
+                }
+                @keyframes slideUp { from { transform: translateY(40px) scale(0.95); opacity: 0; } to { transform: none; opacity: 1; } }
+                .modal-title { font-size: 22px; font-weight: 900; color: #0f172a; margin-bottom: 4px; }
+                .modal-sub { font-size: 13px; color: #64748b; font-weight: 500; margin-bottom: 24px; }
+                .modal-section { margin-bottom: 20px; }
+                .modal-section-title {
+                    font-size: 11px; font-weight: 700; color: #94a3b8;
+                    text-transform: uppercase; letter-spacing: 0.08em;
+                    margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #f1f5f9;
+                }
+                .modal-row {
+                    display: flex; justify-content: space-between; align-items: center;
+                    padding: 9px 0; font-size: 13px; border-bottom: 1px solid #f8fafc;
+                }
+                .modal-row:last-child { border-bottom: none; }
+                .modal-row-label { color: #64748b; font-weight: 500; }
+                .modal-row-value { color: #0f172a; font-weight: 700; text-align: right; }
+                .modal-plate-badge {
+                    font-size: 17px; font-weight: 900; letter-spacing: 0.1em;
+                    background: linear-gradient(135deg, #1e293b, #334155);
+                    color: white; padding: 8px 20px; border-radius: 10px;
+                    font-family: monospace;
+                }
+                .modal-total {
+                    padding: 18px; background: linear-gradient(135deg, #eff6ff, #dbeafe);
+                    border: 1.5px solid #bfdbfe; border-radius: 14px;
+                    display: flex; justify-content: space-between; align-items: center; margin-top: 20px;
+                }
+                .modal-total-label { font-size: 14px; font-weight: 700; color: #1d4ed8; }
+                .modal-total-value { font-size: 26px; font-weight: 900; color: #1e40af; letter-spacing: -0.5px; }
+                .modal-actions { display: flex; gap: 12px; margin-top: 24px; }
+                .modal-cancel {
+                    flex: 1; padding: 15px; border: 1.5px solid #e2e8f0; border-radius: 12px;
+                    background: white; color: #475569; font-size: 14px; font-weight: 700; cursor: pointer;
+                    transition: all 0.2s;
+                }
+                .modal-cancel:hover { border-color: #94a3b8; background: #f8fafc; }
+                .modal-confirm {
+                    flex: 2; padding: 15px; border: none; border-radius: 12px;
+                    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+                    color: white; font-size: 15px; font-weight: 800; cursor: pointer;
+                    display: flex; align-items: center; justify-content: center; gap: 10px;
+                    transition: all 0.25s cubic-bezier(0.34,1.56,0.64,1);
+                    box-shadow: 0 6px 20px rgba(37,99,235,0.4);
+                }
+                .modal-confirm:hover { transform: translateY(-2px); box-shadow: 0 10px 28px rgba(37,99,235,0.5); }
+                .modal-confirm:active { transform: scale(0.98); }
 
-                @keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-                .fade-up { animation: fadeUp 0.3s ease-out forwards; }
-
-                /* Slot map detail panel */
-                .slot-detail {
-                    display: flex; align-items: center; gap: 10px;
-                    background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px;
-                    padding: 10px 14px; margin-top: 14px; flex-wrap: wrap;
+                /* ── Empty state ── */
+                .bk-empty {
+                    text-align: center; padding: 40px 20px; color: #94a3b8;
                 }
-                .slot-detail-code { font-size: 18px; font-weight: 900; color: #0f172a; letter-spacing: -0.5px; }
-                .slot-detail-info { font-size: 11px; color: #475569; font-weight: 600; }
-                .slot-feature-badge {
-                    display: inline-flex; align-items: center; gap: 3px;
-                    font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 20px;
-                    background: #f1f5f9; color: #334155;
-                }
+                .bk-empty-icon { font-size: 48px; margin-bottom: 12px; }
+                .bk-empty-text { font-size: 14px; font-weight: 600; }
             `}</style>
 
-            <div className="bk-page">
+            <div className="bk-root">
                 <Header />
 
-                <div className="bk-header">
-                    <h1>Smart Parking Booking</h1>
-                    <span className="bk-header-sub">{parkingSpot.title}</span>
+                {/* ── Sticky Step Progress ── */}
+                <div className="bk-stepper-wrap">
+                    <div className="bk-stepper">
+                        {STEPS.map(step => (
+                            <div key={step.id}
+                                className={`bk-step ${currentStep === step.id ? 'active' : ''} ${currentStep > step.id ? 'completed' : ''}`}>
+                                <div className="bk-step-circle">
+                                    {currentStep > step.id ? '✓' : step.id}
+                                </div>
+                                <div className="bk-step-label">{step.label}</div>
+                            </div>
+                        ))}
+                    </div>
                 </div>
 
                 <div className="bk-body">
-                    <div className="bk-top-row">
-                        <div className="bk-top-col-left">
+                    {/* ── LEFT: Step Content ── */}
+                    <div key={currentStep}>
 
-                            {/* ── STEP 1: Vehicle ── */}
+                        {/* ── STEP 1: Vehicle Type ── */}
+                        {currentStep === 1 && (
                             <div className="bk-card">
-                            <div className="bk-card-title">
-                                <span className={`bk-step-badge ${vehicleType ? 'done' : 'active'}`}>{vehicleType ? '✓' : '1'}</span>
-                                Select Vehicle Type
-                            </div>
-                            {vehicleTypesLoading ? (
-                                <div className="bk-loading"><div className="bk-spinner" /> Loading...</div>
-                            ) : (
-                                <div className="bk-vehicle-row">
-                                    {vehicleTypes.map(vt => {
-                                        const isSel = vehicleType?._id === vt._id;
-                                        const isMotorbike = ['MOTORBIKE', 'MOTORCYCLE', 'ELECTRIC_BIKE', 'BICYCLE'].some(c => vt.code.includes(c));
-                                        return (
-                                            <button
-                                                key={vt._id}
-                                                className={`bk-vehicle-btn ${isSel ? 'sel' : ''}`}
-                                                onClick={() => setVehicleType(isSel ? null : vt)}
-                                            >
-                                                {isSel && <span className="bk-vehicle-check">✓</span>}
-                                                {/* Icon SVG theo loại xe */}
-                                                {isMotorbike ? (
-                                                    <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" width="40" height="40">
-                                                        <circle cx="9" cy="34" r="6" /><circle cx="39" cy="34" r="6" />
-                                                        <path d="M15 34h18M24 16l4.5 10.5H16l3-6H24" /><path d="M28.5 16H35l4.5 7.5" /><circle cx="36" cy="14.5" r="2.5" />
-                                                    </svg>
-                                                ) : vt.code === 'SMALL_TRUCK' ? (
-                                                    <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" width="40" height="40">
-                                                        <rect x="2" y="16" width="28" height="20" rx="2" />
-                                                        <path d="M30 24h10l4 8v4H30V24z" />
-                                                        <circle cx="10" cy="38" r="4" /><circle cx="38" cy="38" r="4" />
-                                                        <path d="M2 28h28" />
-                                                    </svg>
-                                                ) : (
-                                                    <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" width="40" height="40">
-                                                        <rect x="4" y="22" width="40" height="14" rx="3" /><path d="M10 22l4.5-9h19L37 22" />
-                                                        <circle cx="13" cy="36" r="4" /><circle cx="35" cy="36" r="4" />
-                                                        <rect x="18" y="14" width="12" height="8" rx="1.5" /><path d="M4 28h3M41 28h3" />
-                                                    </svg>
-                                                )}
-                                                <span className="bk-vehicle-label">{vt.name}</span>
-                                                {vt.pricing?.hourlyRate > 0 && (
-                                                    <span style={{
-                                                        fontSize: 10, color: isSel ? '#0f172a' : '#64748b',
-                                                        fontWeight: 600, marginTop: 2,
-                                                    }}>
-                                                        {new Intl.NumberFormat('vi-VN').format(vt.pricing.hourlyRate)}đ/h
-                                                    </span>
-                                                )}
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                            )}
-                        </div>
-
-                        {/* ── STEP 2: Time ── */}
-                        <div className="bk-card">
-                            <div className="bk-card-title">
-                                <span className={`bk-step-badge ${entryDate && duration ? 'done' : 'active'}`}>{entryDate && duration ? '✓' : '2'}</span>
-                                Entry Time &amp; Duration
-                            </div>
-                            <div className="bk-time-grid">
-                                <div className="bk-field">
-                                    <label>Entry Date &amp; Time</label>
-                                    <input type="datetime-local" value={entryDate} onChange={e => setEntryDate(e.target.value)} />
-                                </div>
-                                <div className="bk-field">
-                                    <label>Duration</label>
-                                    <select value={duration} onChange={e => setDuration(Number(e.target.value))}>
-                                        {[1, 2, 3, 4, 5, 6, 8, 10, 12, 24].map(h => <option key={h} value={h}>{h} hour{h > 1 ? 's' : ''}</option>)}
-                                    </select>
-                                </div>
-                            </div>
-                            {entryDate && (
-                                <div className="bk-exit-info">
-                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#0f172a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                        <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
-                                    </svg>
-                                    Estimated exit: <strong>{fmtExit()}</strong>
-                                </div>
-                            )}
-                        </div>
-                        </div> {/* end bk-top-col-left */}
-
-                        <div className="bk-top-col-right">
-
-                            {/* ── STEP 3: Floor ── */}
-                            <div className="bk-card">
-                            <div className="bk-card-title">
-                                <span className={`bk-step-badge ${selectedFloor ? 'done' : vehicleType ? 'active' : ''}`}>{selectedFloor ? '✓' : '3'}</span>
-                                Select Floor
-                            </div>
-                            {floorsLoading ? (
-                                <div className="bk-loading"><div className="bk-spinner" /> Loading...</div>
-                            ) : floorsError ? (
-                                <div className="bk-error">⚠️ {floorsError}<br /><button className="bk-retry" onClick={() => window.location.reload()}>Retry</button></div>
-                            ) : !vehicleType ? (
-                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 16px', textAlign: 'center', color: '#64748b', minHeight: 200 }}>
-                                    <div style={{ fontSize: 32, marginBottom: 8 }}>🏢</div>
-                                    <div style={{ fontSize: 13, fontWeight: 700, color: '#475569', marginBottom: 4 }}>Please select a vehicle type</div>
-                                    <div style={{ fontSize: 11, color: '#94a3b8', maxWidth: 220, lineHeight: 1.4 }}>Select a vehicle type in Step 1 to display the floor list.</div>
-                                </div>
-                            ) : (
-                                <div className="bk-floor-inner">
-                                    <div style={{ flexShrink: 0 }}>
-                                        <IsoBuilding floors={floors} selectedFloor={selectedFloor} onSelect={f => isFloorAllowed(f) && setSelectedFloor(f)} isFloorAllowed={isFloorAllowed} />
+                                <div className="bk-step-header">
+                                    <div className="bk-step-icon">🚗</div>
+                                    <div>
+                                        <div className="bk-step-title">Select Vehicle Type</div>
+                                        <div className="bk-step-sub">Step 1 of 6 — Choose your vehicle category</div>
                                     </div>
-                                    <div className="bk-floor-list">
-                                        {floors.length === 0 ? (
-                                            <div style={{ color: '#94a3b8', fontSize: 12 }}>No floors available</div>
-                                        ) : floors.map(f => {
-                                            const isSel = selectedFloor?._id === f._id;
-                                            const allowed = isFloorAllowed(f);
-                                            return (
-                                                <div 
-                                                    key={f._id} 
-                                                    className={`bk-floor-item ${isSel ? 'sel' : ''}`} 
-                                                    onClick={() => allowed && setSelectedFloor(f)}
-                                                    style={{
-                                                        opacity: allowed ? 1 : 0.45,
-                                                        cursor: allowed ? 'pointer' : 'not-allowed',
-                                                        transition: 'all 0.2s'
-                                                    }}
-                                                >
-                                                    <div style={{ flex: 1, minWidth: 0 }}>
-                                                        <div style={{ fontSize: 12, fontWeight: 700 }}>{f.name || `Floor ${f.floorNumber}`}</div>
-                                                        <div style={{ fontSize: 9.5, color: isSel ? '#0f172a' : '#64748b', fontWeight: 500 }}>
-                                                            {f.allowedVehicleTypes && f.allowedVehicleTypes.length > 0
-                                                                ? f.allowedVehicleTypes.map((vt: any) => vt.name || vt.code).join(', ')
-                                                                : f.vehicleType === 'motorcycle' ? 'Motorcycle' : f.vehicleType === 'car' ? 'Car' : 'Both'}
+                                </div>
+
+                                {vehicleTypesLoading ? (
+                                    <div className="bk-loading"><div className="bk-spin" /><span>Loading vehicle types...</span></div>
+                                ) : (
+                                    <div className="vt-grid">
+                                        {vehicleTypes.map(vt => (
+                                            <div key={vt._id}
+                                                className={`vt-card ${vehicleType?._id === vt._id ? 'sel' : ''}`}
+                                                onClick={() => setVehicleType(vt)}>
+                                                 <div style={{
+                                                    width: 60, height: 60,
+                                                    background: vehicleType?._id === vt._id ? '#f0f4ff' : '#ffffff',
+                                                    border: `1.5px solid ${vehicleType?._id === vt._id ? '#bfdbfe' : '#e2e8f0'}`,
+                                                    borderRadius: 14,
+                                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                    margin: '0 auto 8px',
+                                                    boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+                                                    transition: 'all 0.2s',
+                                                }}>
+                                                    <VehicleSvgIcon code={vt.code} size={38} />
+                                                 </div>
+                                                <div className="vt-name">{vt.name}</div>
+                                                <div className="vt-price">{fmtVND(vt.pricing?.hourlyRate ?? 0)}/hr</div>
+                                                {vehicleType?._id === vt._id && (
+                                                    <div className="vt-check">✓</div>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+
+                                <div className="bk-nav">
+                                    <button className="bk-btn-back" onClick={handleBack}>← Back</button>
+                                    <button
+                                        id="step1-next-btn"
+                                        className="bk-btn-next"
+                                        onClick={handleNext}
+                                        disabled={!vehicleType}>
+                                        Continue → License Plate
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* ── STEP 2: License Plate ── */}
+                        {currentStep === 2 && (
+                            <div className="bk-card">
+                                <div className="bk-step-header">
+                                    <div className="bk-step-icon">🪪</div>
+                                    <div>
+                                        <div className="bk-step-title">Enter License Plate</div>
+                                        <div className="bk-step-sub">Step 2 of 6 — Your vehicle's identification number</div>
+                                    </div>
+                                </div>
+
+                                <div className="lp-hero">
+                                    <div style={{
+                                        width: 120, height: 120,
+                                        background: '#ffffff',
+                                        border: '2px solid #e2e8f0',
+                                        borderRadius: 20,
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                        margin: '0 auto 4px',
+                                        boxShadow: '0 4px 16px rgba(0,0,0,0.07)',
+                                    }}>
+                                        <VehicleSvgIcon code={vehicleType?.code ?? 'CAR'} size={76} />
+                                    </div>
+                                    {vehicleType && (
+                                        <div style={{ fontSize: 13, fontWeight: 700, color: '#475569', marginTop: 8, marginBottom: 4 }}>
+                                            {vehicleType.name}
+                                        </div>
+                                    )}
+
+                                    <div className="lp-input-wrap">
+                                        <input
+                                            id="license-plate-input"
+                                            className={`lp-plate-input ${plateError ? 'error' : ''}`}
+                                            value={licensePlate}
+                                            onChange={e => {
+                                                setLicensePlate(formatPlate(e.target.value));
+                                                setPlateError('');
+                                            }}
+                                            onKeyDown={e => { if (e.key === 'Enter' && canProceed(2)) handleNext(); }}
+                                            placeholder="51A-12345"
+                                            maxLength={12}
+                                            autoFocus
+                                        />
+                                        {plateError && <div className="lp-error">⚠️ {plateError}</div>}
+                                    </div>
+
+                                    {licensePlate.length >= 4 && (
+                                        <div style={{ display: 'flex', justifyContent: 'center', marginTop: 20 }}>
+                                            <div className="lp-plate-preview">
+                                                <span className="lp-flag">🇻🇳</span>
+                                                {licensePlate}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    <div className="lp-hint">
+                                        Format: <strong>51A-12345</strong> (car) or <strong>59T1-12345</strong> (motorcycle)<br/>
+                                        This will be linked to your parking session.
+                                    </div>
+                                </div>
+
+                                <div className="bk-nav">
+                                    <button className="bk-btn-back" onClick={handleBack}>
+                                        ← Back
+                                    </button>
+                                    <button
+                                        id="step2-next-btn"
+                                        className="bk-btn-next"
+                                        onClick={handleNext}
+                                        disabled={licensePlate.trim().length < 4}>
+                                        Continue → Date & Time
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* ── STEP 3: Date & Time ── */}
+                        {currentStep === 3 && (
+                            <div className="bk-card">
+                                <div className="bk-step-header">
+                                    <div className="bk-step-icon">📅</div>
+                                    <div>
+                                        <div className="bk-step-title">Entry Date & Time</div>
+                                        <div className="bk-step-sub">Step 3 of 6 — When do you plan to park?</div>
+                                    </div>
+                                </div>
+
+                                <div className="dt-grid">
+                                    <div className="dt-field" style={{ gridColumn: '1 / -1' }}>
+                                        <label className="dt-label">Entry Date & Time</label>
+                                        <input
+                                            id="entry-datetime"
+                                            type="datetime-local"
+                                            className="dt-input"
+                                            value={entryDate}
+                                            min={new Date().toISOString().slice(0,16)}
+                                            onChange={e => setEntryDate(e.target.value)}
+                                        />
+                                    </div>
+                                    <div className="dt-field" style={{ gridColumn: '1 / -1' }}>
+                                        <label className="dt-label">Duration</label>
+                                        <div className="duration-pills">
+                                            {[1, 2, 3, 4, 6, 8, 12, 24].map(h => (
+                                                <button key={h}
+                                                    className={`dur-pill ${duration === h ? 'sel' : ''}`}
+                                                    onClick={() => setDuration(h)}>
+                                                    {h}h
+                                                </button>
+                                            ))}
+                                        </div>
+                                        <input
+                                            id="duration-custom"
+                                            type="number" min="1" max="72"
+                                            className="dt-input"
+                                            value={duration}
+                                            onChange={e => setDuration(Math.max(1, parseInt(e.target.value) || 1))}
+                                            style={{ marginTop: 10, width: '140px' }}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="dt-exit-info">
+                                    <div className="dt-exit-icon">🏁</div>
+                                    <div>
+                                        <div className="dt-exit-label">Estimated Exit</div>
+                                        <div className="dt-exit-value">{fmtExit()}</div>
+                                    </div>
+                                </div>
+
+                                <div className="bk-nav">
+                                    <button className="bk-btn-back" onClick={handleBack}>← Back</button>
+                                    <button
+                                        id="step3-next-btn"
+                                        className="bk-btn-next"
+                                        onClick={handleNext}>
+                                        Continue → Select Floor
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* ── STEP 4: Floor ── */}
+                        {currentStep === 4 && (
+                            <div className="bk-card">
+                                <div className="bk-step-header">
+                                    <div className="bk-step-icon">🏢</div>
+                                    <div>
+                                        <div className="bk-step-title">Select Floor</div>
+                                        <div className="bk-step-sub">Step 4 of 6 — Choose which floor to park on</div>
+                                    </div>
+                                </div>
+
+                                {floorsLoading ? (
+                                    <div className="bk-loading"><div className="bk-spin" /><span>Loading floors...</span></div>
+                                ) : floorsError ? (
+                                    <div className="bk-error">⚠️ {floorsError}</div>
+                                ) : (
+                                    <div className="floor-layout">
+                                        {/* List */}
+                                        <div className="floor-list">
+                                            {[...floors].sort((a,b) => a.floorNumber - b.floorNumber).map(f => {
+                                                const allowed = isFloorAllowed(f);
+                                                return (
+                                                    <div key={f._id}
+                                                        className={`floor-item ${selectedFloor?._id === f._id ? 'sel' : ''} ${!allowed ? 'disabled' : ''}`}
+                                                        onClick={() => allowed && setSelectedFloor(f)}>
+                                                        <div className="floor-num">{f.floorNumber}</div>
+                                                        <div>
+                                                            <div className="floor-item-name">{f.name || `Floor ${f.floorNumber}`}</div>
+                                                            <div className="floor-item-slots">
+                                                                {f.availableSlots ?? '?'} available
+                                                            </div>
                                                         </div>
+                                                        {selectedFloor?._id === f._id && <span style={{ marginLeft: 'auto', color: '#2563eb', fontWeight: 900 }}>✓</span>}
                                                     </div>
-                                                    {isSel && <span className="bk-floor-check">✓</span>}
-                                                    <span className="bk-floor-slots">{f.availableSlots ?? f.totalSlots ?? '?'} slots</span>
+                                                );
+                                            })}
+                                        </div>
+                                        {/* 3D Building */}
+                                        <div style={{ display: 'flex', justifyContent: 'center' }}>
+                                            <IsoBuilding
+                                                floors={floors}
+                                                selectedFloor={selectedFloor}
+                                                onSelect={setSelectedFloor}
+                                                isFloorAllowed={isFloorAllowed}
+                                            />
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div className="bk-nav">
+                                    <button className="bk-btn-back" onClick={handleBack}>← Back</button>
+                                    <button
+                                        id="step4-next-btn"
+                                        className="bk-btn-next"
+                                        onClick={handleNext}
+                                        disabled={!selectedFloor}>
+                                        Continue → Select Zone
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* ── STEP 5: Zone ── */}
+                        {currentStep === 5 && (
+                            <div className="bk-card">
+                                <div className="bk-step-header">
+                                    <div className="bk-step-icon">📍</div>
+                                    <div>
+                                        <div className="bk-step-title">Select Parking Zone</div>
+                                        <div className="bk-step-sub">Step 5 of 6 — Choose your preferred area</div>
+                                    </div>
+                                </div>
+
+                                {zonesLoading ? (
+                                    <div className="bk-loading"><div className="bk-spin" /><span>Loading zones...</span></div>
+                                ) : zonesError ? (
+                                    <div className="bk-error">⚠️ {zonesError}</div>
+                                ) : zones.length === 0 ? (
+                                    <div className="bk-empty">
+                                        <div className="bk-empty-icon">🚧</div>
+                                        <div className="bk-empty-text">No zones available on this floor</div>
+                                    </div>
+                                ) : (
+                                    <div className="zone-grid">
+                                        {zones.map(z => {
+                                            const pct = z.totalSlots > 0 ? Math.round((z.availableSlots / z.totalSlots) * 100) : 0;
+                                            const isFull = z.availableSlots === 0;
+                                            const barColor = isFull ? '#ef4444' : pct < 30 ? '#f59e0b' : '#10b981';
+                                            const isSel = selectedZone?._id === z._id;
+                                            return (
+                                                <div key={z._id}
+                                                    className={`zone-card ${isSel ? 'sel' : ''} ${isFull ? 'full' : ''}`}
+                                                    onClick={() => !isFull && setSelectedZone(z)}>
+                                                    <div className="zone-card-top">
+                                                        <div className="zone-badge">{z.code}</div>
+                                                        {isSel && <div className="zone-check" style={{ background: '#2563eb' }}>✓</div>}
+                                                        {isFull && <div className="zone-full-badge">Full</div>}
+                                                    </div>
+                                                    <div className="zone-name">{z.name}</div>
+                                                    <div className="zone-slot-bar-bg">
+                                                        <div className="zone-slot-bar-fill" style={{ width: `${pct}%`, background: barColor }} />
+                                                    </div>
+                                                    <div className="zone-slot-text">
+                                                        <span style={{ color: barColor, fontWeight: 800 }}>{z.availableSlots}</span>
+                                                        <span style={{ color: '#94a3b8' }}>/{z.totalSlots} available</span>
+                                                    </div>
                                                 </div>
                                             );
                                         })}
                                     </div>
-                                </div>
-                            )}
-                        </div>
+                                )}
 
-                        {/* ── STEP 4: Zone ── */}
-                        <div>
-                            {selectedFloor ? (
-                                <div className="bk-zone-card fade-up">
-                                    <div className="bk-zone-header">
-                                        <div className="bk-card-title" style={{ marginBottom: 0 }}>
-                                            <span className={`bk-step-badge ${selectedZone ? 'done' : 'active'}`}>{selectedZone ? '✓' : '4'}</span>
-                                            Select Parking Zone ({selectedFloor.name || `Floor ${selectedFloor.floorNumber}`})
-                                        </div>
-                                        {!zonesLoading && zones.length > 0 && (
-                                            <div className="bk-zone-stat">
-                                                <span>{zones.filter(z => z.availableSlots > 0).length}</span>/{zones.length} zones available
-                                            </div>
-                                        )}
+                                <div className="bk-nav">
+                                    <button className="bk-btn-back" onClick={handleBack}>← Back</button>
+                                    <button
+                                        id="step5-next-btn"
+                                        className="bk-btn-next"
+                                        onClick={handleNext}
+                                        disabled={!selectedZone}>
+                                        Continue → Select Slot
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* ── STEP 6: Slot ── */}
+                        {currentStep === 6 && (
+                            <div className="bk-card">
+                                <div className="bk-step-header">
+                                    <div className="bk-step-icon">🅿️</div>
+                                    <div>
+                                        <div className="bk-step-title">Select Parking Slot</div>
+                                        <div className="bk-step-sub">Step 6 of 6 — Pick your exact spot</div>
                                     </div>
-                                    {zonesLoading ? (
-                                        <div className="bk-loading"><div className="bk-spinner" /> Loading zones...</div>
-                                    ) : zonesError ? (
-                                        <div className="bk-error">⚠️ {zonesError}<br />
-                                            <button className="bk-retry" onClick={() => setSelectedFloor({ ...selectedFloor })}>Retry</button>
-                                        </div>
-                                    ) : zones.length === 0 ? (
-                                        <div style={{ textAlign: 'center', padding: '24px 20px', color: '#94a3b8' }}>
-                                            <div style={{ fontSize: 30, marginBottom: 8 }}>🏢</div>
-                                            <div style={{ fontSize: 13, fontWeight: 700, color: '#64748b' }}>No parking zones found</div>
-                                        </div>
-                                    ) : (
-                                        <div className="zone-grid">
-                                            {zones.map(zone => (
-                                                <ZoneCard key={zone._id} zone={zone} selected={selectedZone?._id === zone._id} onSelect={setSelectedZone} />
-                                            ))}
-                                        </div>
-                                    )}
                                 </div>
-                            ) : (
-                                <div className="bk-zone-card" style={{ opacity: 0.45, textAlign: 'center', padding: '28px', color: '#94a3b8' }}>
-                                    <div style={{ fontSize: 28, marginBottom: 8 }}>🏢</div>
-                                    <div style={{ fontSize: 13, fontWeight: 600 }}>Select a floor to view parking zones</div>
-                                </div>
-                            )}
-                        </div>
 
-                        {/* ── STEP 5: Slot Map ── */}
-                        <div>
-                            {selectedZone ? (
-                                <div className="bk-map-card fade-up">
-                                    <div className="bk-map-header">
-                                        <div className="bk-card-title" style={{ marginBottom: 0 }}>
-                                            <span className={`bk-step-badge ${selectedSlot ? 'done' : 'active'}`}>{selectedSlot ? '✓' : '5'}</span>
-                                            Select Slot — {selectedZone.name} ({selectedZone.code})
-                                        </div>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                                            {!slotsLoading && (
-                                                <div className={`bk-map-stat ${availableZoneSlots <= 5 ? 'warn' : ''}`}>
-                                                    {availableZoneSlots} available / {zoneSlots.length} total
-                                                </div>
-                                            )}
+                                {slotsLoading ? (
+                                    <div className="bk-loading"><div className="bk-spin" /><span>Loading parking map...</span></div>
+                                ) : slotsError ? (
+                                    <div className="bk-error">⚠️ {slotsError}</div>
+                                ) : (
+                                    <SlotMapGrid
+                                        slots={zoneSlots}
+                                        selectedSlot={selectedSlot}
+                                        onSelect={setSelectedSlot}
+                                        vehicleType={vehicleType}
+                                    />
+                                )}
+
+                                {selectedSlot && (
+                                    <div style={{ marginTop: 20, padding: '14px 18px', background: 'linear-gradient(135deg,#eff6ff,#dbeafe)', border: '1.5px solid #bfdbfe', borderRadius: 14, display: 'flex', alignItems: 'center', gap: 14 }}>
+                                        <span style={{ fontSize: 24 }}>✅</span>
+                                        <div>
+                                            <div style={{ fontSize: 13, fontWeight: 700, color: '#1d4ed8' }}>Slot Selected</div>
+                                            <div style={{ fontSize: 16, fontWeight: 900, color: '#1e40af', letterSpacing: 1 }}>{selectedSlot.slotCode}</div>
+                                            {selectedSlot.features?.hasEVCharger && <div style={{ fontSize: 11, color: '#10b981', fontWeight: 700, marginTop: 2 }}>⚡ EV Charging Available</div>}
                                         </div>
                                     </div>
+                                )}
 
-                                    {/* (Legend is now rendered inside SlotMapGrid) */}
-
-                                    {slotsLoading ? (
-                                        <div className="bk-loading"><div className="bk-spinner" /> Loading slot map...</div>
-                                    ) : slotsError ? (
-                                        <div className="bk-error">⚠️ {slotsError}<br />
-                                            <button className="bk-retry" onClick={() => setSelectedFloor({ ...selectedFloor! })}>Retry</button>
-                                        </div>
-                                    ) : (
-                                        <>
-                                            <SlotMapGrid
-                                                slots={zoneSlots}
-                                                selectedSlotId={selectedSlot?._id ?? null}
-                                                onSelect={s => setSelectedSlot(prev => prev?._id === s._id ? null : s)}
-                                            />
-
-                                            {/* Selected slot detail panel & main confirm button */}
-                                            {selectedSlot && (
-                                                <>
-                                                    <div className="slot-detail fade-up">
-                                                        <div className="slot-detail-code">{selectedSlot.slotCode}</div>
-                                                        <div className="slot-detail-info">
-                                                            <div>Row {selectedSlot.position?.row ?? '?'} · Column {selectedSlot.position?.column ?? '?'}</div>
-                                                            <div style={{ color: '#0f172a' }}>✓ Ready to book</div>
-                                                        </div>
-                                                        <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                                                            {selectedSlot.features?.hasEVCharger && <span className="slot-feature-badge">⚡ EV</span>}
-                                                            {selectedSlot.features?.isVIP && <span className="slot-feature-badge">⭐ VIP</span>}
-                                                            {selectedSlot.features?.isHandicapped && <span className="slot-feature-badge">♿ Accessible</span>}
-                                                            {selectedSlot.features?.hasCCTV && <span className="slot-feature-badge">📷 CCTV</span>}
-                                                            {getVehicleTypeName(selectedSlot.vehicleType) && (
-                                                                <span className="slot-feature-badge">🚗 {getVehicleTypeName(selectedSlot.vehicleType)}</span>
-                                                            )}
-                                                        </div>
-                                                        <button
-                                                            style={{ marginLeft: 8, background: 'none', border: '1.5px solid #bfdbfe', borderRadius: 7, padding: '4px 10px', color: '#3b82f6', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
-                                                            onClick={() => setSelectedSlot(null)}
-                                                        >Deselect</button>
-                                                    </div>
-
-                                                    {/* Confirm button under Slot Map Details */}
-                                                    <div className="fade-up" style={{ marginTop: 20, display: 'flex', justifyContent: 'center' }}>
-                                                        <button
-                                                            onClick={() => setShowConfirmModal(true)}
-                                                            style={{
-                                                                background: '#0f172a',
-                                                                color: '#fff',
-                                                                border: 'none',
-                                                                borderRadius: '10px',
-                                                                padding: '14px 48px',
-                                                                fontSize: '15px',
-                                                                fontWeight: 800,
-                                                                cursor: 'pointer',
-                                                                boxShadow: '0 4px 14px rgba(15,23,42,0.3)',
-                                                                transition: 'all 0.2s',
-                                                                width: '100%',
-                                                                maxWidth: '320px',
-                                                                textAlign: 'center'
-                                                            }}
-                                                            onMouseOver={e => { e.currentTarget.style.background = '#1e293b'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
-                                                            onMouseOut={e => { e.currentTarget.style.background = '#0f172a'; e.currentTarget.style.transform = 'translateY(0)'; }}
-                                                        >
-                                                            Confirm Booking
-                                                        </button>
-                                                    </div>
-                                                </>
-                                            )}
-                                        </>
-                                    )}
+                                <div className="bk-nav">
+                                    <button className="bk-btn-back" onClick={handleBack}>← Back</button>
+                                    <button
+                                        id="step6-review-btn"
+                                        className="bk-btn-next"
+                                        onClick={handleNext}
+                                        disabled={!selectedSlot}
+                                        style={{ background: 'linear-gradient(135deg, #10b981, #059669)', boxShadow: '0 6px 20px rgba(16,185,129,0.4)' }}>
+                                        🎉 Review & Confirm
+                                    </button>
                                 </div>
-                            ) : (
-                                <div className="bk-map-card" style={{ opacity: 0.45, textAlign: 'center', padding: '32px', color: '#94a3b8' }}>
-                                    <div style={{ fontSize: 36, marginBottom: 10 }}>🅿️</div>
-                                    <div style={{ fontSize: 13, fontWeight: 700, color: '#64748b', marginBottom: 4 }}>Select a parking zone to view the slot map</div>
-                                    <div style={{ fontSize: 11, color: '#94a3b8' }}>The map shows the real-time status of each parking slot</div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* ── RIGHT: Summary Sidebar ── */}
+                    <div className="bk-summary">
+                        <div className="summary-card">
+                            <div className="summary-title">
+                                📋 Booking Summary
+                            </div>
+
+                            <div className="sum-row">
+                                <span className="sum-label">Facility</span>
+                                <span className="sum-value">{parkingSpot.title || 'Parking'}</span>
+                            </div>
+                            <div className="sum-row">
+                                <span className="sum-label">License Plate</span>
+                                <span className="sum-value">
+                                    {licensePlate || <span className="sum-empty">Not entered</span>}
+                                </span>
+                            </div>
+                            <div className="sum-row">
+                                <span className="sum-label">Vehicle</span>
+                                <span className="sum-value">
+                                    {vehicleType ? `${vehicleIcon(vehicleType.code)} ${vehicleType.name}` : <span className="sum-empty">Not selected</span>}
+                                </span>
+                            </div>
+                            <div className="sum-row">
+                                <span className="sum-label">Entry</span>
+                                <span className="sum-value">{fmtDateTime(entryDate)}</span>
+                            </div>
+                            <div className="sum-row">
+                                <span className="sum-label">Duration</span>
+                                <span className="sum-value">{duration}h</span>
+                            </div>
+                            <div className="sum-row">
+                                <span className="sum-label">Floor</span>
+                                <span className="sum-value">
+                                    {selectedFloor ? (selectedFloor.name || `Floor ${selectedFloor.floorNumber}`) : <span className="sum-empty">Not selected</span>}
+                                </span>
+                            </div>
+                            <div className="sum-row">
+                                <span className="sum-label">Zone</span>
+                                <span className="sum-value">
+                                    {selectedZone ? selectedZone.name : <span className="sum-empty">Not selected</span>}
+                                </span>
+                            </div>
+                            <div className="sum-row">
+                                <span className="sum-label">Slot</span>
+                                <span className="sum-value">
+                                    {selectedSlot ? selectedSlot.slotCode : <span className="sum-empty">Not selected</span>}
+                                </span>
+                            </div>
+
+                            {vehicleType && (
+                                <div className="sum-total">
+                                    <span className="sum-total-label">Est. Total</span>
+                                    <span className="sum-total-value">{fmtVND(estimatedPrice)}</span>
                                 </div>
                             )}
                         </div>
-                        </div> {/* end bk-top-col-right */}
-                    </div> {/* end bk-top-row */}
-                </div> {/* end bk-body */}
+                    </div>
+                </div>
             </div>
 
-            {/* ── CONFIRMATION MODAL ── */}
+            {/* ── Confirm Modal ── */}
             {showConfirmModal && (
-                <div style={{
-                    position: 'fixed',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    background: 'rgba(15, 23, 42, 0.6)',
-                    backdropFilter: 'blur(8px)',
-                    WebkitBackdropFilter: 'blur(8px)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    zIndex: 9999,
-                    animation: 'fadeIn 0.2s ease-out'
-                }}>
-                    <div style={{
-                        background: '#ffffff',
-                        borderRadius: '16px',
-                        width: '90%',
-                        maxWidth: '480px',
-                        padding: '28px',
-                        boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)',
-                        animation: 'scaleUp 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) forwards',
-                        color: '#1e293b'
-                    }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
-                            <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#dbeafe', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                <span style={{ fontSize: 18 }}>🅿️</span>
-                            </div>
-                            <h2 style={{ fontSize: 18, fontWeight: 800, color: '#0f172a' }}>Confirm Booking</h2>
-                        </div>
+                <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) setShowConfirmModal(false); }}>
+                    <div className="modal-box">
+                        <div className="modal-title">🎉 Confirm Your Booking</div>
+                        <div className="modal-sub">Please review all details before confirming.</div>
 
-                        <div style={{ background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0', padding: '16px', display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 24 }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                                <span style={{ color: '#64748b', fontWeight: 500 }}>Parking location:</span>
-                                <strong style={{ color: '#0f172a', textAlign: 'right' }}>{parkingSpot.title}</strong>
+                        <div className="modal-section">
+                            <div className="modal-section-title">🚘 Vehicle Information</div>
+                            <div className="modal-row">
+                                <span className="modal-row-label">License Plate</span>
+                                <span className="modal-plate-badge">{licensePlate}</span>
                             </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                                <span style={{ color: '#64748b', fontWeight: 500 }}>Slot position:</span>
-                                <strong style={{ color: '#0f172a' }}>
-                                    {selectedFloor?.name || `Floor ${selectedFloor?.floorNumber}`} · {selectedZone?.name} · <span style={{ color: '#2563eb' }}>{selectedSlot?.slotCode}</span>
-                                </strong>
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                                <span style={{ color: '#64748b', fontWeight: 500 }}>Vehicle type:</span>
-                                <strong style={{ color: '#0f172a' }}>{vehicleType?.name}</strong>
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                                <span style={{ color: '#64748b', fontWeight: 500 }}>Entry time:</span>
-                                <strong style={{ color: '#0f172a' }}>
-                                    {new Date(entryDate).toLocaleDateString('en-US')} {new Date(entryDate).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-                                </strong>
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                                <span style={{ color: '#64748b', fontWeight: 500 }}>Estimated exit time:</span>
-                                <strong style={{ color: '#0f172a' }}>{fmtExit()}</strong>
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                                <span style={{ color: '#64748b', fontWeight: 500 }}>Duration:</span>
-                                <strong style={{ color: '#0f172a' }}>{duration} hour{duration > 1 ? 's' : ''}</strong>
-                            </div>
-                            
-                            <div style={{ height: '1px', background: '#e2e8f0', margin: '4px 0' }} />
-                            
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                                <span style={{ color: '#0f172a', fontWeight: 700, fontSize: 14 }}>Estimated total:</span>
-                                <strong style={{ color: '#16a34a', fontSize: 20, fontWeight: 900 }}>
-                                    {new Intl.NumberFormat('vi-VN').format(estimatedPrice)}đ
-                                </strong>
+                            <div className="modal-row">
+                                <span className="modal-row-label">Vehicle Type</span>
+                                <span className="modal-row-value">{vehicleIcon(vehicleType?.code ?? '')} {vehicleType?.name}</span>
                             </div>
                         </div>
 
-                        <div style={{ display: 'flex', gap: 12 }}>
-                            <button
-                                onClick={() => setShowConfirmModal(false)}
-                                style={{
-                                    flex: 1,
-                                    padding: '12px',
-                                    border: '1.5px solid #cbd5e1',
-                                    borderRadius: '8px',
-                                    background: '#ffffff',
-                                    color: '#475569',
-                                    fontSize: '14px',
-                                    fontWeight: 700,
-                                    cursor: 'pointer',
-                                    transition: 'all 0.15s'
-                                }}
-                                onMouseOver={e => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.borderColor = '#94a3b8'; }}
-                                onMouseOut={e => { e.currentTarget.style.background = '#ffffff'; e.currentTarget.style.borderColor = '#cbd5e1'; }}
-                            >
-                                Cancel
+                        <div className="modal-section">
+                            <div className="modal-section-title">📍 Parking Location</div>
+                            <div className="modal-row">
+                                <span className="modal-row-label">Facility</span>
+                                <span className="modal-row-value">{parkingSpot.title}</span>
+                            </div>
+                            <div className="modal-row">
+                                <span className="modal-row-label">Floor</span>
+                                <span className="modal-row-value">{selectedFloor?.name || `Floor ${selectedFloor?.floorNumber}`}</span>
+                            </div>
+                            <div className="modal-row">
+                                <span className="modal-row-label">Zone</span>
+                                <span className="modal-row-value">{selectedZone?.name} ({selectedZone?.code})</span>
+                            </div>
+                            <div className="modal-row">
+                                <span className="modal-row-label">Slot</span>
+                                <span className="modal-row-value" style={{ fontSize: 16, color: '#2563eb', fontWeight: 900 }}>{selectedSlot?.slotCode}</span>
+                            </div>
+                        </div>
+
+                        <div className="modal-section">
+                            <div className="modal-section-title">⏰ Time Details</div>
+                            <div className="modal-row">
+                                <span className="modal-row-label">Entry</span>
+                                <span className="modal-row-value">{fmtDateTime(entryDate)}</span>
+                            </div>
+                            <div className="modal-row">
+                                <span className="modal-row-label">Est. Exit</span>
+                                <span className="modal-row-value">{fmtExit()}</span>
+                            </div>
+                            <div className="modal-row">
+                                <span className="modal-row-label">Duration</span>
+                                <span className="modal-row-value">{duration} hour{duration !== 1 ? 's' : ''}</span>
+                            </div>
+                            <div className="modal-row">
+                                <span className="modal-row-label">Rate</span>
+                                <span className="modal-row-value">{fmtVND(hourlyRate)}/hr</span>
+                            </div>
+                        </div>
+
+                        <div className="modal-total">
+                            <span className="modal-total-label">Estimated Total</span>
+                            <span className="modal-total-value">{fmtVND(estimatedPrice)}</span>
+                        </div>
+
+                        <div className="modal-actions">
+                            <button className="modal-cancel" onClick={() => setShowConfirmModal(false)}>
+                                ← Edit
                             </button>
-                            <button
-                                onClick={() => {
-                                    setShowConfirmModal(false);
-                                    handleReserve();
-                                }}
-                                style={{
-                                    flex: 1,
-                                    padding: '12px',
-                                    border: 'none',
-                                    borderRadius: '8px',
-                                    background: '#0f172a',
-                                    color: '#ffffff',
-                                    fontSize: '14px',
-                                    fontWeight: 700,
-                                    cursor: 'pointer',
-                                    transition: 'all 0.15s',
-                                    boxShadow: '0 4px 6px -1px rgba(15,23,42,0.2)'
-                                }}
-                                onMouseOver={e => { e.currentTarget.style.background = '#1e293b'; }}
-                                onMouseOut={e => { e.currentTarget.style.background = '#0f172a'; }}
-                            >
-                                Confirm
+                            <button id="confirm-booking-btn" className="modal-confirm" onClick={handleReserve}>
+                                ✅ Confirm Booking
                             </button>
                         </div>
                     </div>
