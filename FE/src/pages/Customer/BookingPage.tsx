@@ -416,6 +416,18 @@ const BookingPage = () => {
     const [checkoutProcessing, setCheckoutProcessing] = useState(false);
     const [checkoutErrors, setCheckoutErrors] = useState<Record<string, string>>({});
 
+    const [showSuccessToast, setShowSuccessToast] = useState(false);
+    const [successBooking, setSuccessBooking] = useState<any>(null);
+
+    useEffect(() => {
+        if (showSuccessToast) {
+            const timer = setTimeout(() => {
+                setShowSuccessToast(false);
+            }, 8000);
+            return () => clearTimeout(timer);
+        }
+    }, [showSuccessToast]);
+
     useEffect(() => {
         if (!showConfirmModal) {
             setCheckoutPhase('review');
@@ -449,25 +461,40 @@ const BookingPage = () => {
         const rawExit = exitTime;
 
         setTimeout(() => {
+            const bookingDetails = {
+                receiptId: `REC-${Math.floor(100000 + Math.random() * 900000)}`,
+                spot: parkingSpot,
+                vehicleType: vehicleType?.code || 'CAR',
+                floorName: selectedFloor?.name || `Floor ${selectedFloor?.floorNumber ?? 1}`,
+                slotCode,
+                licensePlate: formatPlate(licensePlate),
+                entryDate: new Date(entryDate).toISOString(),
+                exitTime: rawExit.toISOString(),
+                elapsed: duration * 3600,
+                totalAmount: estimatedPrice,
+                payMethod,
+            };
+
+            // Save to localStorage
+            localStorage.setItem('activeBooking', JSON.stringify(bookingDetails));
+
+            // Notify header
+            window.dispatchEvent(new Event('bookingUpdated'));
+
+            // Show Toast & Save Booking Details
+            setSuccessBooking(bookingDetails);
+            setShowSuccessToast(true);
+
+            // Clean up and close modal
             setCheckoutProcessing(false);
             setShowConfirmModal(false);
 
-            navigate('/checkoutsuccess', {
-                state: {
-                    spot: parkingSpot,
-                    vehicleType: vehicleType?.code || 'CAR',
-                    floor: selectedFloor?.floorNumber ?? 1,
-                    slot: selectedSlot?.slotCode ?? '',
-                    slotCode,
-                    licensePlate: formatPlate(licensePlate),
-                    entryDate: new Date(entryDate).toISOString(),
-                    exitTime: rawExit.toISOString(),
-                    elapsed: duration * 3600,
-                    totalAmount: estimatedPrice,
-                    payMethod,
-                    cardLast4: payMethod === 'card' ? cardNumber.replace(/\s/g, '').slice(-4) : null,
-                }
-            });
+            // Reset states
+            setLicensePlate('');
+            setSelectedFloor(null);
+            setSelectedZone(null);
+            setSelectedSlot(null);
+            setCurrentStep(1);
         }, 1800);
     };
 
@@ -2298,6 +2325,74 @@ const BookingPage = () => {
                     </div>
                     <button 
                         onClick={() => setShowMotorbikeToast(false)}
+                        style={{
+                            background: 'transparent',
+                            border: 'none',
+                            color: '#94a3b8',
+                            fontSize: '16px',
+                            fontWeight: 'bold',
+                            cursor: 'pointer',
+                            padding: '0 4px',
+                            alignSelf: 'flex-start',
+                            lineHeight: 1,
+                        }}
+                    >
+                        ×
+                    </button>
+                </div>
+            )}
+
+            {/* ── Success Payment Toast Notice ── */}
+            {showSuccessToast && successBooking && (
+                <div style={{
+                    position: 'fixed',
+                    bottom: '24px',
+                    right: '24px',
+                    maxWidth: '380px',
+                    background: 'rgba(255, 255, 255, 0.98)',
+                    backdropFilter: 'blur(10px)',
+                    border: '1.5px solid #bbf7d0',
+                    borderRadius: '16px',
+                    padding: '16px',
+                    boxShadow: '0 10px 30px -5px rgba(21, 128, 61, 0.2), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
+                    zIndex: 10000,
+                    display: 'flex',
+                    gap: '12px',
+                    animation: 'toastSlideIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) both',
+                    fontFamily: "'Inter', sans-serif",
+                }}>
+                    <span style={{ fontSize: '24px', flexShrink: 0 }}>🎉</span>
+                    <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: '13px', fontWeight: 800, color: '#15803d', marginBottom: '3px' }}>
+                            Payment Successful!
+                        </div>
+                        <div style={{ fontSize: '11px', color: '#475569', lineHeight: 1.4, marginBottom: '10px' }}>
+                            Slot <strong>{successBooking.slotCode}</strong> has been reserved for plate <strong>{successBooking.licensePlate}</strong> at <strong>{successBooking.spot?.title}</strong>.
+                        </div>
+                        <button
+                            onClick={() => {
+                                window.dispatchEvent(new Event('openQRModal'));
+                                setShowSuccessToast(false);
+                            }}
+                            style={{
+                                background: '#10b981',
+                                color: 'white',
+                                border: 'none',
+                                padding: '6px 14px',
+                                borderRadius: '8px',
+                                fontSize: '11px',
+                                fontWeight: 'bold',
+                                cursor: 'pointer',
+                                transition: 'background 0.2s',
+                            }}
+                            onMouseOver={(e) => e.currentTarget.style.background = '#059669'}
+                            onMouseOut={(e) => e.currentTarget.style.background = '#10b981'}
+                        >
+                            View QR Ticket
+                        </button>
+                    </div>
+                    <button 
+                        onClick={() => setShowSuccessToast(false)}
                         style={{
                             background: 'transparent',
                             border: 'none',
