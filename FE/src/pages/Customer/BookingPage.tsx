@@ -21,6 +21,45 @@ const fmtDateTime = (iso: string) => {
     return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 };
 
+// Checkout field formatters
+const formatCard = (v: string) => v.replace(/\D/g, '').slice(0, 16).replace(/(.{4})/g, '$1 ').trim();
+const formatExpiry = (v: string) => {
+    const d = v.replace(/\D/g, '').slice(0, 4);
+    return d.length > 2 ? `${d.slice(0, 2)}/${d.slice(2)}` : d;
+};
+const formatCVV = (v: string) => v.replace(/\D/g, '').slice(0, 3);
+
+// Checkout SVG Icons
+const CreditCardIcon = ({ size = 24 }: { size?: number }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="1" y="4" width="22" height="16" rx="2" /><line x1="1" y1="10" x2="23" y2="10" />
+    </svg>
+);
+const MomoIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
+        <circle cx="12" cy="12" r="11" fill="#ae2070" />
+        <text x="12" y="16" textAnchor="middle" fill="white" fontSize="8" fontWeight="900" fontFamily="sans-serif">MoMo</text>
+    </svg>
+);
+const ZaloPayIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
+        <rect width="24" height="24" rx="6" fill="#0068ff" />
+        <text x="12" y="15" textAnchor="middle" fill="white" fontSize="6" fontWeight="900" fontFamily="sans-serif">ZaloPay</text>
+    </svg>
+);
+const CashIcon = ({ size = 24 }: { size?: number }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="1" y="4" width="22" height="16" rx="2" />
+        <circle cx="12" cy="12" r="3" /><path d="M5 12h.01M19 12h.01" />
+    </svg>
+);
+const LockIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" />
+    </svg>
+);
+
+
 // ─── Step Definitions ────────────────────────────────────────────────────────
 const STEPS = [
     { id: 1, label: 'Vehicle Type', icon: '🚗' },
@@ -365,6 +404,72 @@ const BookingPage = () => {
             setShowMotorbikeToast(true);
         }
     }, [currentStep]);
+
+    // ── Integrated Checkout States ──
+    const [checkoutPhase, setCheckoutPhase] = useState<'review' | 'payment'>('review');
+    const [payMethod, setPayMethod] = useState<'card' | 'momo' | 'zalopay' | 'cash'>('card');
+    const [cardNumber, setCardNumber] = useState('');
+    const [cardName, setCardName] = useState('');
+    const [expiry, setExpiry] = useState('');
+    const [cvv, setCvv] = useState('');
+    const [saveCard, setSaveCard] = useState(false);
+    const [checkoutProcessing, setCheckoutProcessing] = useState(false);
+    const [checkoutErrors, setCheckoutErrors] = useState<Record<string, string>>({});
+
+    useEffect(() => {
+        if (!showConfirmModal) {
+            setCheckoutPhase('review');
+            setCardNumber('');
+            setCardName('');
+            setExpiry('');
+            setCvv('');
+            setCheckoutErrors({});
+            setCheckoutProcessing(false);
+        }
+    }, [showConfirmModal]);
+
+    const validateCard = () => {
+        const e: Record<string, string> = {};
+        if (payMethod === 'card') {
+            if (cardNumber.replace(/\s/g, '').length < 16) e.cardNumber = 'Enter a valid 16-digit card number';
+            if (!cardName.trim()) e.cardName = 'Cardholder name is required';
+            if (expiry.length < 5) e.expiry = 'Enter valid expiry MM/YY';
+            if (cvv.length < 3) e.cvv = 'Enter valid CVV';
+        }
+        return e;
+    };
+
+    const handleConfirmPayment = () => {
+        const e = validateCard();
+        if (Object.keys(e).length) { setCheckoutErrors(e); return; }
+        setCheckoutErrors({});
+        setCheckoutProcessing(true);
+
+        const slotCode = selectedSlot?.slotCode ?? '';
+        const rawExit = exitTime;
+
+        setTimeout(() => {
+            setCheckoutProcessing(false);
+            setShowConfirmModal(false);
+
+            navigate('/checkoutsuccess', {
+                state: {
+                    spot: parkingSpot,
+                    vehicleType: vehicleType?.code || 'CAR',
+                    floor: selectedFloor?.floorNumber ?? 1,
+                    slot: selectedSlot?.slotCode ?? '',
+                    slotCode,
+                    licensePlate: formatPlate(licensePlate),
+                    entryDate: new Date(entryDate).toISOString(),
+                    exitTime: rawExit.toISOString(),
+                    elapsed: duration * 3600,
+                    totalAmount: estimatedPrice,
+                    payMethod,
+                    cardLast4: payMethod === 'card' ? cardNumber.replace(/\s/g, '').slice(-4) : null,
+                }
+            });
+        }, 1800);
+    };
 
     // ─── isFloorAllowed helper ──────────────────────────────────────────────
     const isFloorAllowed = (floor: Floor) => {
@@ -977,6 +1082,198 @@ const BookingPage = () => {
                 }
                 .modal-confirm:hover { transform: translateY(-2px); box-shadow: 0 10px 28px rgba(37,99,235,0.5); }
                 .modal-confirm:active { transform: scale(0.98); }
+
+                /* ── Payment / Checkout styles ── */
+                .pay-methods { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
+                .pay-method {
+                    display: flex;
+                    align-items: center;
+                    gap: 14px;
+                    padding: 14px 16px;
+                    border: 2px solid #e2e8f0;
+                    border-radius: 14px;
+                    cursor: pointer;
+                    transition: all 0.2s;
+                    background: white;
+                }
+                .pay-method:hover { border-color: #93c5fd; background: #f8fafc; }
+                .pay-method.selected { border-color: #3b82f6; background: linear-gradient(135deg, #eff6ff, #f0f9ff); }
+                .pay-method-icon {
+                    width: 42px; height: 42px;
+                    border-radius: 10px;
+                    display: flex; align-items: center; justify-content: center;
+                    background: #f8fafc;
+                    flex-shrink: 0;
+                }
+                .pay-method.selected .pay-method-icon { background: #eff6ff; }
+                .pay-method-info { flex: 1; text-align: left; }
+                .pay-method-name { font-size: 14px; font-weight: 700; color: #1e293b; }
+                .pay-method-sub { font-size: 11px; color: #94a3b8; font-weight: 500; margin-top: 1px; }
+                .pay-method-radio {
+                    width: 20px; height: 20px;
+                    border: 2px solid #cbd5e1;
+                    border-radius: 50%;
+                    flex-shrink: 0;
+                    display: flex; align-items: center; justify-content: center;
+                    transition: all 0.15s;
+                }
+                .pay-method.selected .pay-method-radio { border-color: #3b82f6; }
+                .pay-radio-dot {
+                    width: 10px; height: 10px;
+                    background: #3b82f6;
+                    border-radius: 50%;
+                    transform: scale(0);
+                    transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
+                }
+                .pay-method.selected .pay-radio-dot { transform: scale(1); }
+
+                .card-form { margin-top: 20px; display: flex; flex-direction: column; gap: 14px; }
+                .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+                .form-field { display: flex; flex-direction: column; gap: 6px; text-align: left; }
+                .form-label {
+                    font-size: 11px;
+                    font-weight: 700;
+                    color: #94a3b8;
+                    text-transform: uppercase;
+                    letter-spacing: 0.07em;
+                }
+                .form-input {
+                    padding: 13px 16px;
+                    border: 1.5px solid #e2e8f0;
+                    border-radius: 12px;
+                    font-size: 14px;
+                    font-weight: 600;
+                    color: #0f172a;
+                    background: #f8fafc;
+                    outline: none;
+                    transition: all 0.2s;
+                    font-variant-numeric: tabular-nums;
+                    letter-spacing: 0.04em;
+                    width: 100%;
+                }
+                .form-input:focus { border-color: #3b82f6; background: white; box-shadow: 0 0 0 3px rgba(59,130,246,0.1); }
+                .form-input.error { border-color: #ef4444; background: #fef2f2; }
+                .form-error { font-size: 11px; color: #ef4444; font-weight: 600; }
+
+                .card-visual {
+                    height: 140px;
+                    background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 50%, #6366f1 100%);
+                    border-radius: 16px;
+                    padding: 20px 24px;
+                    position: relative;
+                    overflow: hidden;
+                    margin-bottom: 20px;
+                    box-shadow: 0 8px 32px rgba(59,130,246,0.35);
+                    text-align: left;
+                }
+                .card-visual::before {
+                    content: '';
+                    position: absolute;
+                    top: -30px; right: -30px;
+                    width: 140px; height: 140px;
+                    background: rgba(255,255,255,0.08);
+                    border-radius: 50%;
+                }
+                .card-visual::after {
+                    content: '';
+                    position: absolute;
+                    bottom: -50px; right: 60px;
+                    width: 180px; height: 180px;
+                    background: rgba(255,255,255,0.05);
+                    border-radius: 50%;
+                }
+                .card-chip {
+                    width: 36px; height: 26px;
+                    background: linear-gradient(135deg, #fbbf24, #f59e0b);
+                    border-radius: 5px;
+                    margin-bottom: 20px;
+                    position: relative;
+                    z-index: 1;
+                }
+                .card-number-display {
+                    font-size: 16px;
+                    font-weight: 700;
+                    color: white;
+                    letter-spacing: 0.12em;
+                    font-variant-numeric: tabular-nums;
+                    position: relative;
+                    z-index: 1;
+                    margin-bottom: 12px;
+                }
+                .card-bottom {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: flex-end;
+                    position: relative;
+                    z-index: 1;
+                }
+                .card-holder {
+                    font-size: 11px;
+                    color: rgba(255,255,255,0.7);
+                    font-weight: 600;
+                    text-transform: uppercase;
+                    letter-spacing: 0.06em;
+                }
+                .card-holder-name {
+                    font-size: 13px;
+                    color: white;
+                    font-weight: 700;
+                    letter-spacing: 0.04em;
+                }
+                .card-exp-label { font-size: 9px; color: rgba(255,255,255,0.6); letter-spacing: 0.06em; font-weight: 600; }
+                .card-exp-value { font-size: 13px; color: white; font-weight: 700; letter-spacing: 0.06em; }
+
+                .save-card-row {
+                    display: flex; align-items: center; gap: 10px;
+                    padding: 12px 14px;
+                    background: #f8fafc;
+                    border-radius: 10px;
+                    cursor: pointer;
+                    margin-top: 4px;
+                    border: 1px solid #e2e8f0;
+                    transition: all 0.2s;
+                }
+                .save-card-row:hover { background: #eff6ff; border-color: #93c5fd; }
+                .save-checkbox {
+                    width: 18px; height: 18px;
+                    border: 2px solid #cbd5e1;
+                    border-radius: 5px;
+                    display: flex; align-items: center; justify-content: center;
+                    transition: all 0.2s;
+                    flex-shrink: 0;
+                    background: white;
+                }
+                .save-checkbox.checked { background: #3b82f6; border-color: #3b82f6; }
+                .save-card-text { font-size: 13px; font-weight: 600; color: #475569; }
+
+                .modal-pay-btn {
+                    width: 100%;
+                    padding: 15px;
+                    border: none;
+                    border-radius: 12px;
+                    font-size: 15px;
+                    font-weight: 800;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    gap: 10px;
+                    transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+                    letter-spacing: 0.02em;
+                    box-shadow: 0 6px 20px rgba(37, 99, 235, 0.4);
+                }
+                .modal-pay-btn.active {
+                    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+                    color: white;
+                }
+                .modal-pay-btn.active:hover { transform: translateY(-2px); box-shadow: 0 10px 28px rgba(37, 99, 235, 0.5); }
+                .modal-pay-btn.active:active { transform: scale(0.98); }
+                .modal-pay-btn.processing {
+                    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+                    color: white;
+                    cursor: wait;
+                    box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
+                }
 
                 /* ── Empty state ── */
                 .bk-empty {
@@ -1691,80 +1988,281 @@ const BookingPage = () => {
             </div>
 
             {/* ── Confirm Modal ── */}
-            {showConfirmModal && (
-                <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) setShowConfirmModal(false); }}>
-                    <div className="modal-box">
-                        <div className="modal-title">🎉 Confirm Your Booking</div>
-                        <div className="modal-sub">Please review all details before confirming.</div>
+            {showConfirmModal && (() => {
+                const serviceFee = Math.round(estimatedPrice * 0.05);
+                const grandTotal = Math.round(estimatedPrice) + serviceFee;
+                const payMethods = [
+                    { id: 'card', label: 'Credit / Debit Card', icon: <CreditCardIcon size={22} />, color: '#2563eb' },
+                    { id: 'momo', label: 'MoMo Wallet', icon: <MomoIcon />, color: '#ae2070' },
+                    { id: 'zalopay', label: 'ZaloPay', icon: <ZaloPayIcon />, color: '#0068ff' },
+                    { id: 'cash', label: 'Pay at Counter', icon: <CashIcon size={22} />, color: '#10b981' },
+                ];
+                return (
+                    <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget && !checkoutProcessing) setShowConfirmModal(false); }}>
+                        <div className="modal-box">
+                            {checkoutPhase === 'review' ? (
+                                <>
+                                    <div className="modal-title">🎉 Confirm Your Booking</div>
+                                    <div className="modal-sub">Please review all details before confirming.</div>
 
-                        <div className="modal-section">
-                            <div className="modal-section-title">🚘 Vehicle Information</div>
-                            <div className="modal-row">
-                                <span className="modal-row-label">License Plate</span>
-                                <span className="modal-plate-badge">{licensePlate}</span>
-                            </div>
-                            <div className="modal-row">
-                                <span className="modal-row-label">Vehicle Type</span>
-                                <span className="modal-row-value">{vehicleIcon(vehicleType?.code ?? '')} {vehicleType?.name}</span>
-                            </div>
-                        </div>
+                                    <div className="modal-section">
+                                        <div className="modal-section-title">🚘 Vehicle Information</div>
+                                        <div className="modal-row">
+                                            <span className="modal-row-label">License Plate</span>
+                                            <span className="modal-plate-badge">{licensePlate}</span>
+                                        </div>
+                                        <div className="modal-row">
+                                            <span className="modal-row-label">Vehicle Type</span>
+                                            <span className="modal-row-value">{vehicleIcon(vehicleType?.code ?? '')} {vehicleType?.name}</span>
+                                        </div>
+                                    </div>
 
-                        <div className="modal-section">
-                            <div className="modal-section-title">📍 Parking Location</div>
-                            <div className="modal-row">
-                                <span className="modal-row-label">Facility</span>
-                                <span className="modal-row-value">{parkingSpot.title}</span>
-                            </div>
-                            <div className="modal-row">
-                                <span className="modal-row-label">Floor</span>
-                                <span className="modal-row-value">{selectedFloor?.name || `Floor ${selectedFloor?.floorNumber}`}</span>
-                            </div>
-                            <div className="modal-row">
-                                <span className="modal-row-label">Zone</span>
-                                <span className="modal-row-value">{selectedZone?.name} ({selectedZone?.code})</span>
-                            </div>
-                            <div className="modal-row">
-                                <span className="modal-row-label">Slot</span>
-                                <span className="modal-row-value" style={{ fontSize: 16, color: '#2563eb', fontWeight: 900 }}>{selectedSlot?.slotCode}</span>
-                            </div>
-                        </div>
+                                    <div className="modal-section">
+                                        <div className="modal-section-title">📍 Parking Location</div>
+                                        <div className="modal-row">
+                                            <span className="modal-row-label">Facility</span>
+                                            <span className="modal-row-value">{parkingSpot.title}</span>
+                                        </div>
+                                        <div className="modal-row">
+                                            <span className="modal-row-label">Floor</span>
+                                            <span className="modal-row-value">{selectedFloor?.name || `Floor ${selectedFloor?.floorNumber}`}</span>
+                                        </div>
+                                        <div className="modal-row">
+                                            <span className="modal-row-label">Zone</span>
+                                            <span className="modal-row-value">{selectedZone?.name} ({selectedZone?.code})</span>
+                                        </div>
+                                        <div className="modal-row">
+                                            <span className="modal-row-label">Slot</span>
+                                            <span className="modal-row-value" style={{ fontSize: 16, color: '#2563eb', fontWeight: 900 }}>{selectedSlot?.slotCode}</span>
+                                        </div>
+                                    </div>
 
-                        <div className="modal-section">
-                            <div className="modal-section-title">⏰ Time Details</div>
-                            <div className="modal-row">
-                                <span className="modal-row-label">Entry</span>
-                                <span className="modal-row-value">{fmtDateTime(entryDate)}</span>
-                            </div>
-                            <div className="modal-row">
-                                <span className="modal-row-label">Est. Exit</span>
-                                <span className="modal-row-value">{fmtExit()}</span>
-                            </div>
-                            <div className="modal-row">
-                                <span className="modal-row-label">Duration</span>
-                                <span className="modal-row-value">{duration} hour{duration !== 1 ? 's' : ''}</span>
-                            </div>
-                            <div className="modal-row">
-                                <span className="modal-row-label">Rate</span>
-                                <span className="modal-row-value">{fmtVND(hourlyRate)}/hr</span>
-                            </div>
-                        </div>
+                                    <div className="modal-section">
+                                        <div className="modal-section-title">⏰ Time Details</div>
+                                        <div className="modal-row">
+                                            <span className="modal-row-label">Entry</span>
+                                            <span className="modal-row-value">{fmtDateTime(entryDate)}</span>
+                                        </div>
+                                        <div className="modal-row">
+                                            <span className="modal-row-label">Est. Exit</span>
+                                            <span className="modal-row-value">{fmtExit()}</span>
+                                        </div>
+                                        <div className="modal-row">
+                                            <span className="modal-row-label">Duration</span>
+                                            <span className="modal-row-value">{duration} hour{duration !== 1 ? 's' : ''}</span>
+                                        </div>
+                                        <div className="modal-row">
+                                            <span className="modal-row-label">Rate</span>
+                                            <span className="modal-row-value">{fmtVND(hourlyRate)}/hr</span>
+                                        </div>
+                                    </div>
 
-                        <div className="modal-total">
-                            <span className="modal-total-label">Estimated Total</span>
-                            <span className="modal-total-value">{fmtVND(estimatedPrice)}</span>
-                        </div>
+                                    <div className="modal-total">
+                                        <span className="modal-total-label">Estimated Total</span>
+                                        <span className="modal-total-value">{fmtVND(estimatedPrice)}</span>
+                                    </div>
 
-                        <div className="modal-actions">
-                            <button className="modal-cancel" onClick={() => setShowConfirmModal(false)}>
-                                ← Edit
-                            </button>
-                            <button id="confirm-booking-btn" className="modal-confirm" onClick={handleReserve}>
-                                ✅ Confirm Booking
-                            </button>
+                                    <div className="modal-actions">
+                                        <button className="modal-cancel" onClick={() => setShowConfirmModal(false)}>
+                                            ← Edit
+                                        </button>
+                                        <button id="confirm-booking-btn" className="modal-confirm" onClick={() => setCheckoutPhase('payment')}>
+                                            Proceed to Payment →
+                                        </button>
+                                    </div>
+                                </>
+                            ) : (
+                                <>
+                                    <div className="modal-title">💳 Secure Checkout</div>
+                                    <div className="modal-sub">Select payment method and complete your reservation.</div>
+
+                                    {/* Payment method list */}
+                                    <div className="pay-methods">
+                                        {payMethods.map(m => (
+                                            <div
+                                                key={m.id}
+                                                className={`pay-method ${payMethod === m.id ? 'selected' : ''}`}
+                                                onClick={() => { setPayMethod(m.id as any); setCheckoutErrors({}); }}
+                                            >
+                                                <div className="pay-method-icon" style={{ color: m.color }}>{m.icon}</div>
+                                                <div className="pay-method-info">
+                                                    <div className="pay-method-name">{m.label}</div>
+                                                    <div className="pay-method-sub">
+                                                        {m.id === 'card' && 'Visa, Mastercard, JCB, Amex'}
+                                                        {m.id === 'momo' && 'Instant payment via MoMo app'}
+                                                        {m.id === 'zalopay' && 'Instant payment via ZaloPay app'}
+                                                        {m.id === 'cash' && 'Pay at parking booth before exit'}
+                                                    </div>
+                                                </div>
+                                                <div className="pay-method-radio">
+                                                    <div className="pay-radio-dot"></div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    {/* Card form */}
+                                    {payMethod === 'card' && (
+                                        <div className="card-form">
+                                            {/* Visual card */}
+                                            <div className="card-visual">
+                                                <div className="card-chip"></div>
+                                                <div className="card-number-display">
+                                                    {cardNumber || '•••• •••• •••• ••••'}
+                                                </div>
+                                                <div className="card-bottom">
+                                                    <div>
+                                                        <div className="card-holder">Card Holder</div>
+                                                        <div className="card-holder-name">{cardName || 'YOUR NAME'}</div>
+                                                    </div>
+                                                    <div style={{ textAlign: 'right' }}>
+                                                        <div className="card-exp-label">EXPIRES</div>
+                                                        <div className="card-exp-value">{expiry || 'MM/YY'}</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="form-field">
+                                                <label className="form-label">Card Number</label>
+                                                <input
+                                                    id="card-number"
+                                                    className={`form-input ${checkoutErrors.cardNumber ? 'error' : ''}`}
+                                                    placeholder="1234 5678 9012 3456"
+                                                    value={cardNumber}
+                                                    onChange={e => setCardNumber(formatCard(e.target.value))}
+                                                    maxLength={19}
+                                                />
+                                                {checkoutErrors.cardNumber && <span className="form-error">{checkoutErrors.cardNumber}</span>}
+                                            </div>
+
+                                            <div className="form-field">
+                                                <label className="form-label">Cardholder Name</label>
+                                                <input
+                                                    id="card-name"
+                                                    className={`form-input ${checkoutErrors.cardName ? 'error' : ''}`}
+                                                    placeholder="NGUYEN VAN A"
+                                                    value={cardName}
+                                                    onChange={e => setCardName(e.target.value.toUpperCase())}
+                                                />
+                                                {checkoutErrors.cardName && <span className="form-error">{checkoutErrors.cardName}</span>}
+                                            </div>
+
+                                            <div className="form-row">
+                                                <div className="form-field">
+                                                    <label className="form-label">Expiry Date</label>
+                                                    <input
+                                                        id="card-expiry"
+                                                        className={`form-input ${checkoutErrors.expiry ? 'error' : ''}`}
+                                                        placeholder="MM/YY"
+                                                        value={expiry}
+                                                        onChange={e => setExpiry(formatExpiry(e.target.value))}
+                                                        maxLength={5}
+                                                    />
+                                                    {checkoutErrors.expiry && <span className="form-error">{checkoutErrors.expiry}</span>}
+                                                </div>
+                                                <div className="form-field">
+                                                    <label className="form-label">CVV</label>
+                                                    <input
+                                                        id="card-cvv"
+                                                        className={`form-input ${checkoutErrors.cvv ? 'error' : ''}`}
+                                                        placeholder="•••"
+                                                        value={cvv}
+                                                        type="password"
+                                                        onChange={e => setCvv(formatCVV(e.target.value))}
+                                                        maxLength={3}
+                                                    />
+                                                    {checkoutErrors.cvv && <span className="form-error">{checkoutErrors.cvv}</span>}
+                                                </div>
+                                            </div>
+
+                                            <div className="save-card-row" onClick={() => setSaveCard(!saveCard)}>
+                                                <div className={`save-checkbox ${saveCard ? 'checked' : ''}`}>
+                                                    {saveCard && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>}
+                                                </div>
+                                                <span className="save-card-text">Save this card for future payments</span>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* QR instruction for e-wallets */}
+                                    {(payMethod === 'momo' || payMethod === 'zalopay') && (
+                                        <div style={{
+                                            marginTop: 20, padding: '20px',
+                                            background: payMethod === 'momo' ? 'linear-gradient(135deg,#fdf2f8,#fce7f3)' : 'linear-gradient(135deg,#eff6ff,#dbeafe)',
+                                            borderRadius: 14,
+                                            border: `1px solid ${payMethod === 'momo' ? '#f9a8d4' : '#bfdbfe'}`,
+                                            textAlign: 'center'
+                                        }}>
+                                            <div style={{ fontSize: 36, marginBottom: 12 }}>
+                                                {payMethod === 'momo' ? '📱' : '📲'}
+                                            </div>
+                                            <div style={{ fontWeight: 700, fontSize: 14, color: payMethod === 'momo' ? '#9d174d' : '#1d4ed8', marginBottom: 6 }}>
+                                                Open {payMethod === 'momo' ? 'MoMo' : 'ZaloPay'} app and confirm payment
+                                            </div>
+                                            <div style={{ fontSize: 12, color: '#64748b', fontWeight: 500 }}>
+                                                Amount: <strong>{fmtVND(grandTotal)}</strong> will be deducted from your wallet
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Cash instructions */}
+                                    {payMethod === 'cash' && (
+                                        <div style={{
+                                            marginTop: 20, padding: '16px',
+                                            background: 'linear-gradient(135deg,#f0fdf4,#dcfce7)',
+                                            borderRadius: 14,
+                                            border: '1px solid #86efac',
+                                            textAlign: 'left'
+                                        }}>
+                                            <div style={{ fontSize: 13, fontWeight: 600, color: '#166534', lineHeight: 1.6 }}>
+                                                <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 6 }}>📋 Cash Payment Guidelines</div>
+                                                <div>1. Attendant will verify your entry ticket on Floor G.</div>
+                                                <div>2. Show booking confirmation details upon arrival.</div>
+                                                <div>3. Pay Attendant <strong>{fmtVND(grandTotal)}</strong> in cash.</div>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    <div className="modal-total" style={{ marginTop: '20px' }}>
+                                        <div>
+                                            <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', textAlign: 'left' }}>parking fee: {fmtVND(estimatedPrice)}</div>
+                                            <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', textAlign: 'left', marginTop: '2px' }}>service fee (5%): {fmtVND(serviceFee)}</div>
+                                        </div>
+                                        <div style={{ textAlign: 'right' }}>
+                                            <div className="modal-total-label">Grand Total</div>
+                                            <div className="modal-total-value" style={{ fontSize: '24px' }}>{fmtVND(grandTotal)}</div>
+                                        </div>
+                                    </div>
+
+                                    <div className="modal-actions" style={{ marginTop: '24px' }}>
+                                        <button className="modal-cancel" onClick={() => setCheckoutPhase('review')} disabled={checkoutProcessing}>
+                                            ← Back
+                                        </button>
+                                        <button
+                                            id="confirm-payment-btn"
+                                            className={`modal-pay-btn ${checkoutProcessing ? 'processing' : 'active'}`}
+                                            onClick={handleConfirmPayment}
+                                            disabled={checkoutProcessing}
+                                        >
+                                            {checkoutProcessing ? (
+                                                <>
+                                                    <div className="bk-spin" style={{ width: 16, height: 16, borderWidth: 2 }} />
+                                                    Processing...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <LockIcon />
+                                                    Pay {fmtVND(grandTotal)}
+                                                </>
+                                            )}
+                                        </button>
+                                    </div>
+                                </>
+                            )}
                         </div>
                     </div>
-                </div>
-            )}
+                );
+            })()}
             {/* ── Motorbike Toast Notice ── */}
             {currentStep === 4 && isMotorbike && showMotorbikeToast && (
                 <div style={{

@@ -5,6 +5,8 @@ const Header = () => {
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [activeBooking, setActiveBooking] = useState(null);
+  const [showQRModal, setShowQRModal] = useState(false);
   const dropdownRef = useRef(null);
 
   useEffect(() => {
@@ -12,6 +14,16 @@ const Header = () => {
     if (userData) {
       setUser(JSON.parse(userData));
     }
+
+    const checkBooking = () => {
+      const b = localStorage.getItem('activeBooking');
+      setActiveBooking(b ? JSON.parse(b) : null);
+    };
+
+    checkBooking();
+
+    window.addEventListener('bookingUpdated', checkBooking);
+    window.addEventListener('storage', checkBooking);
 
     // Close dropdown on click outside
     const handleClickOutside = (event) => {
@@ -21,7 +33,11 @@ const Header = () => {
     };
 
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    return () => {
+      window.removeEventListener('bookingUpdated', checkBooking);
+      window.removeEventListener('storage', checkBooking);
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
   }, []);
 
   const handleLogout = () => {
@@ -56,6 +72,14 @@ const Header = () => {
       </nav>
 
       <div className="flex items-center gap-6 text-[15px] font-bold">
+        {activeBooking && (
+          <button
+            onClick={() => setShowQRModal(true)}
+            className="flex items-center gap-1.5 text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100/80 px-3 py-1.5 rounded-full text-xs font-extrabold transition-all duration-200 cursor-pointer border border-blue-100"
+          >
+            <span>🎟️ My Ticket</span>
+          </button>
+        )}
         {user ? (
           <div className="relative" ref={dropdownRef}>
             <button
@@ -121,6 +145,82 @@ const Header = () => {
           </>
         )}
       </div>
+
+      {/* ── Active Parking Ticket QR Modal ── */}
+      {showQRModal && activeBooking && (
+        <div 
+          onClick={(e) => { if (e.target === e.currentTarget) setShowQRModal(false); }}
+          className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 animate-fade-in"
+        >
+          <style>{`
+            @keyframes qrFadeIn { from { opacity: 0; } to { opacity: 1; } }
+            @keyframes qrScaleUp { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+            .animate-fade-in { animation: qrFadeIn 0.2s ease-out forwards; }
+            .animate-scale-up { animation: qrScaleUp 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+          `}</style>
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl text-center border border-slate-100 relative animate-scale-up">
+            <button 
+              onClick={() => setShowQRModal(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 text-xl font-bold bg-transparent border-none cursor-pointer"
+            >
+              ×
+            </button>
+            <h3 className="text-lg font-bold text-slate-800 mb-1 font-sans">🎫 Parking Ticket</h3>
+            <p className="text-xs text-slate-400 mb-5 font-sans">Scan at the entrance or exit booth</p>
+            
+            <div className="bg-slate-50 p-4 rounded-xl inline-block mb-5 border border-slate-100">
+              <img 
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(
+                  JSON.stringify({
+                    receiptId: activeBooking.receiptId,
+                    licensePlate: activeBooking.licensePlate,
+                    slotCode: activeBooking.slotCode,
+                    facility: activeBooking.spot?.title,
+                    entryDate: activeBooking.entryDate
+                  })
+                )}`} 
+                alt="Parking QR Code"
+                className="w-[180px] h-[180px]"
+              />
+            </div>
+            
+            <div className="text-left bg-slate-50 rounded-xl p-4 border border-slate-100 text-xs text-slate-600 space-y-2 mb-5 font-sans">
+              <div className="flex justify-between border-b border-slate-100/80 pb-1.5">
+                <span className="font-medium text-slate-400">License Plate</span>
+                <span className="font-bold text-slate-800">{activeBooking.licensePlate}</span>
+              </div>
+              <div className="flex justify-between border-b border-slate-100/80 pb-1.5">
+                <span className="font-medium text-slate-400">Location</span>
+                <span className="font-bold text-slate-800 truncate max-w-[200px]">{activeBooking.spot?.title}</span>
+              </div>
+              <div className="flex justify-between border-b border-slate-100/80 pb-1.5">
+                <span className="font-medium text-slate-400">Floor / Slot</span>
+                <span className="font-bold text-blue-600">{activeBooking.floorName} — {activeBooking.slotCode}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="font-medium text-slate-400">Entry Time</span>
+                <span className="font-bold text-slate-800">
+                  {new Date(activeBooking.entryDate).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                </span>
+              </div>
+            </div>
+
+            <button
+              onClick={() => {
+                if (window.confirm("Do you want to clear/complete this ticket?")) {
+                  localStorage.removeItem('activeBooking');
+                  setActiveBooking(null);
+                  setShowQRModal(false);
+                  window.dispatchEvent(new Event('bookingUpdated'));
+                }
+              }}
+              className="w-full bg-red-50 hover:bg-red-100 text-red-600 border border-red-100 py-2.5 rounded-xl text-xs font-bold transition-colors cursor-pointer font-sans"
+            >
+              Clear / Complete Ticket
+            </button>
+          </div>
+        </div>
+      )}
     </header>
   );
 };
