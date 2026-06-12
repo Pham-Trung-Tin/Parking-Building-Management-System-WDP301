@@ -824,17 +824,34 @@ const BookingPage = () => {
                     border-color: #2563eb;
                     box-shadow: 0 0 0 3px rgba(37,99,235,0.15);
                 }
-                .cal-popover {
-                    position: absolute;
-                    top: calc(100% + 8px);
-                    left: 20px;
-                    right: 20px;
+                .cal-modal-overlay {
+                    position: fixed;
+                    inset: 0;
+                    background: rgba(15, 23, 42, 0.45);
+                    backdrop-filter: blur(4px);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    z-index: 1000;
+                    animation: calFadeIn 0.2s ease-out;
+                }
+                .cal-modal-content {
                     background: white;
-                    border-radius: 16px;
-                    border: 1px solid #e2e8f0;
-                    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-                    padding: 16px;
-                    z-index: 50;
+                    border-radius: 24px;
+                    box-shadow: 0 20px 50px rgba(15, 23, 42, 0.15);
+                    width: 95%;
+                    max-width: 400px;
+                    padding: 24px;
+                    position: relative;
+                    animation: calScaleIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+                }
+                @keyframes calFadeIn {
+                    from { opacity: 0; }
+                    to { opacity: 1; }
+                }
+                @keyframes calScaleIn {
+                    from { transform: scale(0.9) translateY(10px); opacity: 0; }
+                    to { transform: scale(1) translateY(0); opacity: 1; }
                 }
                 .cal-popover-header {
                     display: flex;
@@ -920,7 +937,7 @@ const BookingPage = () => {
                 }
                 .cal-popover-footer {
                     display: flex;
-                    justify-content: space-between;
+                    justify-content: center;
                     margin-top: 16px;
                     padding-top: 12px;
                     border-top: 1.5px solid #f1f5f9;
@@ -937,6 +954,8 @@ const BookingPage = () => {
                 .cal-btn-close {
                     background: #fef2f2;
                     color: #ef4444;
+                    width: 100%;
+                    text-align: center;
                 }
                 .cal-btn-close:hover {
                     background: #fee2e2;
@@ -1831,7 +1850,7 @@ const BookingPage = () => {
                                         </div>
                                     </div>
 
-                                    {/* ── 1. DATE (Calendar UI) ── */}
+                                    {/* ── 1. DATE (Single trigger + Calendar Popover) ── */}
                                     {(() => {
                                         const MONTH_NAMES = [
                                             'January', 'February', 'March', 'April', 'May', 'June',
@@ -1849,138 +1868,38 @@ const BookingPage = () => {
                                         };
 
                                         return (
-                                            <div className="cal-container">
-                                                <div className="cal-header-title">Select Date</div>
-                                                <div className="cal-triggers-row">
-                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
-                                                        <div className="cal-trigger-label">From</div>
-                                                        <button 
-                                                            className={`cal-trigger-btn ${showCalendar && activeInput === 'from' ? 'active' : ''}`}
-                                                            onClick={() => openCalendar('from')}
-                                                        >
-                                                            <span>{fmtCalBtnDate(fromDt)}</span>
-                                                            <svg width="12" height="8" viewBox="0 0 12 8" fill="none"><path d="M1 1L6 6L11 1" stroke="#64748b" strokeWidth="2" strokeLinecap="round"/></svg>
-                                                        </button>
+                                            <div style={{ position: 'relative', marginBottom: 28 }}>
+                                                <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>📆 Booking Date</div>
+                                                <button 
+                                                    onClick={() => {
+                                                        if (showCalendar) setShowCalendar(false);
+                                                        else openCalendar('from');
+                                                    }}
+                                                    style={{
+                                                        width: '100%',
+                                                        background: 'white',
+                                                        border: showCalendar ? '1.5px solid #2563eb' : '1.5px solid #e2e8f0',
+                                                        borderRadius: 14,
+                                                        padding: '14px 18px',
+                                                        fontSize: 15,
+                                                        fontWeight: 700,
+                                                        color: '#334155',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'space-between',
+                                                        cursor: 'pointer',
+                                                        boxShadow: showCalendar ? '0 0 0 3px rgba(37,99,235,0.15)' : '0 1px 3px rgba(0,0,0,0.05)',
+                                                        transition: 'all 0.2s',
+                                                    }}
+                                                >
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                                        <span style={{ fontSize: 16 }}>📅</span>
+                                                        <span>{fmtCalBtnDate(fromDt)}</span>
+                                                        <span style={{ color: '#94a3b8', fontWeight: 500 }}>➔</span>
+                                                        <span>{fmtCalBtnDate(toDt)}</span>
                                                     </div>
-                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
-                                                        <div className="cal-trigger-label">To</div>
-                                                        <button 
-                                                            className={`cal-trigger-btn ${showCalendar && activeInput === 'to' ? 'active' : ''}`}
-                                                            onClick={() => openCalendar('to')}
-                                                        >
-                                                            <span>{fmtCalBtnDate(toDt)}</span>
-                                                            <svg width="12" height="8" viewBox="0 0 12 8" fill="none"><path d="M1 1L6 6L11 1" stroke="#64748b" strokeWidth="2" strokeLinecap="round"/></svg>
-                                                        </button>
-                                                    </div>
-                                                </div>
-
-                                                {showCalendar && (() => {
-                                                    const calDays = getCalendarDays(calYear, calMonth);
-                                                    const now = new Date();
-                                                    const todayOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-
-                                                    return (
-                                                        <div className="cal-popover">
-                                                            <div className="cal-popover-header">
-                                                                <select 
-                                                                    className="cal-select"
-                                                                    value={calMonth}
-                                                                    onChange={e => setCalMonth(parseInt(e.target.value))}
-                                                                >
-                                                                    {MONTH_NAMES.map((name, idx) => (
-                                                                        <option key={name} value={idx}>{name}</option>
-                                                                    ))}
-                                                                </select>
-                                                                <select 
-                                                                    className="cal-select"
-                                                                    value={calYear}
-                                                                    onChange={e => setCalYear(parseInt(e.target.value))}
-                                                                >
-                                                                    {Array.from({ length: 3 }, (_, i) => now.getFullYear() + i).map(yr => (
-                                                                        <option key={yr} value={yr}>{yr}</option>
-                                                                    ))}
-                                                                </select>
-                                                            </div>
-
-                                                            <div className="cal-weekdays">
-                                                                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => (
-                                                                    <div key={d} className="cal-weekday">{d}</div>
-                                                                ))}
-                                                            </div>
-
-                                                            <div className="cal-days-grid">
-                                                                {calDays.map((cell, idx) => {
-                                                                    const cellDate = new Date(cell.year, cell.month, cell.day);
-                                                                    const isTodayCell = isSameDay(cellDate, todayOnly);
-                                                                    const isPast = isBeforeDay(cellDate, todayOnly);
-
-                                                                    const isStart = isSameDay(cellDate, tempFromDate);
-                                                                    const isEnd = isSameDay(cellDate, tempToDate);
-                                                                    const isStartEndSame = isSameDay(tempFromDate, tempToDate);
-                                                                    
-                                                                    const inRange = isAfterDay(cellDate, tempFromDate) && isBeforeDay(cellDate, tempToDate);
-
-                                                                    let cellClass = 'cal-day-cell';
-                                                                    if (!cell.isCurrentMonth) cellClass += ' other-month';
-                                                                    if (isPast) cellClass += ' disabled';
-                                                                    else if (isStart && isEnd && isStartEndSame) cellClass += ' range-start-end-same';
-                                                                    else if (isStart) cellClass += ' range-start';
-                                                                    else if (isEnd) cellClass += ' range-end';
-                                                                    else if (inRange) cellClass += ' in-range';
-
-                                                                    return (
-                                                                        <div 
-                                                                            key={idx} 
-                                                                            className={cellClass}
-                                                                            onClick={() => {
-                                                                                if (isPast) return;
-                                                                                if (activeInput === 'from') {
-                                                                                    setTempFromDate(cellDate);
-                                                                                    if (isBeforeDay(tempToDate, cellDate)) {
-                                                                                        setTempToDate(cellDate);
-                                                                                    }
-                                                                                    setActiveInput('to');
-                                                                                } else {
-                                                                                    if (isBeforeDay(cellDate, tempFromDate)) {
-                                                                                        setTempFromDate(cellDate);
-                                                                                        setActiveInput('to');
-                                                                                    } else {
-                                                                                        setTempToDate(cellDate);
-                                                                                    }
-                                                                                }
-                                                                            }}
-                                                                        >
-                                                                            {cell.day}
-                                                                        </div>
-                                                                    );
-                                                                })}
-                                                            </div>
-
-                                                            <div className="cal-popover-footer">
-                                                                <button className="cal-btn cal-btn-close" onClick={() => setShowCalendar(false)}>Close</button>
-                                                                <button 
-                                                                    className="cal-btn cal-btn-confirm"
-                                                                    onClick={() => {
-                                                                        const dateStr = `${tempFromDate.getFullYear()}-${String(tempFromDate.getMonth() + 1).padStart(2,'0')}-${String(tempFromDate.getDate()).padStart(2,'0')}`;
-                                                                        setDay(dateStr);
-
-                                                                        const diffMs = tempToDate.getTime() - tempFromDate.getTime();
-                                                                        const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
-                                                                        if (diffDays > 0) {
-                                                                            setDuration(diffDays * 24);
-                                                                        } else {
-                                                                            if (duration > 24) setDuration(2);
-                                                                        }
-                                                                        setShowCalendar(false);
-                                                                    }}
-                                                                >
-                                                                    Confirm
-                                                                </button>
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })()}
-                                            </div>
+                                                    <span style={{ color: '#94a3b8', fontSize: 10 }}>▼</span>
+                                                </button>                                            </div>
                                         );
                                     })()}
 
@@ -2872,6 +2791,108 @@ const BookingPage = () => {
                     </button>
                 </div>
             )}
+            {/* ── Calendar Modal (escapes transformed parents) ── */}
+            {showCalendar && (() => {
+                const MONTH_NAMES = [
+                    'January', 'February', 'March', 'April', 'May', 'June',
+                    'July', 'August', 'September', 'October', 'November', 'December'
+                ];
+                const calDays = getCalendarDays(calYear, calMonth);
+                const now = new Date();
+                const todayOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+                const fmtCalBtnDate = (d: Date) => {
+                    const day = String(d.getDate()).padStart(2, '0');
+                    const month = MONTH_NAMES[d.getMonth()];
+                    const year = d.getFullYear();
+                    return `${day} ${month}, ${year}`;
+                };
+
+                return (
+                    <div className="cal-modal-overlay" onClick={() => setShowCalendar(false)}>
+                        <div className="cal-modal-content" onClick={e => e.stopPropagation()}>
+                            {/* Title inside Modal */}
+                            <div style={{ textAlign: 'center', marginBottom: 16, fontSize: 16, fontWeight: 800, color: '#1e293b' }}>
+                                Select Booking Date
+                            </div>
+
+                            <div className="cal-popover-header">
+                                <select 
+                                    className="cal-select"
+                                    value={calMonth}
+                                    onChange={e => setCalMonth(parseInt(e.target.value))}
+                                >
+                                    {MONTH_NAMES.map((name, idx) => {
+                                        const isPastMonth = calYear === now.getFullYear() && idx < now.getMonth();
+                                        return (
+                                            <option key={name} value={idx} disabled={isPastMonth}>{name}</option>
+                                        );
+                                    })}
+                                </select>
+                                <select 
+                                    className="cal-select"
+                                    value={calYear}
+                                    onChange={e => {
+                                        const selectedYear = parseInt(e.target.value);
+                                        setCalYear(selectedYear);
+                                        if (selectedYear === now.getFullYear() && calMonth < now.getMonth()) {
+                                            setCalMonth(now.getMonth());
+                                        }
+                                    }}
+                                >
+                                    {Array.from({ length: 3 }, (_, i) => now.getFullYear() + i).map(yr => (
+                                        <option key={yr} value={yr}>{yr}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div className="cal-weekdays">
+                                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => (
+                                    <div key={d} className="cal-weekday">{d}</div>
+                                ))}
+                            </div>
+
+                            <div className="cal-days-grid">
+                                {calDays.map((cell, idx) => {
+                                    const cellDate = new Date(cell.year, cell.month, cell.day);
+                                    const isPast = isBeforeDay(cellDate, todayOnly);
+
+                                    const isSelected = isSameDay(cellDate, tempFromDate);
+
+                                    let cellClass = 'cal-day-cell';
+                                    if (!cell.isCurrentMonth) cellClass += ' other-month';
+                                    if (isPast) cellClass += ' disabled';
+                                    else if (isSelected) cellClass += ' range-start-end-same';
+
+                                    return (
+                                        <div 
+                                            key={idx} 
+                                            className={cellClass}
+                                            onClick={() => {
+                                                if (isPast) return;
+                                                const selHour = parseInt(entryDate.slice(11, 13)) || 0;
+                                                const selMin = parseInt(entryDate.slice(14, 16)) || 0;
+                                                const dateStr = `${cellDate.getFullYear()}-${String(cellDate.getMonth() + 1).padStart(2,'0')}-${String(cellDate.getDate()).padStart(2,'0')}`;
+                                                setEntryDate(`${dateStr}T${String(selHour).padStart(2,'0')}:${String(selMin).padStart(2,'0')}`);
+
+                                                setTempFromDate(cellDate);
+                                                setTempToDate(cellDate);
+                                                setShowCalendar(false);
+                                            }}
+                                        >
+                                            {cell.day}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+
+                            <div className="cal-popover-footer">
+                                <button className="cal-btn cal-btn-close" onClick={() => setShowCalendar(false)}>Close</button>
+                            </div>
+                        </div>
+                    </div>
+                );
+            })()}
         </>
     );
 };
