@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { Scanner } from '@yudiel/react-qr-scanner';
 import useProfile from '../../hooks/useProfile';
+import { verifyQRToken } from '../../utils/qrToken';
 
 // Interface for mock booking data
 interface BookingData {
@@ -156,25 +157,33 @@ const StaffPage = () => {
     }
   };
 
-  const processQRCode = (code: string) => {
+  const processQRCode = async (code: string) => {
     if (isProcessingQR) return;
 
     setIsProcessingQR(true);
     playBeep();
 
     setIsLoadingQR(true);
-    setTimeout(() => {
+    try {
+      const payload = await verifyQRToken(code);
+      
+      setTimeout(() => {
+        setIsLoadingQR(false);
+        const mockResult: BookingData = {
+          id: payload.receiptId || payload.bookingId.substring(0, 8).toUpperCase(),
+          plate: payload.licensePlate,
+          customerName: 'Customer',
+          spot: payload.slotCode,
+          status: 'VALID'
+        };
+        setModalData(mockResult);
+        setShowModal(true);
+      }, 500);
+    } catch (error: any) {
       setIsLoadingQR(false);
-      const mockResult: BookingData = {
-        id: code.toUpperCase(),
-        plate: '30A-123.45',
-        customerName: 'John Doe',
-        spot: 'Zone B - Spot 05',
-        status: 'VALID'
-      };
-      setModalData(mockResult);
-      setShowModal(true);
-    }, 1000);
+      setIsProcessingQR(false);
+      showNotification(error.message || 'Mã QR không hợp lệ', 'error');
+    }
   };
 
   const handleManualCheckQR = (e: React.FormEvent) => {
