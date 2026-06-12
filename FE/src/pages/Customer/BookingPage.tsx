@@ -10,6 +10,65 @@ import vehicleTypeService, { VehicleType } from '../../services/api/vehicleTypeS
 const getZoneId = (z: ParkingSlot['zone']): string =>
     typeof z === 'string' ? z : (z as any)?._id ?? '';
 
+const getCalendarDays = (year: number, month: number) => {
+    const firstDayIndex = new Date(year, month, 1).getDay();
+    const currentMonthDays = new Date(year, month + 1, 0).getDate();
+    const prevMonthDays = new Date(year, month, 0).getDate();
+
+    const days = [];
+
+    // Prev month days
+    for (let i = firstDayIndex - 1; i >= 0; i--) {
+        days.push({
+            day: prevMonthDays - i,
+            month: month === 0 ? 11 : month - 1,
+            year: month === 0 ? year - 1 : year,
+            isCurrentMonth: false,
+        });
+    }
+
+    // Current month days
+    for (let i = 1; i <= currentMonthDays; i++) {
+        days.push({
+            day: i,
+            month: month,
+            year: year,
+            isCurrentMonth: true,
+        });
+    }
+
+    // Next month days to fill 42 cells
+    const remaining = 42 - days.length;
+    for (let i = 1; i <= remaining; i++) {
+        days.push({
+            day: i,
+            month: month === 11 ? 0 : month + 1,
+            year: month === 11 ? year + 1 : year,
+            isCurrentMonth: false,
+        });
+    }
+
+    return days;
+};
+
+const isSameDay = (d1: Date, d2: Date) => {
+    return d1.getFullYear() === d2.getFullYear() &&
+           d1.getMonth() === d2.getMonth() &&
+           d1.getDate() === d2.getDate();
+};
+
+const isBeforeDay = (d1: Date, d2: Date) => {
+    const t1 = new Date(d1.getFullYear(), d1.getMonth(), d1.getDate()).getTime();
+    const t2 = new Date(d2.getFullYear(), d2.getMonth(), d2.getDate()).getTime();
+    return t1 < t2;
+};
+
+const isAfterDay = (d1: Date, d2: Date) => {
+    const t1 = new Date(d1.getFullYear(), d1.getMonth(), d1.getDate()).getTime();
+    const t2 = new Date(d2.getFullYear(), d2.getMonth(), d2.getDate()).getTime();
+    return t1 > t2;
+};
+
 // Vietnamese license plate validation
 const LP_REGEX = /^[0-9]{2}[A-Z]{1,2}-[0-9]{4,5}$|^[0-9]{2}-[A-Z][0-9]{4,5}$/i;
 const formatPlate = (v: string) => v.toUpperCase().replace(/[^A-Z0-9-]/gi, '');
@@ -366,9 +425,34 @@ const BookingPage = () => {
     const [vehicleTypes, setVehicleTypes] = useState<VehicleType[]>([]);
     const [vehicleTypesLoading, setVehicleTypesLoading] = useState(false);
 
-    // ── Step 3: Date & Time ──
     const [entryDate, setEntryDate] = useState(() => new Date().toISOString().slice(0, 16));
     const [duration, setDuration] = useState(2);
+
+    const [showCalendar, setShowCalendar] = useState(false);
+    const [calMonth, setCalMonth] = useState(() => new Date().getMonth());
+    const [calYear, setCalYear] = useState(() => new Date().getFullYear());
+    const [activeInput, setActiveInput] = useState<'from' | 'to'>('from');
+
+    // Temporal calendar values
+    const [tempFromDate, setTempFromDate] = useState<Date>(() => new Date());
+    const [tempToDate, setTempToDate] = useState<Date>(() => {
+        const d = new Date();
+        d.setHours(d.getHours() + 2);
+        return d;
+    });
+
+    const openCalendar = (mode: 'from' | 'to') => {
+        const fromDate = new Date(entryDate.slice(0, 10));
+        const toDate = new Date(entryDate);
+        toDate.setHours(toDate.getHours() + duration);
+        
+        setTempFromDate(fromDate);
+        setTempToDate(toDate);
+        setCalMonth(fromDate.getMonth());
+        setCalYear(fromDate.getFullYear());
+        setActiveInput(mode);
+        setShowCalendar(true);
+    };
 
     // ── Step 4: Floor ──
     const [floors, setFloors] = useState<Floor[]>([]);
@@ -658,7 +742,212 @@ const BookingPage = () => {
         <>
             <style>{`
                 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
-                * { box-sizing: border-box; margin: 0; padding: 0; }
+                .time-drum-input {
+                    height: 60px;
+                    width: 90px;
+                    font-size: 44px;
+                    font-weight: 900;
+                    color: #1e293b;
+                    letter-spacing: -2px;
+                    background: white;
+                    border-radius: 16px;
+                    border: 2.5px solid #e2e8f0;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+                    text-align: center;
+                    outline: none;
+                    cursor: text;
+                    padding: 0;
+                    transition: all 0.2s ease;
+                    -moz-appearance: textfield;
+                }
+                .time-drum-input::-webkit-outer-spin-button,
+                .time-drum-input::-webkit-inner-spin-button {
+                    -webkit-appearance: none;
+                    margin: 0;
+                }
+                .time-drum-input:hover {
+                    border-color: #cbd5e1;
+                    box-shadow: 0 4px 15px rgba(0,0,0,0.06);
+                }
+                .time-drum-input:focus {
+                    border-color: #2563eb;
+                    box-shadow: 0 6px 20px rgba(37,99,235,0.18);
+                }
+
+                /* ── Calendar UI ── */
+                .cal-container {
+                    background: #f0f6fa;
+                    border-radius: 20px;
+                    border: 1.5px solid #e2e8f0;
+                    padding: 20px;
+                    box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+                    margin-bottom: 24px;
+                    position: relative;
+                }
+                .cal-header-title {
+                    font-size: 20px;
+                    font-weight: 850;
+                    color: #1e293b;
+                    margin-bottom: 16px;
+                    font-family: 'Inter', sans-serif;
+                }
+                .cal-triggers-row {
+                    display: flex;
+                    align-items: center;
+                    gap: 12px;
+                }
+                .cal-trigger-label {
+                    font-size: 13px;
+                    font-weight: 700;
+                    color: #64748b;
+                }
+                .cal-trigger-btn {
+                    flex: 1;
+                    background: white;
+                    border: 1.5px solid #e2e8f0;
+                    border-radius: 12px;
+                    padding: 10px 16px;
+                    font-size: 14px;
+                    font-weight: 700;
+                    color: #334155;
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    cursor: pointer;
+                    transition: all 0.2s ease;
+                }
+                .cal-trigger-btn:hover {
+                    border-color: #cbd5e1;
+                    background: #f8fafc;
+                }
+                .cal-trigger-btn.active {
+                    border-color: #2563eb;
+                    box-shadow: 0 0 0 3px rgba(37,99,235,0.15);
+                }
+                .cal-popover {
+                    position: absolute;
+                    top: calc(100% + 8px);
+                    left: 20px;
+                    right: 20px;
+                    background: white;
+                    border-radius: 16px;
+                    border: 1px solid #e2e8f0;
+                    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+                    padding: 16px;
+                    z-index: 50;
+                }
+                .cal-popover-header {
+                    display: flex;
+                    justify-content: center;
+                    gap: 8px;
+                    margin-bottom: 16px;
+                }
+                .cal-select {
+                    padding: 6px 12px;
+                    border-radius: 10px;
+                    border: 1.5px solid #e2e8f0;
+                    font-size: 13px;
+                    font-weight: 700;
+                    color: #334155;
+                    background: #f8fafc;
+                    outline: none;
+                    cursor: pointer;
+                }
+                .cal-select:hover {
+                    border-color: #cbd5e1;
+                }
+                .cal-weekdays {
+                    display: grid;
+                    grid-template-columns: repeat(7, 1fr);
+                    text-align: center;
+                    margin-bottom: 8px;
+                }
+                .cal-weekday {
+                    font-size: 11px;
+                    font-weight: 700;
+                    color: #94a3b8;
+                    text-transform: uppercase;
+                    letter-spacing: 0.05em;
+                }
+                .cal-days-grid {
+                    display: grid;
+                    grid-template-columns: repeat(7, 1fr);
+                    gap: 4px;
+                }
+                .cal-day-cell {
+                    aspect-ratio: 1;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 13px;
+                    font-weight: 700;
+                    border-radius: 50%;
+                    cursor: pointer;
+                    position: relative;
+                    transition: all 0.15s ease;
+                    color: #334155;
+                }
+                .cal-day-cell.other-month {
+                    color: #cbd5e1;
+                }
+                .cal-day-cell.disabled {
+                    color: #e2e8f0;
+                    cursor: not-allowed;
+                    text-decoration: line-through;
+                }
+                .cal-day-cell.in-range {
+                    background: #eff6ff;
+                    border-radius: 0;
+                }
+                .cal-day-cell.range-start {
+                    background: #2563eb !important;
+                    color: white !important;
+                    border-radius: 50% 0 0 50%;
+                }
+                .cal-day-cell.range-end {
+                    background: #2563eb !important;
+                    color: white !important;
+                    border-radius: 0 50% 50% 0;
+                }
+                .cal-day-cell.range-start-end-same {
+                    background: #2563eb !important;
+                    color: white !important;
+                    border-radius: 50% !important;
+                }
+                .cal-day-cell:not(.disabled):not(.range-start):not(.range-end):hover {
+                    background: #f1f5f9;
+                    border-radius: 50%;
+                }
+                .cal-popover-footer {
+                    display: flex;
+                    justify-content: space-between;
+                    margin-top: 16px;
+                    padding-top: 12px;
+                    border-top: 1.5px solid #f1f5f9;
+                }
+                .cal-btn {
+                    padding: 10px 20px;
+                    border-radius: 12px;
+                    font-size: 14px;
+                    font-weight: 700;
+                    cursor: pointer;
+                    border: none;
+                    transition: all 0.2s ease;
+                }
+                .cal-btn-close {
+                    background: #fef2f2;
+                    color: #ef4444;
+                }
+                .cal-btn-close:hover {
+                    background: #fee2e2;
+                }
+                .cal-btn-confirm {
+                    background: #ecfdf5;
+                    color: #10b981;
+                }
+                .cal-btn-confirm:hover {
+                    background: #d1fae5;
+                }
 
                 .bk-root {
                     min-height: 100vh;
@@ -1476,11 +1765,11 @@ const BookingPage = () => {
 
                         {/* ── STEP 3: Date & Time ── */}
                         {currentStep === 3 && (() => {
-                            const now          = new Date();
-                            const todayStr     = now.toISOString().slice(0, 10);
+                            const now = new Date();
+                            const todayStr = now.toISOString().slice(0, 10);
                             const selectedDate = entryDate.slice(0, 10);
-                            const selHour      = parseInt(entryDate.slice(11, 13)) || 0;
-                            const selMin       = parseInt(entryDate.slice(14, 16)) || 0;
+                            const selHour = parseInt(entryDate.slice(11, 13)) || 0;
+                            const selMin = parseInt(entryDate.slice(14, 16)) || 0;
 
                             // Build next 7 day options
                             const dayOptions = Array.from({ length: 7 }, (_, i) => {
@@ -1488,11 +1777,11 @@ const BookingPage = () => {
                                 d.setDate(d.getDate() + i);
                                 const iso = d.toISOString().slice(0, 10);
                                 const labels = ['Today', 'Tomorrow'];
-                                const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+                                const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
                                 return {
                                     val: iso,
                                     line1: labels[i] ?? dayNames[d.getDay()],
-                                    line2: `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`,
+                                    line2: `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`,
                                 };
                             });
 
@@ -1503,271 +1792,433 @@ const BookingPage = () => {
                                     const isToday = selectedDate === todayStr;
                                     const disabled = isToday && (h < now.getHours() || (h === now.getHours() && m <= now.getMinutes()));
                                     timeSlots.push({
-                                        label: `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`,
+                                        label: `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`,
                                         h, m, disabled,
                                     });
                                 }
                             }
 
                             const setSlot = (h: number, m: number) => {
-                                setEntryDate(`${selectedDate}T${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`);
+                                setEntryDate(`${selectedDate}T${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
                             };
                             const setDay = (dateStr: string) => {
-                                setEntryDate(`${dateStr}T${String(selHour).padStart(2,'0')}:${String(selMin).padStart(2,'0')}`);
+                                setEntryDate(`${dateStr}T${String(selHour).padStart(2, '0')}:${String(selMin).padStart(2, '0')}`);
                             };
 
                             const exitDt = new Date(new Date(entryDate).getTime() + duration * 3600000);
-                            const fmtT   = (d: Date) => `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
-                            const fmtD   = (d: Date) => `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
+                            const fmtT = (d: Date) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+                            const fmtD = (d: Date) => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
 
                             const DURATION_OPTIONS = [
-                                { label: '1h',     val: 1  },
-                                { label: '2h',     val: 2  },
-                                { label: '3h',     val: 3  },
-                                { label: '4h',     val: 4  },
-                                { label: '6h',     val: 6  },
-                                { label: '8h',     val: 8  },
-                                { label: '12h',    val: 12 },
-                                { label: 'All day',val: 24 },
+                                { label: '1h', val: 1 },
+                                { label: '2h', val: 2 },
+                                { label: '3h', val: 3 },
+                                { label: '4h', val: 4 },
+                                { label: '6h', val: 6 },
+                                { label: '8h', val: 8 },
+                                { label: '12h', val: 12 },
+                                { label: 'All day', val: 24 },
                             ];
                             const isCustomDur = !DURATION_OPTIONS.find(o => o.val === duration);
 
                             return (
-                            <div className="bk-card">
-                                <div className="bk-step-header">
-                                    <div className="bk-step-icon">📅</div>
-                                    <div>
-                                        <div className="bk-step-title">When do you want to park?</div>
-                                        <div className="bk-step-sub">Step 3 of 6 — Pick date, arrival time & duration</div>
-                                    </div>
-                                </div>
-
-                                {/* ── 1. DATE ── */}
-                                <div style={{ marginBottom: 28 }}>
-                                    <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>📆 Date</div>
-                                    <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4, scrollbarWidth: 'none' }}>
-                                        {dayOptions.map(opt => {
-                                            const isSel = selectedDate === opt.val;
-                                            return (
-                                                <button key={opt.val} onClick={() => setDay(opt.val)}
-                                                    style={{
-                                                        flexShrink: 0,
-                                                        minWidth: 68,
-                                                        padding: '12px 10px',
-                                                        border: `2px solid ${isSel ? '#2563eb' : '#e2e8f0'}`,
-                                                        borderRadius: 14,
-                                                        background: isSel ? 'linear-gradient(135deg,#2563eb,#1d4ed8)' : 'white',
-                                                        color: isSel ? 'white' : '#374151',
-                                                        cursor: 'pointer',
-                                                        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
-                                                        transition: 'all 0.2s cubic-bezier(0.34,1.56,0.64,1)',
-                                                        boxShadow: isSel ? '0 6px 16px rgba(37,99,235,0.35)' : '0 1px 4px rgba(0,0,0,0.05)',
-                                                        transform: isSel ? 'scale(1.05)' : 'scale(1)',
-                                                    }}>
-                                                    <span style={{ fontSize: 12, fontWeight: 700, opacity: isSel ? 1 : 0.6 }}>{opt.line1}</span>
-                                                    <span style={{ fontSize: 15, fontWeight: 900 }}>{opt.line2}</span>
-                                                </button>
-                                            );
-                                        })}
-                                        {/* Hidden custom date behind a styled button */}
-                                        <label style={{
-                                            flexShrink: 0, minWidth: 68, padding: '12px 10px',
-                                            border: '2px dashed #e2e8f0', borderRadius: 14, cursor: 'pointer',
-                                            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
-                                            color: '#94a3b8', position: 'relative', background: '#fafbfc',
-                                        }}>
-                                            <span style={{ fontSize: 18 }}>＋</span>
-                                            <span style={{ fontSize: 11, fontWeight: 700 }}>More</span>
-                                            <input type="date" value={selectedDate} min={todayStr}
-                                                onChange={e => setDay(e.target.value)}
-                                                style={{ position: 'absolute', inset: 0, opacity: 0, width: '100%', height: '100%', cursor: 'pointer' }} />
-                                        </label>
-                                    </div>
-                                </div>
-
-                                {/* ── 2. ARRIVAL TIME — Dual Drum Spinner ── */}
-                                <div style={{ marginBottom: 28 }}>
-                                    <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 16 }}>
-                                        🕐 Arrival Time
-                                        <span style={{ fontSize: 13, fontWeight: 800, color: '#2563eb', marginLeft: 10, letterSpacing: 0, textTransform: 'none' }}>
-                                            {String(selHour).padStart(2,'0')}:{String(selMin).padStart(2,'0')}
-                                        </span>
-                                    </div>
-
-                                    {/* Drum spinner container */}
-                                    <div style={{
-                                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0,
-                                        background: 'linear-gradient(135deg,#f8fafc,#f1f5f9)',
-                                        borderRadius: 22, border: '1.5px solid #e2e8f0',
-                                        padding: '16px 24px',
-                                        boxShadow: '0 4px 20px rgba(0,0,0,0.06)',
-                                    }}>
-                                        {/* ── HOUR drum ── */}
-                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0, flex: 1 }}>
-                                            <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Hour</div>
-                                            <button
-                                                onClick={() => setSlot((selHour - 1 + 24) % 24, selMin)}
-                                                style={{ width: 48, height: 36, border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}>
-                                                <svg width="18" height="12" viewBox="0 0 18 12" fill="none"><path d="M1 10L9 2L17 10" stroke="#94a3b8" strokeWidth="2.5" strokeLinecap="round"/></svg>
-                                            </button>
-                                            {/* prev */}
-                                            <div style={{ height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, fontWeight: 900, color: '#d1d5db', opacity: 0.5, letterSpacing: -1 }}>
-                                                {String((selHour - 1 + 24) % 24).padStart(2,'0')}
-                                            </div>
-                                            {/* selected — highlight */}
-                                            <div style={{
-                                                height: 60, width: 90, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                fontSize: 44, fontWeight: 900, color: '#1e293b', letterSpacing: -2,
-                                                background: 'white', borderRadius: 16,
-                                                border: '2.5px solid #2563eb',
-                                                boxShadow: '0 6px 20px rgba(37,99,235,0.18)',
-                                                transition: 'all 0.2s',
-                                            }}>
-                                                {String(selHour).padStart(2,'0')}
-                                            </div>
-                                            {/* next */}
-                                            <div style={{ height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, fontWeight: 900, color: '#d1d5db', opacity: 0.5, letterSpacing: -1 }}>
-                                                {String((selHour + 1) % 24).padStart(2,'0')}
-                                            </div>
-                                            <button
-                                                onClick={() => setSlot((selHour + 1) % 24, selMin)}
-                                                style={{ width: 48, height: 36, border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}>
-                                                <svg width="18" height="12" viewBox="0 0 18 12" fill="none"><path d="M1 2L9 10L17 2" stroke="#94a3b8" strokeWidth="2.5" strokeLinecap="round"/></svg>
-                                            </button>
+                                <div className="bk-card">
+                                    <div className="bk-step-header">
+                                        <div className="bk-step-icon">📅</div>
+                                        <div>
+                                            <div className="bk-step-title">When do you want to park?</div>
+                                            <div className="bk-step-sub">Step 3 of 6 — Pick date, arrival time & duration</div>
                                         </div>
+                                    </div>
 
-                                        {/* colon */}
-                                        <div style={{ fontSize: 44, fontWeight: 900, color: '#1e293b', padding: '0 4px', lineHeight: 1, marginTop: 8 }}>:</div>
+                                    {/* ── 1. DATE (Calendar UI) ── */}
+                                    {(() => {
+                                        const MONTH_NAMES = [
+                                            'January', 'February', 'March', 'April', 'May', 'June',
+                                            'July', 'August', 'September', 'October', 'November', 'December'
+                                        ];
+                                        const fromDt = new Date(entryDate.slice(0, 10));
+                                        const toDt = new Date(entryDate);
+                                        toDt.setHours(toDt.getHours() + duration);
 
-                                        {/* ── MINUTE drum ── */}
-                                        {(() => {
-                                            const MINS = [0, 15, 30, 45];
-                                            const selIdx = MINS.indexOf(selMin) === -1 ? 0 : MINS.indexOf(selMin);
-                                            const prevMin = MINS[(selIdx - 1 + MINS.length) % MINS.length];
-                                            const nextMin = MINS[(selIdx + 1) % MINS.length];
-                                            return (
-                                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0, flex: 1 }}>
-                                                    <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Min</div>
-                                                    <button
-                                                        onClick={() => setSlot(selHour, prevMin)}
-                                                        style={{ width: 48, height: 36, border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}>
-                                                        <svg width="18" height="12" viewBox="0 0 18 12" fill="none"><path d="M1 10L9 2L17 10" stroke="#94a3b8" strokeWidth="2.5" strokeLinecap="round"/></svg>
-                                                    </button>
-                                                    <div style={{ height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, fontWeight: 900, color: '#d1d5db', opacity: 0.5, letterSpacing: -1 }}>
-                                                        {String(prevMin).padStart(2,'0')}
+                                        const fmtCalBtnDate = (d: Date) => {
+                                            const day = String(d.getDate()).padStart(2, '0');
+                                            const month = MONTH_NAMES[d.getMonth()];
+                                            const year = d.getFullYear();
+                                            return `${day} ${month}, ${year}`;
+                                        };
+
+                                        return (
+                                            <div className="cal-container">
+                                                <div className="cal-header-title">Select Date</div>
+                                                <div className="cal-triggers-row">
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
+                                                        <div className="cal-trigger-label">From</div>
+                                                        <button 
+                                                            className={`cal-trigger-btn ${showCalendar && activeInput === 'from' ? 'active' : ''}`}
+                                                            onClick={() => openCalendar('from')}
+                                                        >
+                                                            <span>{fmtCalBtnDate(fromDt)}</span>
+                                                            <svg width="12" height="8" viewBox="0 0 12 8" fill="none"><path d="M1 1L6 6L11 1" stroke="#64748b" strokeWidth="2" strokeLinecap="round"/></svg>
+                                                        </button>
                                                     </div>
-                                                    <div style={{
-                                                        height: 60, width: 90, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                        fontSize: 44, fontWeight: 900, color: '#1e293b', letterSpacing: -2,
-                                                        background: 'white', borderRadius: 16,
-                                                        border: '2.5px solid #2563eb',
-                                                        boxShadow: '0 6px 20px rgba(37,99,235,0.18)',
-                                                        transition: 'all 0.2s',
-                                                    }}>
-                                                        {String(selMin).padStart(2,'0')}
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
+                                                        <div className="cal-trigger-label">To</div>
+                                                        <button 
+                                                            className={`cal-trigger-btn ${showCalendar && activeInput === 'to' ? 'active' : ''}`}
+                                                            onClick={() => openCalendar('to')}
+                                                        >
+                                                            <span>{fmtCalBtnDate(toDt)}</span>
+                                                            <svg width="12" height="8" viewBox="0 0 12 8" fill="none"><path d="M1 1L6 6L11 1" stroke="#64748b" strokeWidth="2" strokeLinecap="round"/></svg>
+                                                        </button>
                                                     </div>
-                                                    <div style={{ height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, fontWeight: 900, color: '#d1d5db', opacity: 0.5, letterSpacing: -1 }}>
-                                                        {String(nextMin).padStart(2,'0')}
-                                                    </div>
-                                                    <button
-                                                        onClick={() => setSlot(selHour, nextMin)}
-                                                        style={{ width: 48, height: 36, border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}>
-                                                        <svg width="18" height="12" viewBox="0 0 18 12" fill="none"><path d="M1 2L9 10L17 2" stroke="#94a3b8" strokeWidth="2.5" strokeLinecap="round"/></svg>
-                                                    </button>
                                                 </div>
-                                            );
-                                        })()}
-                                    </div>
-                                    <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 10, textAlign: 'center', fontWeight: 500 }}>
-                                        Tap ▲▼ to adjust hour & minute
-                                    </div>
-                                </div>
 
+                                                {showCalendar && (() => {
+                                                    const calDays = getCalendarDays(calYear, calMonth);
+                                                    const now = new Date();
+                                                    const todayOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-                                {/* ── 3. DURATION ── */}
-                                <div style={{ marginBottom: 24 }}>
-                                    <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>⏳ Duration</div>
-                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
-                                        {DURATION_OPTIONS.map(opt => {
-                                            const isSel = duration === opt.val && !isCustomDur;
-                                            return (
-                                                <button key={opt.val} onClick={() => setDuration(opt.val)}
-                                                    style={{
-                                                        padding: '14px 20px',
-                                                        border: `2px solid ${isSel ? '#2563eb' : '#e2e8f0'}`,
-                                                        borderRadius: 14,
-                                                        background: isSel ? 'linear-gradient(135deg,#2563eb,#1d4ed8)' : 'white',
-                                                        color: isSel ? 'white' : '#374151',
-                                                        fontWeight: isSel ? 800 : 700,
-                                                        fontSize: 15,
-                                                        cursor: 'pointer',
-                                                        transition: 'all 0.2s cubic-bezier(0.34,1.56,0.64,1)',
-                                                        boxShadow: isSel ? '0 6px 18px rgba(37,99,235,0.35)' : '0 1px 4px rgba(0,0,0,0.05)',
-                                                        transform: isSel ? 'scale(1.06)' : 'scale(1)',
-                                                    }}>
-                                                    {opt.label}
-                                                </button>
-                                            );
-                                        })}
-                                        {/* Custom stepper */}
+                                                    return (
+                                                        <div className="cal-popover">
+                                                            <div className="cal-popover-header">
+                                                                <select 
+                                                                    className="cal-select"
+                                                                    value={calMonth}
+                                                                    onChange={e => setCalMonth(parseInt(e.target.value))}
+                                                                >
+                                                                    {MONTH_NAMES.map((name, idx) => (
+                                                                        <option key={name} value={idx}>{name}</option>
+                                                                    ))}
+                                                                </select>
+                                                                <select 
+                                                                    className="cal-select"
+                                                                    value={calYear}
+                                                                    onChange={e => setCalYear(parseInt(e.target.value))}
+                                                                >
+                                                                    {Array.from({ length: 3 }, (_, i) => now.getFullYear() + i).map(yr => (
+                                                                        <option key={yr} value={yr}>{yr}</option>
+                                                                    ))}
+                                                                </select>
+                                                            </div>
+
+                                                            <div className="cal-weekdays">
+                                                                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => (
+                                                                    <div key={d} className="cal-weekday">{d}</div>
+                                                                ))}
+                                                            </div>
+
+                                                            <div className="cal-days-grid">
+                                                                {calDays.map((cell, idx) => {
+                                                                    const cellDate = new Date(cell.year, cell.month, cell.day);
+                                                                    const isTodayCell = isSameDay(cellDate, todayOnly);
+                                                                    const isPast = isBeforeDay(cellDate, todayOnly);
+
+                                                                    const isStart = isSameDay(cellDate, tempFromDate);
+                                                                    const isEnd = isSameDay(cellDate, tempToDate);
+                                                                    const isStartEndSame = isSameDay(tempFromDate, tempToDate);
+                                                                    
+                                                                    const inRange = isAfterDay(cellDate, tempFromDate) && isBeforeDay(cellDate, tempToDate);
+
+                                                                    let cellClass = 'cal-day-cell';
+                                                                    if (!cell.isCurrentMonth) cellClass += ' other-month';
+                                                                    if (isPast) cellClass += ' disabled';
+                                                                    else if (isStart && isEnd && isStartEndSame) cellClass += ' range-start-end-same';
+                                                                    else if (isStart) cellClass += ' range-start';
+                                                                    else if (isEnd) cellClass += ' range-end';
+                                                                    else if (inRange) cellClass += ' in-range';
+
+                                                                    return (
+                                                                        <div 
+                                                                            key={idx} 
+                                                                            className={cellClass}
+                                                                            onClick={() => {
+                                                                                if (isPast) return;
+                                                                                if (activeInput === 'from') {
+                                                                                    setTempFromDate(cellDate);
+                                                                                    if (isBeforeDay(tempToDate, cellDate)) {
+                                                                                        setTempToDate(cellDate);
+                                                                                    }
+                                                                                    setActiveInput('to');
+                                                                                } else {
+                                                                                    if (isBeforeDay(cellDate, tempFromDate)) {
+                                                                                        setTempFromDate(cellDate);
+                                                                                        setActiveInput('to');
+                                                                                    } else {
+                                                                                        setTempToDate(cellDate);
+                                                                                    }
+                                                                                }
+                                                                            }}
+                                                                        >
+                                                                            {cell.day}
+                                                                        </div>
+                                                                    );
+                                                                })}
+                                                            </div>
+
+                                                            <div className="cal-popover-footer">
+                                                                <button className="cal-btn cal-btn-close" onClick={() => setShowCalendar(false)}>Close</button>
+                                                                <button 
+                                                                    className="cal-btn cal-btn-confirm"
+                                                                    onClick={() => {
+                                                                        const dateStr = `${tempFromDate.getFullYear()}-${String(tempFromDate.getMonth() + 1).padStart(2,'0')}-${String(tempFromDate.getDate()).padStart(2,'0')}`;
+                                                                        setDay(dateStr);
+
+                                                                        const diffMs = tempToDate.getTime() - tempFromDate.getTime();
+                                                                        const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+                                                                        if (diffDays > 0) {
+                                                                            setDuration(diffDays * 24);
+                                                                        } else {
+                                                                            if (duration > 24) setDuration(2);
+                                                                        }
+                                                                        setShowCalendar(false);
+                                                                    }}
+                                                                >
+                                                                    Confirm
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })()}
+                                            </div>
+                                        );
+                                    })()}
+
+                                    {/* ── 2. ARRIVAL TIME — Dual Drum Spinner ── */}
+                                    <div style={{ marginBottom: 28 }}>
+                                        <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 16 }}>
+                                            🕐 Arrival Time
+                                            <span style={{ fontSize: 13, fontWeight: 800, color: '#2563eb', marginLeft: 10, letterSpacing: 0, textTransform: 'none' }}>
+                                                {String(selHour).padStart(2, '0')}:{String(selMin).padStart(2, '0')}
+                                            </span>
+                                        </div>
+
+                                        {/* Drum spinner container */}
                                         <div style={{
-                                            display: 'flex', alignItems: 'center', gap: 0,
-                                            border: `2px solid ${isCustomDur ? '#2563eb' : '#e2e8f0'}`,
-                                            borderRadius: 14, overflow: 'hidden', background: isCustomDur ? '#eff6ff' : 'white',
+                                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0,
+                                            background: 'linear-gradient(135deg,#f8fafc,#f1f5f9)',
+                                            borderRadius: 22, border: '1.5px solid #e2e8f0',
+                                            padding: '16px 24px',
+                                            boxShadow: '0 4px 20px rgba(0,0,0,0.06)',
                                         }}>
-                                            <button onClick={() => setDuration(d => Math.max(1, d - 1))}
-                                                style={{ width: 38, height: 52, border: 'none', background: 'transparent', fontSize: 20, fontWeight: 900, color: '#1e293b', cursor: 'pointer' }}>−</button>
-                                            <div style={{ padding: '0 8px', textAlign: 'center', borderLeft: '1.5px solid #e2e8f0', borderRight: '1.5px solid #e2e8f0', minWidth: 52 }}>
-                                                <div style={{ fontSize: 18, fontWeight: 900, color: isCustomDur ? '#2563eb' : '#64748b', lineHeight: 1 }}>{duration}</div>
-                                                <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 600 }}>hr</div>
+                                            {/* ── HOUR drum ── */}
+                                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0, flex: 1 }}>
+                                                <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Hour</div>
+                                                <button
+                                                    onClick={() => setSlot((selHour - 1 + 24) % 24, selMin)}
+                                                    style={{ width: 48, height: 36, border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}>
+                                                    <svg width="18" height="12" viewBox="0 0 18 12" fill="none"><path d="M1 10L9 2L17 10" stroke="#94a3b8" strokeWidth="2.5" strokeLinecap="round" /></svg>
+                                                </button>
+                                                {/* prev */}
+                                                <div style={{ height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, fontWeight: 900, color: '#d1d5db', opacity: 0.5, letterSpacing: -1 }}>
+                                                    {String((selHour - 1 + 24) % 24).padStart(2, '0')}
+                                                </div>
+                                                {/* selected hour — click to edit */}
+                                                <input
+                                                    type="number"
+                                                    className="time-drum-input"
+                                                    min={0}
+                                                    max={23}
+                                                    value={String(selHour).padStart(2,'0')}
+                                                    onChange={e => {
+                                                        if (e.target.value === '') {
+                                                            setSlot(0, selMin);
+                                                            return;
+                                                        }
+                                                        const v = parseInt(e.target.value);
+                                                        if (!isNaN(v)) setSlot(Math.min(23, Math.max(0, v)), selMin);
+                                                    }}
+                                                    onFocus={e => e.target.select()}
+                                                    onBlur={e => {
+                                                        const v = parseInt(e.target.value);
+                                                        if (isNaN(v)) setSlot(0, selMin);
+                                                        else setSlot(Math.min(23, Math.max(0, v)), selMin);
+                                                    }}
+                                                    onKeyDown={e => {
+                                                        if (e.key === 'ArrowUp') { e.preventDefault(); setSlot((selHour + 1) % 24, selMin); }
+                                                        if (e.key === 'ArrowDown') { e.preventDefault(); setSlot((selHour - 1 + 24) % 24, selMin); }
+                                                        if (e.key === 'Enter') { e.currentTarget.blur(); }
+                                                    }}
+                                                />
+                                                {/* next */}
+                                                <div style={{ height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, fontWeight: 900, color: '#d1d5db', opacity: 0.5, letterSpacing: -1 }}>
+                                                    {String((selHour + 1) % 24).padStart(2, '0')}
+                                                </div>
+                                                <button
+                                                    onClick={() => setSlot((selHour + 1) % 24, selMin)}
+                                                    style={{ width: 48, height: 36, border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}>
+                                                    <svg width="18" height="12" viewBox="0 0 18 12" fill="none"><path d="M1 2L9 10L17 2" stroke="#94a3b8" strokeWidth="2.5" strokeLinecap="round" /></svg>
+                                                </button>
                                             </div>
-                                            <button onClick={() => setDuration(d => Math.min(72, d + 1))}
-                                                style={{ width: 38, height: 52, border: 'none', background: 'transparent', fontSize: 20, fontWeight: 900, color: '#1e293b', cursor: 'pointer' }}>+</button>
+
+                                            {/* colon */}
+                                            <div style={{ fontSize: 44, fontWeight: 900, color: '#1e293b', padding: '0 4px', lineHeight: 1, marginTop: 8 }}>:</div>
+
+                                            {/* ── MINUTE drum ── */}
+                                            {(() => {
+                                                const MINS = [0, 15, 30, 45];
+                                                const selIdx = MINS.indexOf(selMin) === -1 ? 0 : MINS.indexOf(selMin);
+                                                const prevMin = MINS[(selIdx - 1 + MINS.length) % MINS.length];
+                                                const nextMin = MINS[(selIdx + 1) % MINS.length];
+                                                return (
+                                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0, flex: 1 }}>
+                                                        <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Min</div>
+                                                        <button
+                                                            onClick={() => setSlot(selHour, prevMin)}
+                                                            style={{ width: 48, height: 36, border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}>
+                                                            <svg width="18" height="12" viewBox="0 0 18 12" fill="none"><path d="M1 10L9 2L17 10" stroke="#94a3b8" strokeWidth="2.5" strokeLinecap="round" /></svg>
+                                                        </button>
+                                                        <div style={{ height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, fontWeight: 900, color: '#d1d5db', opacity: 0.5, letterSpacing: -1 }}>
+                                                            {String(prevMin).padStart(2, '0')}
+                                                        </div>
+                                                        {/* selected minute — click to edit */}
+                                                        <input
+                                                            type="number"
+                                                            className="time-drum-input"
+                                                            min={0}
+                                                            max={59}
+                                                            value={String(selMin).padStart(2,'0')}
+                                                            onChange={e => {
+                                                                if (e.target.value === '') {
+                                                                    setSlot(selHour, 0);
+                                                                    return;
+                                                                }
+                                                                const v = parseInt(e.target.value);
+                                                                if (!isNaN(v)) {
+                                                                    const clamped = Math.min(59, Math.max(0, v));
+                                                                    setSlot(selHour, clamped);
+                                                                }
+                                                            }}
+                                                            onFocus={e => e.target.select()}
+                                                            onBlur={e => {
+                                                                const v = parseInt(e.target.value);
+                                                                if (isNaN(v)) {
+                                                                    setSlot(selHour, 0);
+                                                                } else {
+                                                                    const clamped = Math.min(59, Math.max(0, v));
+                                                                    setSlot(selHour, clamped);
+                                                                }
+                                                            }}
+                                                            onKeyDown={e => {
+                                                                const MINS = [0, 15, 30, 45];
+                                                                const selIdx = MINS.indexOf(selMin) === -1 ? 0 : MINS.indexOf(selMin);
+                                                                if (e.key === 'ArrowUp') {
+                                                                    e.preventDefault();
+                                                                    const prevMin = MINS[(selIdx - 1 + MINS.length) % MINS.length];
+                                                                    setSlot(selHour, prevMin);
+                                                                }
+                                                                if (e.key === 'ArrowDown') {
+                                                                    e.preventDefault();
+                                                                    const nextMin = MINS[(selIdx + 1) % MINS.length];
+                                                                    setSlot(selHour, nextMin);
+                                                                }
+                                                                if (e.key === 'Enter') {
+                                                                    e.currentTarget.blur();
+                                                                }
+                                                            }}
+                                                        />
+                                                        <div style={{ height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, fontWeight: 900, color: '#d1d5db', opacity: 0.5, letterSpacing: -1 }}>
+                                                            {String(nextMin).padStart(2, '0')}
+                                                        </div>
+                                                        <button
+                                                            onClick={() => setSlot(selHour, nextMin)}
+                                                            style={{ width: 48, height: 36, border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}>
+                                                            <svg width="18" height="12" viewBox="0 0 18 12" fill="none"><path d="M1 2L9 10L17 2" stroke="#94a3b8" strokeWidth="2.5" strokeLinecap="round" /></svg>
+                                                        </button>
+                                                    </div>
+                                                );
+                                            })()}
+                                        </div>
+                                        <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 10, textAlign: 'center', fontWeight: 500 }}>
+                                            Tap ▲▼ to adjust &nbsp;·&nbsp; Click number to type directly
                                         </div>
                                     </div>
-                                </div>
 
-                                {/* ── 4. SUMMARY CARD ── */}
-                                <div style={{
-                                    background: 'linear-gradient(135deg,#0f172a,#1e293b)',
-                                    borderRadius: 20, padding: '18px 22px',
-                                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                                    gap: 12,
-                                }}>
-                                    <div>
-                                        <div style={{ fontSize: 10, color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>🅿️ Your Parking</div>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                            <div style={{ textAlign: 'center' }}>
-                                                <div style={{ fontSize: 22, fontWeight: 900, color: '#60a5fa', letterSpacing: -0.5 }}>{fmtT(new Date(entryDate))}</div>
-                                                <div style={{ fontSize: 10, color: '#475569', marginTop: 1 }}>{fmtD(new Date(entryDate))}</div>
-                                            </div>
-                                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, flex: 1 }}>
-                                                <div style={{ fontSize: 11, color: '#64748b', fontWeight: 700 }}>{duration}h</div>
-                                                <div style={{ height: 2, background: 'linear-gradient(90deg,#60a5fa,#34d399)', borderRadius: 1, width: '100%' }} />
-                                            </div>
-                                            <div style={{ textAlign: 'center' }}>
-                                                <div style={{ fontSize: 22, fontWeight: 900, color: '#34d399', letterSpacing: -0.5 }}>{fmtT(exitDt)}</div>
-                                                <div style={{ fontSize: 10, color: '#475569', marginTop: 1 }}>{fmtD(exitDt)}</div>
+
+                                    {/* ── 3. DURATION ── */}
+                                    <div style={{ marginBottom: 24 }}>
+                                        <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>⏳ Duration</div>
+                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+                                            {DURATION_OPTIONS.map(opt => {
+                                                const isSel = duration === opt.val && !isCustomDur;
+                                                return (
+                                                    <button key={opt.val} onClick={() => setDuration(opt.val)}
+                                                        style={{
+                                                            padding: '14px 20px',
+                                                            border: `2px solid ${isSel ? '#2563eb' : '#e2e8f0'}`,
+                                                            borderRadius: 14,
+                                                            background: isSel ? 'linear-gradient(135deg,#2563eb,#1d4ed8)' : 'white',
+                                                            color: isSel ? 'white' : '#374151',
+                                                            fontWeight: isSel ? 800 : 700,
+                                                            fontSize: 15,
+                                                            cursor: 'pointer',
+                                                            transition: 'all 0.2s cubic-bezier(0.34,1.56,0.64,1)',
+                                                            boxShadow: isSel ? '0 6px 18px rgba(37,99,235,0.35)' : '0 1px 4px rgba(0,0,0,0.05)',
+                                                            transform: isSel ? 'scale(1.06)' : 'scale(1)',
+                                                        }}>
+                                                        {opt.label}
+                                                    </button>
+                                                );
+                                            })}
+                                            {/* Custom stepper */}
+                                            <div style={{
+                                                display: 'flex', alignItems: 'center', gap: 0,
+                                                border: `2px solid ${isCustomDur ? '#2563eb' : '#e2e8f0'}`,
+                                                borderRadius: 14, overflow: 'hidden', background: isCustomDur ? '#eff6ff' : 'white',
+                                            }}>
+                                                <button onClick={() => setDuration(d => Math.max(1, d - 1))}
+                                                    style={{ width: 38, height: 52, border: 'none', background: 'transparent', fontSize: 20, fontWeight: 900, color: '#1e293b', cursor: 'pointer' }}>−</button>
+                                                <div style={{ padding: '0 8px', textAlign: 'center', borderLeft: '1.5px solid #e2e8f0', borderRight: '1.5px solid #e2e8f0', minWidth: 52 }}>
+                                                    <div style={{ fontSize: 18, fontWeight: 900, color: isCustomDur ? '#2563eb' : '#64748b', lineHeight: 1 }}>{duration}</div>
+                                                    <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 600 }}>hr</div>
+                                                </div>
+                                                <button onClick={() => setDuration(d => Math.min(72, d + 1))}
+                                                    style={{ width: 38, height: 52, border: 'none', background: 'transparent', fontSize: 20, fontWeight: 900, color: '#1e293b', cursor: 'pointer' }}>+</button>
                                             </div>
                                         </div>
                                     </div>
-                                    {vehicleType && (
-                                        <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                                            <div style={{ fontSize: 10, color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Est. Cost</div>
-                                            <div style={{ fontSize: 20, fontWeight: 900, color: '#fbbf24', letterSpacing: -0.5 }}>
-                                                {new Intl.NumberFormat('vi-VN').format(Math.round((vehicleType.pricing?.hourlyRate ?? 0) * duration))}₫
+
+                                    {/* ── 4. SUMMARY CARD ── */}
+                                    <div style={{
+                                        background: 'linear-gradient(135deg,#0f172a,#1e293b)',
+                                        borderRadius: 20, padding: '18px 22px',
+                                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                        gap: 12,
+                                    }}>
+                                        <div>
+                                            <div style={{ fontSize: 10, color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>🅿️ Your Parking</div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                                <div style={{ textAlign: 'center' }}>
+                                                    <div style={{ fontSize: 22, fontWeight: 900, color: '#60a5fa', letterSpacing: -0.5 }}>{fmtT(new Date(entryDate))}</div>
+                                                    <div style={{ fontSize: 10, color: '#475569', marginTop: 1 }}>{fmtD(new Date(entryDate))}</div>
+                                                </div>
+                                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, flex: 1 }}>
+                                                    <div style={{ fontSize: 11, color: '#64748b', fontWeight: 700 }}>{duration}h</div>
+                                                    <div style={{ height: 2, background: 'linear-gradient(90deg,#60a5fa,#34d399)', borderRadius: 1, width: '100%' }} />
+                                                </div>
+                                                <div style={{ textAlign: 'center' }}>
+                                                    <div style={{ fontSize: 22, fontWeight: 900, color: '#34d399', letterSpacing: -0.5 }}>{fmtT(exitDt)}</div>
+                                                    <div style={{ fontSize: 10, color: '#475569', marginTop: 1 }}>{fmtD(exitDt)}</div>
+                                                </div>
                                             </div>
                                         </div>
-                                    )}
-                                </div>
+                                        {vehicleType && (
+                                            <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                                                <div style={{ fontSize: 10, color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Est. Cost</div>
+                                                <div style={{ fontSize: 20, fontWeight: 900, color: '#fbbf24', letterSpacing: -0.5 }}>
+                                                    {new Intl.NumberFormat('vi-VN').format(Math.round((vehicleType.pricing?.hourlyRate ?? 0) * duration))}₫
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
 
-                                <div className="bk-nav">
-                                    <button className="bk-btn-back" onClick={handleBack}>← Back</button>
-                                    <button id="step3-next-btn" className="bk-btn-next" onClick={handleNext}>
-                                        Continue → Select Floor
-                                    </button>
+                                    <div className="bk-nav">
+                                        <button className="bk-btn-back" onClick={handleBack}>← Back</button>
+                                        <button id="step3-next-btn" className="bk-btn-next" onClick={handleNext}>
+                                            Continue → Select Floor
+                                        </button>
+                                    </div>
                                 </div>
-                            </div>
                             );
                         })()}
 
@@ -2216,7 +2667,7 @@ const BookingPage = () => {
 
                                             <div className="save-card-row" onClick={() => setSaveCard(!saveCard)}>
                                                 <div className={`save-checkbox ${saveCard ? 'checked' : ''}`}>
-                                                    {saveCard && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>}
+                                                    {saveCard && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3"><polyline points="20 6 9 17 4 12" /></svg>}
                                                 </div>
                                                 <span className="save-card-text">Save this card for future payments</span>
                                             </div>
@@ -2335,7 +2786,7 @@ const BookingPage = () => {
                             Motorbikes are only allowed on designated floors (highlighted below). Other floors will be locked.
                         </div>
                     </div>
-                    <button 
+                    <button
                         onClick={() => setShowMotorbikeToast(false)}
                         style={{
                             background: 'transparent',
@@ -2403,7 +2854,7 @@ const BookingPage = () => {
                             View QR Ticket
                         </button>
                     </div>
-                    <button 
+                    <button
                         onClick={() => setShowSuccessToast(false)}
                         style={{
                             background: 'transparent',
