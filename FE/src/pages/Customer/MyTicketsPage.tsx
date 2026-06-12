@@ -1,9 +1,12 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { QRCodeSVG } from 'qrcode.react';
 import Header from '../../components/Header/Header';
+import { createQRToken } from '../../utils/qrToken';
 
 interface Ticket {
     receiptId: string;
+    bookingId?: string;
     spot: {
         _id?: string;
         title: string;
@@ -23,6 +26,8 @@ interface Ticket {
 const MyTicketsPage = () => {
     const navigate = useNavigate();
     const [tickets, setTickets] = useState<Ticket[]>([]);
+    // Map: receiptId → signed QR token string
+    const [qrTokens, setQrTokens] = useState<Record<string, string>>({});
 
     useEffect(() => {
         const loadTickets = () => {
@@ -47,6 +52,26 @@ const MyTicketsPage = () => {
         };
     }, []);
 
+    // Tạo HMAC-signed token cho từng ticket (async vì dùng Web Crypto)
+    useEffect(() => {
+        if (tickets.length === 0) return;
+        const generateTokens = async () => {
+            const entries = await Promise.all(
+                tickets.map(async (t) => {
+                    const token = await createQRToken({
+                        bookingId: t.bookingId ?? t.receiptId,
+                        receiptId: t.receiptId,
+                        licensePlate: t.licensePlate,
+                        slotCode: t.slotCode,
+                    });
+                    return [t.receiptId, token] as [string, string];
+                })
+            );
+            setQrTokens(Object.fromEntries(entries));
+        };
+        generateTokens();
+    }, [tickets]);
+
     const handleRemoveTicket = (receiptId: string) => {
         if (window.confirm("Are you sure you want to clear/complete this ticket?")) {
             const updated = tickets.filter(t => t.receiptId !== receiptId);
@@ -63,6 +88,43 @@ const MyTicketsPage = () => {
             window.dispatchEvent(new Event('bookingUpdated'));
         }
     };
+
+    /**
+     * Download QR code as PNG image.
+     * Finds the <svg> inside the wrapper div by id, serialises it,
+     * draws onto a canvas, then triggers a file download.
+     */
+    const downloadQR = useCallback((receiptId: string, licensePlate: string) => {
+        const svgEl = document.getElementById(`qr-svg-${receiptId}`)?.querySelector('svg');
+        if (!svgEl) return;
+
+        const SIZE = 400; // export at higher resolution
+        const serialiser = new XMLSerializer();
+        const svgStr = serialiser.serializeToString(svgEl);
+        const svgBlob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
+        const url = URL.createObjectURL(svgBlob);
+
+        const img = new Image();
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = SIZE;
+            canvas.height = SIZE;
+            const ctx = canvas.getContext('2d')!;
+
+            // White background
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, SIZE, SIZE);
+            ctx.drawImage(img, 0, 0, SIZE, SIZE);
+
+            URL.revokeObjectURL(url);
+            const pngUrl = canvas.toDataURL('image/png');
+            const a = document.createElement('a');
+            a.href = pngUrl;
+            a.download = `parking-ticket-${licensePlate}-${receiptId}.png`;
+            a.click();
+        };
+        img.src = url;
+    }, []);
 
     const fmtVND = (n: number) => new Intl.NumberFormat('vi-VN').format(Math.round(n)) + ' ₫';
     
@@ -330,6 +392,60 @@ const MyTicketsPage = () => {
                     transform: translateY(-1px);
                     box-shadow: 0 6px 20px rgba(37,99,235,0.4);
                 }
+
+                /* ── QR section ── */
+                .t-qr-label {
+                    font-size: 11px;
+                    font-weight: 700;
+                    color: #64748b;
+                    text-transform: uppercase;
+                    letter-spacing: 0.06em;
+                    margin-bottom: 10px;
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                }
+                .t-qr-expiry {
+                    font-size: 10px;
+                    color: #94a3b8;
+                    font-weight: 600;
+                    margin-top: 8px;
+                    margin-bottom: 16px;
+                }
+
+                @keyframes shimmer {
+                    0% { background-position: -200% 0; }
+                    100% { background-position: 200% 0; }
+                }
+
+                /* ── Download button ── */
+                .t-download-btn {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 6px;
+                    margin-top: 6px;
+                    margin-bottom: 4px;
+                    padding: 7px 16px;
+                    border-radius: 10px;
+                    border: 1.5px solid #e2e8f0;
+                    background: white;
+                    color: #2563eb;
+                    font-size: 12px;
+                    font-weight: 700;
+                    cursor: pointer;
+                    transition: all 0.18s;
+                    letter-spacing: 0.02em;
+                }
+                .t-download-btn:hover {
+                    background: #eff6ff;
+                    border-color: #93c5fd;
+                    transform: translateY(-1px);
+                    box-shadow: 0 4px 12px rgba(37,99,235,0.12);
+                }
+                .t-download-btn:active {
+                    transform: translateY(0);
+                    box-shadow: none;
+                }
             `}</style>
 
             <div className="t-root">
@@ -402,25 +518,46 @@ const MyTicketsPage = () => {
                                     </div>
 
                                     <div className="t-card-bottom">
-                                        <div className="t-qr-container">
-                                            <img
-                                                src={`https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(
-                                                    JSON.stringify({
-                                                        receiptId: ticket.receiptId,
-                                                        licensePlate: ticket.licensePlate,
-                                                        slotCode: ticket.slotCode,
-                                                        facility: ticket.spot.title,
-                                                        floorName: ticket.floorName,
-                                                        entryDate: ticket.entryDate,
-                                                        exitTime: ticket.exitTime,
-                                                        totalAmount: ticket.totalAmount,
-                                                        payMethod: ticket.payMethod
-                                                    })
-                                                )}`}
-                                                alt="Ticket QR Code"
-                                                className="t-qr-img"
-                                            />
+                                        <p className="t-qr-label">🔏 Scan to Enter</p>
+                                        <div className="t-qr-container" id={`qr-svg-${ticket.receiptId}`}>
+                                            {qrTokens[ticket.receiptId] ? (
+                                                <QRCodeSVG
+                                                    value={qrTokens[ticket.receiptId]}
+                                                    size={148}
+                                                    level="M"
+                                                    includeMargin={false}
+                                                    style={{ display: 'block' }}
+                                                />
+                                            ) : (
+                                                <div style={{
+                                                    width: 148, height: 148,
+                                                    background: 'linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%)',
+                                                    backgroundSize: '200% 100%',
+                                                    animation: 'shimmer 1.4s infinite',
+                                                    borderRadius: 8
+                                                }} />
+                                            )}
                                         </div>
+
+                                        {/* Download button — only when token is ready */}
+                                        {qrTokens[ticket.receiptId] && (
+                                            <button
+                                                className="t-download-btn"
+                                                onClick={() => downloadQR(ticket.receiptId, ticket.licensePlate)}
+                                                title="Download QR as PNG"
+                                            >
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                                    <polyline points="7 10 12 15 17 10"/>
+                                                    <line x1="12" y1="15" x2="12" y2="3"/>
+                                                </svg>
+                                                Download QR
+                                            </button>
+                                        )}
+
+                                        <p className="t-qr-expiry">
+                                            ⏱ Valid for 24h &nbsp;·&nbsp; Show to staff at gate
+                                        </p>
                                         <div className="t-receipt-id">ID: {ticket.receiptId}</div>
 
                                         <button 
