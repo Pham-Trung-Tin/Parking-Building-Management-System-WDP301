@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { 
   LogIn, 
@@ -9,7 +9,8 @@ import {
   User, 
   Search,
   CheckCircle2,
-  RefreshCw
+  RefreshCw,
+  VideoOff
 } from 'lucide-react';
 import useProfile from '../../hooks/useProfile';
 
@@ -24,6 +25,32 @@ const StaffExitPage = () => {
   const [isManual, setIsManual] = useState(false);
   const [confidence, setConfidence] = useState<number | null>(null);
   const [notification, setNotification] = useState<{ show: boolean, message: string, type: 'success' | 'info' | 'error' } | null>(null);
+
+  const [isExitCamActive, setIsExitCamActive] = useState(true);
+  const videoRefExit = useRef<HTMLVideoElement>(null);
+  
+  useEffect(() => {
+    let stream: MediaStream | null = null;
+    if (isExitCamActive) {
+      navigator.mediaDevices.getUserMedia({ video: true })
+        .then(s => {
+          stream = s;
+          if (videoRefExit.current) {
+            videoRefExit.current.srcObject = s;
+          }
+        })
+        .catch(err => console.error("Camera access denied:", err));
+    } else {
+      if (videoRefExit.current && videoRefExit.current.srcObject) {
+         const s = videoRefExit.current.srcObject as MediaStream;
+         s.getTracks().forEach(t => t.stop());
+         videoRefExit.current.srcObject = null;
+      }
+    }
+    return () => {
+      if (stream) stream.getTracks().forEach(t => t.stop());
+    };
+  }, [isExitCamActive]);
 
   const showNotification = (message: string, type: 'success' | 'info' | 'error' = 'info') => {
     setNotification({ show: true, message, type });
@@ -323,8 +350,44 @@ const StaffExitPage = () => {
                 </section>
               </div>
 
-              {/* Right Column (Amount Due) */}
-              <div className="w-[380px]">
+              {/* Right Column (Amount Due & Camera) */}
+              <div className="w-[380px] flex flex-col space-y-6">
+                
+                {/* Camera View */}
+                <section>
+                  <div className="flex justify-between items-center mb-3">
+                    <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Live Feed</h3>
+                    <button
+                      onClick={() => setIsExitCamActive(!isExitCamActive)}
+                      className={`text-[10px] px-2 py-1 rounded font-bold uppercase tracking-wider transition-colors ${
+                        isExitCamActive ? 'bg-red-100 text-red-700 hover:bg-red-200' : 'bg-green-100 text-green-700 hover:bg-green-200'
+                      }`}
+                    >
+                      {isExitCamActive ? 'Turn Off Cam' : 'Turn On Cam'}
+                    </button>
+                  </div>
+                  <div className="relative bg-black aspect-video rounded-xl overflow-hidden border border-gray-200 shadow-sm flex items-center justify-center">
+                    {isExitCamActive ? (
+                      <video
+                        ref={videoRefExit}
+                        autoPlay
+                        playsInline
+                        muted
+                        className="w-full h-full object-cover opacity-90 mix-blend-screen"
+                      />
+                    ) : (
+                      <div className="flex flex-col items-center text-gray-500">
+                        <VideoOff className="w-10 h-10 mb-2 opacity-50" />
+                        <span className="text-xs font-bold tracking-widest uppercase">Camera Disabled</span>
+                      </div>
+                    )}
+                    <div className="absolute top-3 left-3 bg-black/80 text-white text-[10px] font-bold px-2 py-1 rounded flex items-center tracking-wider">
+                      <span className={`w-1.5 h-1.5 rounded-full mr-2 ${isExitCamActive ? 'bg-red-500 animate-pulse' : 'bg-gray-500'}`}></span>
+                      LPR-CAM-02
+                    </div>
+                  </div>
+                </section>
+
                 <div className="bg-white border border-gray-200 shadow-sm p-8 flex flex-col space-y-6">
                   <div>
                     <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Amount Due</h3>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import {
   LogIn,
@@ -49,6 +49,36 @@ const StaffPage = () => {
   // ==========================================
   // STATES FOR STANDARD ENTRY (WALK-IN)
   // ==========================================
+  const [isStandardCamActive, setIsStandardCamActive] = useState(true);
+  const videoRefStandard = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    let stream: MediaStream | null = null;
+    if (entryMode === 'standard' && isStandardCamActive) {
+      navigator.mediaDevices.getUserMedia({ video: true })
+        .then(s => {
+          stream = s;
+          if (videoRefStandard.current) {
+            videoRefStandard.current.srcObject = s;
+          }
+        })
+        .catch(err => {
+          console.error("Camera access denied:", err);
+        });
+    } else {
+      if (videoRefStandard.current && videoRefStandard.current.srcObject) {
+         const s = videoRefStandard.current.srcObject as MediaStream;
+         s.getTracks().forEach(t => t.stop());
+         videoRefStandard.current.srcObject = null;
+      }
+    }
+    return () => {
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [entryMode, isStandardCamActive]);
+
   const [selectedVehicle, setSelectedVehicle] = useState('car');
   const [plate, setPlate] = useState('ABC-1234');
   const [confidence, setConfidence] = useState<number | null>(98);
@@ -469,14 +499,34 @@ const StaffPage = () => {
 
                 {/* Camera View Placeholder */}
                 <section>
-                  <div className="relative bg-gray-200 aspect-video rounded-xl overflow-hidden border border-gray-200 shadow-sm">
-                    <img
-                      src="https://images.unsplash.com/photo-1621570273836-5b4d70908865?auto=format&fit=crop&q=80&w=600"
-                      alt="Camera Feed"
-                      className="w-full h-full object-cover grayscale opacity-80 mix-blend-multiply"
-                    />
+                  <div className="flex justify-between items-center mb-3">
+                    <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Live Feed</h3>
+                    <button
+                      onClick={() => setIsStandardCamActive(!isStandardCamActive)}
+                      className={`text-[10px] px-2 py-1 rounded font-bold uppercase tracking-wider transition-colors ${
+                        isStandardCamActive ? 'bg-red-100 text-red-700 hover:bg-red-200' : 'bg-green-100 text-green-700 hover:bg-green-200'
+                      }`}
+                    >
+                      {isStandardCamActive ? 'Turn Off Cam' : 'Turn On Cam'}
+                    </button>
+                  </div>
+                  <div className="relative bg-black aspect-video rounded-xl overflow-hidden border border-gray-200 shadow-sm flex items-center justify-center">
+                    {isStandardCamActive ? (
+                      <video
+                        ref={videoRefStandard}
+                        autoPlay
+                        playsInline
+                        muted
+                        className="w-full h-full object-cover opacity-90 mix-blend-screen"
+                      />
+                    ) : (
+                      <div className="flex flex-col items-center text-gray-500">
+                        <VideoOff className="w-10 h-10 mb-2 opacity-50" />
+                        <span className="text-xs font-bold tracking-widest uppercase">Camera Disabled</span>
+                      </div>
+                    )}
                     <div className="absolute top-3 left-3 bg-black/80 text-white text-[10px] font-bold px-2 py-1 rounded flex items-center tracking-wider">
-                      <span className="w-1.5 h-1.5 rounded-full bg-red-500 mr-2 animate-pulse"></span>
+                      <span className={`w-1.5 h-1.5 rounded-full mr-2 ${isStandardCamActive ? 'bg-red-500 animate-pulse' : 'bg-gray-500'}`}></span>
                       LPR-CAM-01
                     </div>
                   </div>
