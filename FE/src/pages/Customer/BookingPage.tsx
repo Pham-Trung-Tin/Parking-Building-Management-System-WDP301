@@ -1895,8 +1895,6 @@ const BookingPage = () => {
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                                                         <span style={{ fontSize: 16 }}>📅</span>
                                                         <span>{fmtCalBtnDate(fromDt)}</span>
-                                                        <span style={{ color: '#94a3b8', fontWeight: 500 }}>➔</span>
-                                                        <span>{fmtCalBtnDate(toDt)}</span>
                                                     </div>
                                                     <span style={{ color: '#94a3b8', fontSize: 10 }}>▼</span>
                                                 </button>                                            </div>
