@@ -641,7 +641,9 @@ const StaffPage = () => {
                       <Scanner
                         onScan={handleScanQR}
                         onError={handleErrorQR}
-
+                        formats={['qr_code']}
+                        allowMultiple={true}
+                        scanDelay={2000}
                         styles={{ container: { width: '100%', height: '100%' }, video: { objectFit: 'cover' } }}
                         paused={isProcessingQR}
                       />
