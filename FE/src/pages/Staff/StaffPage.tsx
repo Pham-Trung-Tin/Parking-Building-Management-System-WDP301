@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import {
   LogIn,
@@ -29,6 +29,7 @@ import {
 import { Scanner } from '@yudiel/react-qr-scanner';
 import useProfile from '../../hooks/useProfile';
 import { verifyQRToken } from '../../utils/qrToken';
+import lprService from '../../services/api/lprService';
 
 // Interface for mock booking data
 interface BookingData {
@@ -51,6 +52,9 @@ const StaffPage = () => {
   // ==========================================
   const [isStandardCamActive, setIsStandardCamActive] = useState(true);
   const videoRefStandard = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [lprEngine, setLprEngine] = useState<string | null>(null);
+  const [lprProcessingTime, setLprProcessingTime] = useState<number | null>(null);
 
   useEffect(() => {
     let stream: MediaStream | null = null;
@@ -114,19 +118,73 @@ const StaffPage = () => {
   // ==========================================
   // LOGIC FOR STANDARD ENTRY
   // ==========================================
-  const handleRescanStandard = () => {
+  /**
+   * Capture current video frame and send to AI LPR backend for OCR
+   */
+  const handleRescanStandard = useCallback(async () => {
+    const video = videoRefStandard.current;
+    const canvas = canvasRef.current;
+
+    if (!video || !canvas || !isStandardCamActive) {
+      showNotification('Camera is not active. Please turn on camera first.', 'error');
+      return;
+    }
+
+    // Ensure video is playing and has dimensions
+    if (video.readyState < 2 || video.videoWidth === 0) {
+      showNotification('Camera not ready yet. Please wait...', 'error');
+      return;
+    }
+
     setIsScanningStandard(true);
     setPlate('');
     setConfidence(null);
-    setTimeout(() => {
-      const randomPlates = ['XYZ-9876', 'LMN-4567', 'DEF-1122', 'GHI-5542'];
-      setPlate(randomPlates[Math.floor(Math.random() * randomPlates.length)]);
-      setConfidence(Math.floor(Math.random() * 15) + 85);
+    setLprEngine(null);
+    setLprProcessingTime(null);
+
+    try {
+      // Draw current video frame to canvas
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('Canvas context failed');
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      // Convert canvas to base64
+      const imageBase64 = canvas.toDataURL('image/jpeg', 0.85);
+
+      // Send to backend AI LPR
+      const response = await lprService.recognizeFromBase64(imageBase64);
+      const data = response.data;
+
+      if (data && data.licensePlate && data.licensePlate !== 'UNRECOGNIZED') {
+        setPlate(data.licensePlate);
+        setConfidence(data.confidence);
+        setLprEngine(data.engine);
+        setLprProcessingTime(data.processingTimeMs);
+        setIsManualStandard(false);
+        showNotification(
+          `AI recognized: ${data.licensePlate} (${data.confidence}% confidence, ${data.processingTimeMs}ms)`,
+          'success'
+        );
+      } else {
+        setPlate('');
+        setConfidence(0);
+        showNotification(
+          'Could not recognize plate. Try repositioning the vehicle or use Manual Override.',
+          'error'
+        );
+      }
+    } catch (err: any) {
+      console.error('LPR Error:', err);
+      showNotification(
+        err?.message || 'AI recognition failed. Please enter plate manually.',
+        'error'
+      );
+    } finally {
       setIsScanningStandard(false);
-      setIsManualStandard(false);
-      showNotification('Plate scanned successfully', 'success');
-    }, 1500);
-  };
+    }
+  }, [isStandardCamActive]);
 
   const handleCreateSessionStandard = () => {
     if (!plate || isScanningStandard) {
@@ -411,7 +469,8 @@ const StaffPage = () => {
                     {isScanningStandard ? (
                       <div className="flex flex-col items-center text-gray-400">
                         <RefreshCw className="w-10 h-10 mb-4 animate-spin text-gray-300" />
-                        <span className="text-xl font-bold tracking-widest uppercase animate-pulse">Scanning...</span>
+                        <span className="text-xl font-bold tracking-widest uppercase animate-pulse">AI Analyzing...</span>
+                        <span className="text-xs text-gray-400 mt-2">Processing camera frame with OCR engine</span>
                       </div>
                     ) : (
                       <input
@@ -424,17 +483,33 @@ const StaffPage = () => {
                       />
                     )}
                   </div>
-                  <div className="flex justify-between items-center mt-3 h-6">
-                    <span className="text-sm text-gray-500">
-                      {isScanningStandard ? 'Processing image feed...' : confidence ? `Confidence: ${confidence}%` : 'Waiting for vehicle...'}
+                  <div className="flex justify-between items-center mt-3 min-h-[24px]">
+                    <span className="text-sm text-gray-500 flex items-center gap-2">
+                      {isScanningStandard ? (
+                        'AI processing image feed...'
+                      ) : confidence ? (
+                        <>
+                          Confidence: <span className={`font-bold ${confidence >= 80 ? 'text-green-600' : confidence >= 50 ? 'text-yellow-600' : 'text-red-500'}`}>{confidence}%</span>
+                          {lprEngine && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 font-bold uppercase">
+                              {lprEngine === 'plate_recognizer' ? 'PR API' : 'Tesseract'}
+                            </span>
+                          )}
+                          {lprProcessingTime && (
+                            <span className="text-[10px] text-gray-400">{lprProcessingTime}ms</span>
+                          )}
+                        </>
+                      ) : (
+                        'Waiting for vehicle...'
+                      )}
                     </span>
                     <button
                       onClick={handleRescanStandard}
                       disabled={isScanningStandard}
                       className="flex items-center text-sm font-bold text-gray-700 hover:text-gray-900 transition-colors disabled:opacity-50"
                     >
-                      <RefreshCw className={`w-4 h-4 mr-2 ${isScanningStandard ? 'animate-spin' : ''}`} />
-                      RE-SCAN
+                      <Camera className={`w-4 h-4 mr-2 ${isScanningStandard ? 'animate-pulse' : ''}`} />
+                      {isScanningStandard ? 'SCANNING...' : 'AI SCAN'}
                     </button>
                   </div>
                 </section>
@@ -527,9 +602,11 @@ const StaffPage = () => {
                     )}
                     <div className="absolute top-3 left-3 bg-black/80 text-white text-[10px] font-bold px-2 py-1 rounded flex items-center tracking-wider">
                       <span className={`w-1.5 h-1.5 rounded-full mr-2 ${isStandardCamActive ? 'bg-red-500 animate-pulse' : 'bg-gray-500'}`}></span>
-                      LPR-CAM-01
+                      LPR-CAM-01 {lprEngine && <span className="ml-1.5 text-green-400">• AI Ready</span>}
                     </div>
                   </div>
+                  {/* Hidden canvas for capturing camera frame */}
+                  <canvas ref={canvasRef} className="hidden" />
                 </section>
 
                 {/* Parking Status Allocation */}
