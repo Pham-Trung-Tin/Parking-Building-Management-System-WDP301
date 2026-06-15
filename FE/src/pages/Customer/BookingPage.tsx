@@ -5,6 +5,8 @@ import floorService, { Floor } from '../../services/api/floorService';
 import zoneService, { Zone } from '../../services/api/zoneService';
 import parkingSlotService, { ParkingSlot } from '../../services/api/parkingSlotService';
 import vehicleTypeService, { VehicleType } from '../../services/api/vehicleTypeService';
+import { vehicleService } from '../../services/api';
+import type { Vehicle } from '../../services/api/vehicleService';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const getZoneId = (z: ParkingSlot['zone']): string =>
@@ -53,8 +55,8 @@ const getCalendarDays = (year: number, month: number) => {
 
 const isSameDay = (d1: Date, d2: Date) => {
     return d1.getFullYear() === d2.getFullYear() &&
-           d1.getMonth() === d2.getMonth() &&
-           d1.getDate() === d2.getDate();
+        d1.getMonth() === d2.getMonth() &&
+        d1.getDate() === d2.getDate();
 };
 
 const isBeforeDay = (d1: Date, d2: Date) => {
@@ -419,6 +421,8 @@ const BookingPage = () => {
     // ── Step 1: License Plate ──
     const [licensePlate, setLicensePlate] = useState('');
     const [plateError, setPlateError] = useState('');
+    const [savedVehicles, setSavedVehicles] = useState<Vehicle[]>([]);
+    const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
 
     // ── Step 2: Vehicle Type ──
     const [vehicleType, setVehicleType] = useState<VehicleType | null>(null);
@@ -445,7 +449,7 @@ const BookingPage = () => {
         const fromDate = new Date(entryDate.slice(0, 10));
         const toDate = new Date(entryDate);
         toDate.setHours(toDate.getHours() + duration);
-        
+
         setTempFromDate(fromDate);
         setTempToDate(toDate);
         setCalMonth(fromDate.getMonth());
@@ -616,6 +620,14 @@ const BookingPage = () => {
                 { _id: 'motorcycle', name: 'Motorcycle', code: 'MOTORBIKE', size: 'small', isActive: true, pricing: { hourlyRate: 5000, dailyRate: 40000 } },
             ]))
             .finally(() => setVehicleTypesLoading(false));
+
+        // Fetch saved vehicles
+        vehicleService.getMyVehicles(1, 50)
+            .then((res: any) => {
+                const list = Array.isArray(res?.data) ? res.data : (res?.data?.docs || res?.docs || (Array.isArray(res) ? res : []));
+                setSavedVehicles(list);
+            })
+            .catch(() => { /* not logged in or no vehicles */ });
     }, []);
 
     useEffect(() => {
@@ -1735,6 +1747,78 @@ const BookingPage = () => {
                                         </div>
                                     )}
 
+                                    {/* ── Saved Vehicles Quick Select ── */}
+                                    {(() => {
+                                        const matching = savedVehicles.filter(v => {
+                                            const vtId = typeof v.vehicleType === 'object' ? v.vehicleType._id : v.vehicleType;
+                                            return vtId === vehicleType?._id;
+                                        });
+                                        if (matching.length === 0) return null;
+                                        return (
+                                            <div style={{ marginBottom: 16, width: '100%', maxWidth: 420, marginLeft: 'auto', marginRight: 'auto' }}>
+                                                <div style={{ fontSize: 12, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, textAlign: 'left' }}>
+                                                    My Vehicles
+                                                </div>
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                                    {matching.map(v => {
+                                                        const isSelected = selectedVehicleId === v._id;
+                                                        return (
+                                                            <button
+                                                                key={v._id}
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setLicensePlate(v.licensePlate);
+                                                                    setSelectedVehicleId(v._id);
+                                                                    setPlateError('');
+                                                                }}
+                                                                style={{
+                                                                    display: 'flex', alignItems: 'center', gap: 12,
+                                                                    padding: '12px 16px',
+                                                                    borderRadius: 14,
+                                                                    border: isSelected ? '2px solid #2563eb' : '1.5px solid #e2e8f0',
+                                                                    background: isSelected ? '#eff6ff' : '#ffffff',
+                                                                    cursor: 'pointer',
+                                                                    transition: 'all 0.15s',
+                                                                    textAlign: 'left',
+                                                                    width: '100%',
+                                                                    boxShadow: isSelected ? '0 2px 8px rgba(37,99,235,0.15)' : '0 1px 3px rgba(0,0,0,0.04)',
+                                                                }}
+                                                            >
+                                                                <div style={{
+                                                                    width: 42, height: 42, borderRadius: 10,
+                                                                    background: isSelected ? '#dbeafe' : '#f8fafc',
+                                                                    border: `1px solid ${isSelected ? '#93c5fd' : '#e2e8f0'}`,
+                                                                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                                                                }}>
+                                                                    <VehicleSvgIcon code={vehicleType?.code ?? 'CAR'} size={26} />
+                                                                </div>
+                                                                <div style={{ flex: 1, minWidth: 0 }}>
+                                                                    <div style={{ fontWeight: 800, fontSize: 14, color: '#1e293b', letterSpacing: 0.5 }}>
+                                                                        {v.licensePlate}
+                                                                    </div>
+                                                                    <div style={{ fontSize: 12, color: '#64748b', fontWeight: 500 }}>
+                                                                        {[v.vehicleBrand, v.vehicleModel].filter(Boolean).join(' ') || 'No details'}
+                                                                        {v.vehicleColor ? ` · ${v.vehicleColor}` : ''}
+                                                                        {v.nickname ? ` — "${v.nickname}"` : ''}
+                                                                    </div>
+                                                                </div>
+                                                                {isSelected && (
+                                                                    <div style={{ color: '#2563eb', fontWeight: 800, fontSize: 16 }}>✓</div>
+                                                                )}
+                                                                {v.isDefault && !isSelected && (
+                                                                    <div style={{ fontSize: 10, fontWeight: 700, color: '#2563eb', background: '#dbeafe', padding: '2px 8px', borderRadius: 6 }}>Default</div>
+                                                                )}
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                                <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 8, textAlign: 'center', fontWeight: 500 }}>
+                                                    Select a saved vehicle or enter a new plate below
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
+
                                     <div className="lp-input-wrap">
                                         <input
                                             id="license-plate-input"
@@ -1742,6 +1826,7 @@ const BookingPage = () => {
                                             value={licensePlate}
                                             onChange={e => {
                                                 setLicensePlate(formatPlate(e.target.value));
+                                                setSelectedVehicleId(null);
                                                 setPlateError('');
                                             }}
                                             onKeyDown={e => { if (e.key === 'Enter' && canProceed(2)) handleNext(); }}
@@ -1870,7 +1955,7 @@ const BookingPage = () => {
                                         return (
                                             <div style={{ position: 'relative', marginBottom: 28 }}>
                                                 <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>📆 Booking Date</div>
-                                                <button 
+                                                <button
                                                     onClick={() => {
                                                         if (showCalendar) setShowCalendar(false);
                                                         else openCalendar('from');
@@ -1936,7 +2021,7 @@ const BookingPage = () => {
                                                     className="time-drum-input"
                                                     min={0}
                                                     max={23}
-                                                    value={String(selHour).padStart(2,'0')}
+                                                    value={String(selHour).padStart(2, '0')}
                                                     onChange={e => {
                                                         if (e.target.value === '') {
                                                             setSlot(0, selMin);
@@ -1994,7 +2079,7 @@ const BookingPage = () => {
                                                             className="time-drum-input"
                                                             min={0}
                                                             max={59}
-                                                            value={String(selMin).padStart(2,'0')}
+                                                            value={String(selMin).padStart(2, '0')}
                                                             onChange={e => {
                                                                 if (e.target.value === '') {
                                                                     setSlot(selHour, 0);
@@ -2815,7 +2900,7 @@ const BookingPage = () => {
                             </div>
 
                             <div className="cal-popover-header">
-                                <select 
+                                <select
                                     className="cal-select"
                                     value={calMonth}
                                     onChange={e => setCalMonth(parseInt(e.target.value))}
@@ -2827,7 +2912,7 @@ const BookingPage = () => {
                                         );
                                     })}
                                 </select>
-                                <select 
+                                <select
                                     className="cal-select"
                                     value={calYear}
                                     onChange={e => {
@@ -2863,15 +2948,15 @@ const BookingPage = () => {
                                     else if (isSelected) cellClass += ' range-start-end-same';
 
                                     return (
-                                        <div 
-                                            key={idx} 
+                                        <div
+                                            key={idx}
                                             className={cellClass}
                                             onClick={() => {
                                                 if (isPast) return;
                                                 const selHour = parseInt(entryDate.slice(11, 13)) || 0;
                                                 const selMin = parseInt(entryDate.slice(14, 16)) || 0;
-                                                const dateStr = `${cellDate.getFullYear()}-${String(cellDate.getMonth() + 1).padStart(2,'0')}-${String(cellDate.getDate()).padStart(2,'0')}`;
-                                                setEntryDate(`${dateStr}T${String(selHour).padStart(2,'0')}:${String(selMin).padStart(2,'0')}`);
+                                                const dateStr = `${cellDate.getFullYear()}-${String(cellDate.getMonth() + 1).padStart(2, '0')}-${String(cellDate.getDate()).padStart(2, '0')}`;
+                                                setEntryDate(`${dateStr}T${String(selHour).padStart(2, '0')}:${String(selMin).padStart(2, '0')}`);
 
                                                 setTempFromDate(cellDate);
                                                 setTempToDate(cellDate);
