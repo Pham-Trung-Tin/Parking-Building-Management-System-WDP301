@@ -7,6 +7,9 @@ import parkingSlotService, { ParkingSlot } from '../../services/api/parkingSlotS
 import vehicleTypeService, { VehicleType } from '../../services/api/vehicleTypeService';
 import { vehicleService } from '../../services/api';
 import type { Vehicle } from '../../services/api/vehicleService';
+import bookingService from '../../services/api/bookingService';
+import paymentService from '../../services/api/paymentService';
+import parkingLotService from '../../services/api/parkingLotService';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const getZoneId = (z: ParkingSlot['zone']): string =>
@@ -112,6 +115,11 @@ const CashIcon = ({ size = 24 }: { size?: number }) => (
     <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <rect x="1" y="4" width="22" height="16" rx="2" />
         <circle cx="12" cy="12" r="3" /><path d="M5 12h.01M19 12h.01" />
+    </svg>
+);
+const QrCodeIcon = ({ size = 24 }: { size?: number }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect width="5" height="5" x="3" y="3" rx="1"/><rect width="5" height="5" x="16" y="3" rx="1"/><rect width="5" height="5" x="3" y="16" rx="1"/><path d="M21 16h-3a2 2 0 0 0-2 2v3"/><path d="M21 21v.01"/><path d="M12 7v3a2 2 0 0 1-2 2H7"/><path d="M3 12h.01"/><path d="M12 3h.01"/><path d="M12 16v.01"/><path d="M16 12h1"/><path d="M21 12v.01"/><path d="M12 21v-1"/>
     </svg>
 );
 const LockIcon = () => (
@@ -413,7 +421,20 @@ const SlotMapGrid = ({ slots, selectedSlot, onSelect, vehicleType }: {
 const BookingPage = () => {
     const navigate = useNavigate();
     const location = useLocation();
-    const parkingSpot = location.state?.spot || { title: 'Bitexco Financial Tower Parking', price: 50000 };
+    const [parkingSpot, setParkingSpot] = useState<any>(location.state?.spot || { title: 'Bitexco Financial Tower Parking', price: 50000 });
+
+    useEffect(() => {
+        if (!parkingSpot._id) {
+            parkingLotService.getParkingLots({ status: 'active', limit: 1 })
+                .then((res: any) => {
+                    const lots = res.data?.data || res.data || res;
+                    if (Array.isArray(lots) && lots.length > 0) {
+                        setParkingSpot({ ...lots[0], title: lots[0].name, price: lots[0].settings?.pricePerHour || 50000 });
+                    }
+                })
+                .catch(console.error);
+        }
+    }, []);
 
     // ── Step state ──
     const [currentStep, setCurrentStep] = useState(1);
@@ -494,18 +515,16 @@ const BookingPage = () => {
     }, [currentStep]);
 
     // ── Integrated Checkout States ──
-    const [checkoutPhase, setCheckoutPhase] = useState<'review' | 'payment'>('review');
-    const [payMethod, setPayMethod] = useState<'card' | 'momo' | 'zalopay' | 'cash'>('card');
-    const [cardNumber, setCardNumber] = useState('');
-    const [cardName, setCardName] = useState('');
-    const [expiry, setExpiry] = useState('');
-    const [cvv, setCvv] = useState('');
-    const [saveCard, setSaveCard] = useState(false);
+    const [checkoutPhase, setCheckoutPhase] = useState<'review' | 'payment' | 'qr'>('review');
+    const [payMethod, setPayMethod] = useState<'bank_transfer' | 'momo' | 'cash'>('bank_transfer');
     const [checkoutProcessing, setCheckoutProcessing] = useState(false);
     const [checkoutErrors, setCheckoutErrors] = useState<Record<string, string>>({});
 
     const [showSuccessToast, setShowSuccessToast] = useState(false);
     const [successBooking, setSuccessBooking] = useState<any>(null);
+    const [mockTransferContent, setMockTransferContent] = useState('');
+    const [bankInfo, setBankInfo] = useState<any>(null);
+    const [polling, setPolling] = useState(false);
 
     useEffect(() => {
         if (showSuccessToast) {
@@ -519,82 +538,135 @@ const BookingPage = () => {
     useEffect(() => {
         if (!showConfirmModal) {
             setCheckoutPhase('review');
-            setCardNumber('');
-            setCardName('');
-            setExpiry('');
-            setCvv('');
             setCheckoutErrors({});
             setCheckoutProcessing(false);
+            setPolling(false);
+            setBankInfo(null);
         }
     }, [showConfirmModal]);
 
-    const validateCard = () => {
-        const e: Record<string, string> = {};
-        if (payMethod === 'card') {
-            if (cardNumber.replace(/\s/g, '').length < 16) e.cardNumber = 'Enter a valid 16-digit card number';
-            if (!cardName.trim()) e.cardName = 'Cardholder name is required';
-            if (expiry.length < 5) e.expiry = 'Enter valid expiry MM/YY';
-            if (cvv.length < 3) e.cvv = 'Enter valid CVV';
+    // ── Compatibility for TicketsPage & Header ──
+    const saveToMyTickets = (backendData: any) => {
+        const hourlyRate = vehicleType?.pricing?.hourlyRate || (parkingSpot.settings?.pricePerHour ?? parkingSpot.price ?? 20000);
+        const estimatedPrice = hourlyRate * duration;
+        const grandTotal = Math.round(estimatedPrice);
+        const rawExit = exitTime;
+
+        const bookingDetails = {
+            receiptId: `REC-${Math.floor(100000 + Math.random() * 900000)}`,
+            bookingId: backendData._id || backendData.data?._id,
+            spot: parkingSpot,
+            vehicleType: vehicleType?.code || 'CAR',
+            floorName: selectedFloor?.name || `Floor ${selectedFloor?.floorNumber ?? 1}`,
+            slotCode: selectedSlot?.slotCode ?? '',
+            licensePlate: formatPlate(licensePlate),
+            entryDate: new Date(entryDate).toISOString(),
+            exitTime: rawExit.toISOString(),
+            elapsed: duration * 3600,
+            totalAmount: grandTotal,
+            payMethod,
+        };
+
+        const existingRaw = localStorage.getItem('myTickets');
+        let ticketsList = [];
+        if (existingRaw) {
+            try { ticketsList = JSON.parse(existingRaw); } catch (e) { ticketsList = []; }
         }
-        return e;
+        const updatedTicketsList = [bookingDetails, ...ticketsList];
+        localStorage.setItem('myTickets', JSON.stringify(updatedTicketsList));
+        localStorage.setItem('activeBooking', JSON.stringify(bookingDetails));
+
+        window.dispatchEvent(new Event('bookingUpdated'));
     };
 
-    const handleConfirmPayment = () => {
-        const e = validateCard();
-        if (Object.keys(e).length) { setCheckoutErrors(e); return; }
+    useEffect(() => {
+        let interval: ReturnType<typeof setInterval>;
+        if (polling && bankInfo?.payment?._id) {
+            interval = setInterval(async () => {
+                try {
+                    const res = await paymentService.checkBankTransferStatus(bankInfo.payment._id);
+                    const statusInfo = (res as any).data || res;
+                    if (statusInfo.isPaid) {
+                        setPolling(false);
+                        clearInterval(interval);
+                        
+                        saveToMyTickets(successBooking);
+                        setShowSuccessToast(true);
+                        setCheckoutProcessing(false);
+                        setShowConfirmModal(false);
+
+                        // Reset states
+                        setLicensePlate('');
+                        setSelectedFloor(null);
+                        setSelectedZone(null);
+                        setSelectedSlot(null);
+                        setCurrentStep(1);
+                    }
+                } catch (err) {
+                    console.error('Polling error:', err);
+                }
+            }, 3000);
+        }
+        return () => clearInterval(interval);
+    }, [polling, bankInfo, successBooking]);
+
+    const handleConfirmPayment = async () => {
         setCheckoutErrors({});
         setCheckoutProcessing(true);
 
-        const slotCode = selectedSlot?.slotCode ?? '';
         const rawExit = exitTime;
 
-        setTimeout(() => {
-            const bookingDetails = {
-                receiptId: `REC-${Math.floor(100000 + Math.random() * 900000)}`,
-                spot: parkingSpot,
-                vehicleType: vehicleType?.code || 'CAR',
-                floorName: selectedFloor?.name || `Floor ${selectedFloor?.floorNumber ?? 1}`,
-                slotCode,
-                licensePlate: formatPlate(licensePlate),
-                entryDate: new Date(entryDate).toISOString(),
-                exitTime: rawExit.toISOString(),
-                elapsed: duration * 3600,
-                totalAmount: estimatedPrice,
-                payMethod,
+        try {
+            // 1. Call API to create booking
+            const bookingData = {
+                parkingLot: parkingSpot._id,
+                vehicleType: vehicleType?._id,
+                scheduledDate: new Date(entryDate).toISOString(),
+                startTime: `${String(new Date(entryDate).getHours()).padStart(2, '0')}:${String(new Date(entryDate).getMinutes()).padStart(2, '0')}`,
+                endTime: `${String(rawExit.getHours()).padStart(2, '0')}:${String(rawExit.getMinutes()).padStart(2, '0')}`,
+                vehicleInfo: {
+                    licensePlate: formatPlate(licensePlate),
+                },
+                floorId: selectedFloor?._id,
+                zoneId: selectedZone?._id,
+                assignedSlot: selectedSlot?._id,
             };
 
-            // Save to localStorage
-            const existingRaw = localStorage.getItem('myTickets');
-            let ticketsList = [];
-            if (existingRaw) {
-                try {
-                    ticketsList = JSON.parse(existingRaw);
-                } catch (e) {
-                    ticketsList = [];
-                }
+            const bookingRes = await bookingService.create(bookingData);
+            const bookingId = bookingRes.data?._id || bookingRes._id;
+            setSuccessBooking(bookingRes.data || bookingRes); // Save for success toast
+
+            if (payMethod === 'bank_transfer') {
+                // 2. Initiate Bank Transfer
+                const paymentRes = await paymentService.initiateBookingBankTransfer(bookingId);
+                const paymentInfo = (paymentRes as any).data || paymentRes;
+
+                setBankInfo(paymentInfo);
+                setMockTransferContent(paymentInfo.transferContent);
+                setCheckoutPhase('qr'); // Switch to qr phase to show QR
+                setPolling(true);
+                setCheckoutProcessing(false);
+            } else {
+                // Cash/Momo (Mock for now): directly show success
+                saveToMyTickets(bookingRes.data || bookingRes);
+                setShowSuccessToast(true);
+                setCheckoutProcessing(false);
+                setShowConfirmModal(false);
+                // Reset states
+                setLicensePlate('');
+                setSelectedFloor(null);
+                setSelectedZone(null);
+                setSelectedSlot(null);
+                setCurrentStep(1);
             }
-            const updatedTicketsList = [bookingDetails, ...ticketsList];
-            localStorage.setItem('myTickets', JSON.stringify(updatedTicketsList));
-            localStorage.setItem('activeBooking', JSON.stringify(bookingDetails));
-
-            // Notify header
-            window.dispatchEvent(new Event('bookingUpdated'));
-
-            // Show Toast & Save Booking Details
-            setSuccessBooking(bookingDetails);
-            setShowSuccessToast(true);
-
-            // Clean up and close modal
+        } catch (error: any) {
+            let formMsg = error.response?.data?.message || 'Failed to create booking';
+            if (error.response?.data?.errors && Array.isArray(error.response.data.errors)) {
+                formMsg = error.response.data.errors.map((e: any) => `${e.field}: ${e.message}`).join(' | ');
+            }
+            setCheckoutErrors({ form: formMsg });
             setCheckoutProcessing(false);
-            setShowConfirmModal(false);
-
-            // Reset states
-            setLicensePlate('');
-            setSelectedFloor(null);
-            setSelectedZone(null);
-            setSelectedSlot(null);
-            setCurrentStep(1);
-        }, 1800);
+        }
     };
 
     // ─── isFloorAllowed helper ──────────────────────────────────────────────
@@ -2481,18 +2553,16 @@ const BookingPage = () => {
 
             {/* ── Confirm Modal ── */}
             {showConfirmModal && (() => {
-                const serviceFee = Math.round(estimatedPrice * 0.05);
-                const grandTotal = Math.round(estimatedPrice) + serviceFee;
+                const grandTotal = Math.round(estimatedPrice);
                 const payMethods = [
-                    { id: 'card', label: 'Credit / Debit Card', icon: <CreditCardIcon size={22} />, color: '#2563eb' },
+                    { id: 'bank_transfer', label: 'Bank Transfer (VietQR)', icon: <QrCodeIcon size={22} />, color: '#2563eb' },
                     { id: 'momo', label: 'MoMo Wallet', icon: <MomoIcon />, color: '#ae2070' },
-                    { id: 'zalopay', label: 'ZaloPay', icon: <ZaloPayIcon />, color: '#0068ff' },
                     { id: 'cash', label: 'Pay at Counter', icon: <CashIcon size={22} />, color: '#10b981' },
                 ];
                 return (
                     <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget && !checkoutProcessing) setShowConfirmModal(false); }}>
                         <div className="modal-box">
-                            {checkoutPhase === 'review' ? (
+                            {checkoutPhase === 'review' && (
                                 <>
                                     <div className="modal-title">🎉 Confirm Your Booking</div>
                                     <div className="modal-sub">Please review all details before confirming.</div>
@@ -2563,7 +2633,8 @@ const BookingPage = () => {
                                         </button>
                                     </div>
                                 </>
-                            ) : (
+                            )}
+                            {checkoutPhase === 'payment' && (
                                 <>
                                     <div className="modal-title">💳 Secure Checkout</div>
                                     <div className="modal-sub">Select payment method and complete your reservation.</div>
@@ -2580,9 +2651,8 @@ const BookingPage = () => {
                                                 <div className="pay-method-info">
                                                     <div className="pay-method-name">{m.label}</div>
                                                     <div className="pay-method-sub">
-                                                        {m.id === 'card' && 'Visa, Mastercard, JCB, Amex'}
+                                                        {m.id === 'bank_transfer' && 'Scan VietQR code to pay via Banking App'}
                                                         {m.id === 'momo' && 'Instant payment via MoMo app'}
-                                                        {m.id === 'zalopay' && 'Instant payment via ZaloPay app'}
                                                         {m.id === 'cash' && 'Pay at parking booth before exit'}
                                                     </div>
                                                 </div>
@@ -2593,91 +2663,8 @@ const BookingPage = () => {
                                         ))}
                                     </div>
 
-                                    {/* Card form */}
-                                    {payMethod === 'card' && (
-                                        <div className="card-form">
-                                            {/* Visual card */}
-                                            <div className="card-visual">
-                                                <div className="card-chip"></div>
-                                                <div className="card-number-display">
-                                                    {cardNumber || '•••• •••• •••• ••••'}
-                                                </div>
-                                                <div className="card-bottom">
-                                                    <div>
-                                                        <div className="card-holder">Card Holder</div>
-                                                        <div className="card-holder-name">{cardName || 'YOUR NAME'}</div>
-                                                    </div>
-                                                    <div style={{ textAlign: 'right' }}>
-                                                        <div className="card-exp-label">EXPIRES</div>
-                                                        <div className="card-exp-value">{expiry || 'MM/YY'}</div>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            <div className="form-field">
-                                                <label className="form-label">Card Number</label>
-                                                <input
-                                                    id="card-number"
-                                                    className={`form-input ${checkoutErrors.cardNumber ? 'error' : ''}`}
-                                                    placeholder="1234 5678 9012 3456"
-                                                    value={cardNumber}
-                                                    onChange={e => setCardNumber(formatCard(e.target.value))}
-                                                    maxLength={19}
-                                                />
-                                                {checkoutErrors.cardNumber && <span className="form-error">{checkoutErrors.cardNumber}</span>}
-                                            </div>
-
-                                            <div className="form-field">
-                                                <label className="form-label">Cardholder Name</label>
-                                                <input
-                                                    id="card-name"
-                                                    className={`form-input ${checkoutErrors.cardName ? 'error' : ''}`}
-                                                    placeholder="NGUYEN VAN A"
-                                                    value={cardName}
-                                                    onChange={e => setCardName(e.target.value.toUpperCase())}
-                                                />
-                                                {checkoutErrors.cardName && <span className="form-error">{checkoutErrors.cardName}</span>}
-                                            </div>
-
-                                            <div className="form-row">
-                                                <div className="form-field">
-                                                    <label className="form-label">Expiry Date</label>
-                                                    <input
-                                                        id="card-expiry"
-                                                        className={`form-input ${checkoutErrors.expiry ? 'error' : ''}`}
-                                                        placeholder="MM/YY"
-                                                        value={expiry}
-                                                        onChange={e => setExpiry(formatExpiry(e.target.value))}
-                                                        maxLength={5}
-                                                    />
-                                                    {checkoutErrors.expiry && <span className="form-error">{checkoutErrors.expiry}</span>}
-                                                </div>
-                                                <div className="form-field">
-                                                    <label className="form-label">CVV</label>
-                                                    <input
-                                                        id="card-cvv"
-                                                        className={`form-input ${checkoutErrors.cvv ? 'error' : ''}`}
-                                                        placeholder="•••"
-                                                        value={cvv}
-                                                        type="password"
-                                                        onChange={e => setCvv(formatCVV(e.target.value))}
-                                                        maxLength={3}
-                                                    />
-                                                    {checkoutErrors.cvv && <span className="form-error">{checkoutErrors.cvv}</span>}
-                                                </div>
-                                            </div>
-
-                                            <div className="save-card-row" onClick={() => setSaveCard(!saveCard)}>
-                                                <div className={`save-checkbox ${saveCard ? 'checked' : ''}`}>
-                                                    {saveCard && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3"><polyline points="20 6 9 17 4 12" /></svg>}
-                                                </div>
-                                                <span className="save-card-text">Save this card for future payments</span>
-                                            </div>
-                                        </div>
-                                    )}
-
                                     {/* QR instruction for e-wallets */}
-                                    {(payMethod === 'momo' || payMethod === 'zalopay') && (
+                                    {(payMethod === 'momo') && (
                                         <div style={{
                                             marginTop: 20, padding: '20px',
                                             background: payMethod === 'momo' ? 'linear-gradient(135deg,#fdf2f8,#fce7f3)' : 'linear-gradient(135deg,#eff6ff,#dbeafe)',
@@ -2689,7 +2676,7 @@ const BookingPage = () => {
                                                 {payMethod === 'momo' ? '📱' : '📲'}
                                             </div>
                                             <div style={{ fontWeight: 700, fontSize: 14, color: payMethod === 'momo' ? '#9d174d' : '#1d4ed8', marginBottom: 6 }}>
-                                                Open {payMethod === 'momo' ? 'MoMo' : 'ZaloPay'} app and confirm payment
+                                                Open {payMethod === 'momo' ? 'MoMo' : 'E-wallet'} app and confirm payment
                                             </div>
                                             <div style={{ fontSize: 12, color: '#64748b', fontWeight: 500 }}>
                                                 Amount: <strong>{fmtVND(grandTotal)}</strong> will be deducted from your wallet
@@ -2718,7 +2705,6 @@ const BookingPage = () => {
                                     <div className="modal-total" style={{ marginTop: '20px' }}>
                                         <div>
                                             <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', textAlign: 'left' }}>parking fee: {fmtVND(estimatedPrice)}</div>
-                                            <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', textAlign: 'left', marginTop: '2px' }}>service fee (5%): {fmtVND(serviceFee)}</div>
                                         </div>
                                         <div style={{ textAlign: 'right' }}>
                                             <div className="modal-total-label">Grand Total</div>
@@ -2727,8 +2713,8 @@ const BookingPage = () => {
                                     </div>
 
                                     <div className="modal-actions" style={{ marginTop: '24px' }}>
-                                        <button className="modal-cancel" onClick={() => setCheckoutPhase('review')} disabled={checkoutProcessing}>
-                                            ← Back
+                                        <button className="modal-cancel" onClick={() => setShowConfirmModal(false)} disabled={checkoutProcessing}>
+                                            Cancel
                                         </button>
                                         <button
                                             id="confirm-payment-btn"
@@ -2743,11 +2729,45 @@ const BookingPage = () => {
                                                 </>
                                             ) : (
                                                 <>
-                                                    <LockIcon />
-                                                    Pay {fmtVND(grandTotal)}
+                                                    Confirm Reservation
                                                 </>
                                             )}
                                         </button>
+                                    </div>
+                                </>
+                            )}
+                            {checkoutPhase === 'qr' && (
+                                <>
+                                    <div className="modal-header">
+                                        <div className="modal-title">Payment</div>
+                                        <div className="modal-subtitle">Scan to complete reservation</div>
+                                    </div>
+                                    <div className="modal-body" style={{ textAlign: 'center', padding: '20px' }}>
+                                        {payMethod === 'bank_transfer' && bankInfo ? (
+                                            <div style={{
+                                                background: 'linear-gradient(135deg,#eff6ff,#dbeafe)',
+                                                borderRadius: 16,
+                                                padding: '24px',
+                                                border: '1px solid #bfdbfe'
+                                            }}>
+                                                <div style={{ fontWeight: 800, fontSize: 18, color: '#1d4ed8', marginBottom: 16 }}>
+                                                    Scan to Pay via VietQR
+                                                </div>
+                                                <div style={{ background: 'white', padding: 16, borderRadius: 16, display: 'inline-block', marginBottom: 16, boxShadow: '0 8px 24px rgba(37,99,235,0.15)' }}>
+                                                    <img src={bankInfo.qrUrl} alt="VietQR" style={{ width: 220, height: 220, objectFit: 'contain' }} />
+                                                </div>
+                                                <div style={{ fontSize: 14, color: '#475569', fontWeight: 600, background: '#ffffff', padding: '12px 20px', borderRadius: 8, border: '1px dashed #93c5fd' }}>
+                                                    Transfer Content: <strong style={{ color: '#1e293b', fontSize: 18, letterSpacing: 1 }}>{bankInfo.transferContent}</strong>
+                                                </div>
+                                                
+                                                <div style={{ marginTop: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+                                                    <div className="bk-spin" style={{ width: 18, height: 18, borderWidth: 2, borderColor: '#3b82f6', borderTopColor: 'transparent' }} />
+                                                    <span style={{ fontSize: 13, color: '#2563eb', fontWeight: 600 }}>Waiting for payment confirmation...</span>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div>Payment processing...</div>
+                                        )}
                                     </div>
                                 </>
                             )}
