@@ -13,6 +13,7 @@ import SessionPage from './pages/Customer/SessionPage';
 import CheckoutPage from './pages/Customer/CheckoutPage';
 import CheckoutSuccessPage from './pages/Customer/CheckoutSuccessPage';
 import MyTicketsPage from './pages/Customer/MyTicketsPage';
+import MyVehiclesPage from './pages/Customer/MyVehiclesPage';
 import AdminPortal from './pages/Admin/AdminPortal';
 import StaffPage from './pages/Staff/StaffPage';
 import StaffExitPage from './pages/Staff/StaffExitPage';
@@ -47,6 +48,7 @@ function App() {
                         <Route path="/checkout" element={<CheckoutPage />} />
                         <Route path="/checkoutsuccess" element={<CheckoutSuccessPage />} />
                         <Route path="/tickets" element={<MyTicketsPage />} />
+                        <Route path="/my-vehicles" element={<MyVehiclesPage />} />
                     </Route>
                 </Route>
 
