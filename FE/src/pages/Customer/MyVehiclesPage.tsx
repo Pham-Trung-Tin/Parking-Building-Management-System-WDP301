@@ -14,6 +14,21 @@ const VehicleSvgIcon = ({ code, size = 48 }: { code: string; size?: number }) =>
   const lc = 'round';
   const lj = 'round';
 
+  if (
+    c.includes('ELECTRIC_CAR') || 
+    c.includes('TRUCK') || 
+    c.includes('TAI') || 
+    c.includes('LORRY') || 
+    c.includes('VAN') || 
+    (c.includes('ELECTRIC') && c.includes('CAR'))
+  ) return (
+    <img 
+      src="https://res.cloudinary.com/dgz3rhiv4/image/upload/v1781593889/electric-car_gittvm.png" 
+      alt="Electric Car" 
+      style={{ width: size, height: size, objectFit: 'contain' }} 
+    />
+  );
+
   if (c.includes('ELECTRIC') || c.includes('DIEN') || c.includes('EV')) return (
     <img 
       src="https://res.cloudinary.com/dgz3rhiv4/image/upload/v1781593348/electric-motor_tijdux.png" 
@@ -36,14 +51,6 @@ const VehicleSvgIcon = ({ code, size = 48 }: { code: string; size?: number }) =>
       alt="Bicycle" 
       style={{ width: size, height: size, objectFit: 'contain' }} 
     />
-  );
-
-  if (c.includes('TRUCK') || c.includes('TAI') || c.includes('LORRY') || c.includes('VAN')) return (
-    <svg viewBox="0 0 48 48" width={size} height={size} fill="none" stroke={stroke} strokeWidth={sw} strokeLinecap={lc as any} strokeLinejoin={lj as any}>
-      <rect x="2" y="14" width="28" height="20" rx="2" />
-      <path d="M30 20 L44 20 L46 34 L30 34" /><path d="M30 20 L36 14 L44 14 L44 20" />
-      <circle cx="10" cy="36" r="4" /><circle cx="36" cy="36" r="4" /><line x1="2" y1="22" x2="30" y2="22" />
-    </svg>
   );
 
   // Default: Car
