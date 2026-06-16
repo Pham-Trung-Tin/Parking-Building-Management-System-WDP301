@@ -9,7 +9,8 @@ import {
   User, 
   Search,
   Filter,
-  Clock
+  Clock,
+  RefreshCw
 } from 'lucide-react';
 import useProfile from '../../hooks/useProfile';
 
@@ -24,6 +25,26 @@ const StaffLiveViewPage = () => {
     { id: 'S-904', plate: 'XYZ-9876', type: 'MOTORCYCLE', entry: '11:05 AM', zone: 'East - Level 2', duration: '03h 51m', status: 'Parked' },
     { id: 'S-905', plate: 'DEF-1122', type: 'CAR', entry: '01:20 PM', zone: 'West - Level 1', duration: '01h 36m', status: 'Entering' },
   ];
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterStatus, setFilterStatus] = useState<string>('All');
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState('Just now');
+  const [showFilterDropdown, setShowFilterDropdown] = useState(false);
+
+  const filteredSessions = mockSessions.filter(session => {
+    const matchesSearch = session.plate.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesStatus = filterStatus === 'All' || session.status === filterStatus;
+    return matchesSearch && matchesStatus;
+  });
+
+  const handleRefresh = () => {
+    setIsRefreshing(true);
+    setTimeout(() => {
+      setIsRefreshing(false);
+      setLastUpdated(new Date().toLocaleTimeString());
+    }, 800);
+  };
 
   const handleLogout = () => {
     localStorage.removeItem('accessToken');
@@ -114,11 +135,45 @@ const StaffLiveViewPage = () => {
               <div className="flex gap-3">
                 <div className="bg-white border border-gray-200 px-4 py-2 flex items-center shadow-sm">
                   <Search className="w-4 h-4 text-gray-400 mr-2" />
-                  <input type="text" placeholder="Search plates..." className="outline-none text-sm w-48" />
+                  <input 
+                    type="text" 
+                    placeholder="Search plates..." 
+                    className="outline-none text-sm w-48" 
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
                 </div>
-                <button className="bg-white border border-gray-200 px-4 py-2 text-xs font-bold uppercase tracking-wider flex items-center shadow-sm hover:bg-gray-50 transition-colors">
-                  <Filter className="w-4 h-4 mr-2 text-gray-500" />
-                  Filter
+                
+                <div className="relative">
+                  <button 
+                    onClick={() => setShowFilterDropdown(!showFilterDropdown)}
+                    className="h-full bg-white border border-gray-200 px-4 py-2 text-xs font-bold uppercase tracking-wider flex items-center shadow-sm hover:bg-gray-50 transition-colors"
+                  >
+                    <Filter className="w-4 h-4 mr-2 text-gray-500" />
+                    {filterStatus === 'All' ? 'Filter' : filterStatus}
+                  </button>
+                  
+                  {showFilterDropdown && (
+                    <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 shadow-lg z-10 py-1">
+                      {['All', 'Parked', 'Entering', 'Exiting'].map(status => (
+                        <button
+                          key={status}
+                          onClick={() => { setFilterStatus(status); setShowFilterDropdown(false); }}
+                          className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 ${filterStatus === status ? 'font-bold text-gray-900 bg-gray-50' : 'text-gray-700'}`}
+                        >
+                          {status}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <button 
+                  onClick={handleRefresh}
+                  className="bg-white border border-gray-200 px-4 py-2 text-xs font-bold uppercase tracking-wider flex items-center shadow-sm hover:bg-gray-50 transition-colors"
+                >
+                  <RefreshCw className={`w-4 h-4 mr-2 text-gray-500 ${isRefreshing ? 'animate-spin' : ''}`} />
+                  Refresh
                 </button>
               </div>
             </div>
@@ -148,7 +203,7 @@ const StaffLiveViewPage = () => {
               <div className="px-6 py-4 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
                 <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">Current Active Sessions</h3>
                 <span className="text-xs font-medium text-gray-500 flex items-center">
-                  <Clock className="w-3 h-3 mr-1" /> Last updated: Just now
+                  <Clock className="w-3 h-3 mr-1" /> Last updated: {lastUpdated}
                 </span>
               </div>
               <table className="w-full text-left text-sm">
@@ -164,25 +219,33 @@ const StaffLiveViewPage = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 text-gray-700">
-                  {mockSessions.map((session, index) => (
-                    <tr key={index} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-6 py-4 font-medium text-gray-500">{session.id}</td>
-                      <td className="px-6 py-4 font-bold text-gray-900">{session.plate}</td>
-                      <td className="px-6 py-4">{session.type}</td>
-                      <td className="px-6 py-4">{session.entry}</td>
-                      <td className="px-6 py-4">{session.zone}</td>
-                      <td className="px-6 py-4 font-medium">{session.duration}</td>
-                      <td className="px-6 py-4">
-                        <span className={`text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider ${
-                          session.status === 'Parked' ? 'bg-blue-50 text-blue-600' :
-                          session.status === 'Exiting' ? 'bg-orange-50 text-orange-600' :
-                          'bg-green-50 text-green-600'
-                        }`}>
-                          {session.status}
-                        </span>
+                  {filteredSessions.length > 0 ? (
+                    filteredSessions.map((session, index) => (
+                      <tr key={index} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-6 py-4 font-medium text-gray-500">{session.id}</td>
+                        <td className="px-6 py-4 font-bold text-gray-900">{session.plate}</td>
+                        <td className="px-6 py-4">{session.type}</td>
+                        <td className="px-6 py-4">{session.entry}</td>
+                        <td className="px-6 py-4">{session.zone}</td>
+                        <td className="px-6 py-4 font-medium">{session.duration}</td>
+                        <td className="px-6 py-4">
+                          <span className={`text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider ${
+                            session.status === 'Parked' ? 'bg-blue-50 text-blue-600' :
+                            session.status === 'Exiting' ? 'bg-orange-50 text-orange-600' :
+                            'bg-green-50 text-green-600'
+                          }`}>
+                            {session.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
+                        No sessions found matching your criteria.
                       </td>
                     </tr>
-                  ))}
+                  )}
                 </tbody>
               </table>
             </div>
