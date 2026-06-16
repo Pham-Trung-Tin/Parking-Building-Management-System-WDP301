@@ -119,7 +119,7 @@ const CashIcon = ({ size = 24 }: { size?: number }) => (
 );
 const QrCodeIcon = ({ size = 24 }: { size?: number }) => (
     <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <rect width="5" height="5" x="3" y="3" rx="1"/><rect width="5" height="5" x="16" y="3" rx="1"/><rect width="5" height="5" x="3" y="16" rx="1"/><path d="M21 16h-3a2 2 0 0 0-2 2v3"/><path d="M21 21v.01"/><path d="M12 7v3a2 2 0 0 1-2 2H7"/><path d="M3 12h.01"/><path d="M12 3h.01"/><path d="M12 16v.01"/><path d="M16 12h1"/><path d="M21 12v.01"/><path d="M12 21v-1"/>
+        <rect width="5" height="5" x="3" y="3" rx="1" /><rect width="5" height="5" x="16" y="3" rx="1" /><rect width="5" height="5" x="3" y="16" rx="1" /><path d="M21 16h-3a2 2 0 0 0-2 2v3" /><path d="M21 21v.01" /><path d="M12 7v3a2 2 0 0 1-2 2H7" /><path d="M3 12h.01" /><path d="M12 3h.01" /><path d="M12 16v.01" /><path d="M16 12h1" /><path d="M21 12v.01" /><path d="M12 21v-1" />
     </svg>
 );
 const LockIcon = () => (
@@ -147,68 +147,56 @@ const VehicleSvgIcon = ({ code, size = 96 }: { code: string; size?: number }) =>
     const lc = 'round';
     const lj = 'round';
 
-    // Bicycle
-    if (c.includes('BICYCLE') || c.includes('BIKE') || (c.includes('DAP') && !c.includes('DIEN'))) return (
-        <svg viewBox="0 0 48 48" width={size} height={size} fill="none" stroke={stroke} strokeWidth={sw} strokeLinecap={lc as any} strokeLinejoin={lj as any}>
-            <circle cx="12" cy="34" r="9" />
-            <circle cx="36" cy="34" r="9" />
-            <circle cx="24" cy="12" r="3" />
-            <path d="M12 34 L20 16 L28 16" />
-            <path d="M12 34 L28 22 L36 34" />
-            <path d="M20 16 L36 34" />
-            <path d="M22 12 L30 12" />
-        </svg>
+    // Electric Car / Truck / Van
+    if (
+        c.includes('ELECTRIC_CAR') ||
+        c.includes('TRUCK') ||
+        c.includes('TAI') ||
+        c.includes('LORRY') ||
+        c.includes('VAN') ||
+        (c.includes('ELECTRIC') && c.includes('CAR'))
+    ) return (
+        <img
+            src="https://res.cloudinary.com/dgz3rhiv4/image/upload/v1781593889/electric-car_gittvm.png"
+            alt="Electric Car"
+            style={{ width: size, height: size, objectFit: 'contain' }}
+        />
     );
 
     // Electric bicycle / scooter
     if (c.includes('ELECTRIC') || c.includes('DIEN') || c.includes('EV')) return (
-        <svg viewBox="0 0 48 48" width={size} height={size} fill="none" stroke={stroke} strokeWidth={sw} strokeLinecap={lc as any} strokeLinejoin={lj as any}>
-            <circle cx="12" cy="34" r="8" />
-            <circle cx="36" cy="34" r="8" />
-            <path d="M12 34 L20 16 L28 16" />
-            <path d="M20 16 L36 34" />
-            <path d="M12 34 L28 22 L36 34" />
-            {/* Lightning bolt */}
-            <path d="M26 8 L22 18 L27 18 L23 28" strokeWidth="2.2" />
-        </svg>
+        <img
+            src="https://res.cloudinary.com/dgz3rhiv4/image/upload/v1781593348/electric-motor_tijdux.png"
+            alt="Electric Bicycle"
+            style={{ width: size, height: size, objectFit: 'contain' }}
+        />
     );
 
     // Motorcycle / motorbike
     if (c.includes('MOTOR') || c.includes('MOTO') || c.includes('SCOOTER') || c.includes('MAY')) return (
-        <svg viewBox="0 0 48 48" width={size} height={size} fill="none" stroke={stroke} strokeWidth={sw} strokeLinecap={lc as any} strokeLinejoin={lj as any}>
-            <circle cx="10" cy="32" r="8" />
-            <circle cx="38" cy="32" r="8" />
-            <path d="M10 32 C14 20 20 16 26 16" />
-            <path d="M26 16 L32 16 L38 24 L38 32" />
-            <path d="M18 24 L30 24 L34 32" />
-            <path d="M24 16 L26 10 L32 10" />
-            <path d="M18 24 L14 28" />
-        </svg>
+        <img
+            src="https://res.cloudinary.com/dgz3rhiv4/image/upload/v1781592993/bike_uzksng.png"
+            alt="Motorcycle"
+            style={{ width: size, height: size, objectFit: 'contain' }}
+        />
     );
 
-    // Truck / tải
-    if (c.includes('TRUCK') || c.includes('TAI') || c.includes('LORRY') || c.includes('VAN')) return (
-        <svg viewBox="0 0 48 48" width={size} height={size} fill="none" stroke={stroke} strokeWidth={sw} strokeLinecap={lc as any} strokeLinejoin={lj as any}>
-            <rect x="2" y="14" width="28" height="20" rx="2" />
-            <path d="M30 20 L44 20 L46 34 L30 34" />
-            <path d="M30 20 L36 14 L44 14 L44 20" />
-            <circle cx="10" cy="36" r="4" />
-            <circle cx="36" cy="36" r="4" />
-            <line x1="2" y1="22" x2="30" y2="22" />
-        </svg>
+    // Bicycle
+    if (c.includes('BICYCLE') || c.includes('BIKE') || c.includes('DAP')) return (
+        <img
+            src="https://res.cloudinary.com/dgz3rhiv4/image/upload/v1781593172/bike_1_dbeqbj.png"
+            alt="Bicycle"
+            style={{ width: size, height: size, objectFit: 'contain' }}
+        />
     );
 
     // Default: Car / sedan
     return (
-        <svg viewBox="0 0 48 48" width={size} height={size} fill="none" stroke={stroke} strokeWidth={sw} strokeLinecap={lc as any} strokeLinejoin={lj as any}>
-            <rect x="3" y="22" width="42" height="16" rx="3" />
-            <path d="M8 22 L13 12 L35 12 L40 22" />
-            <circle cx="12" cy="38" r="4" />
-            <circle cx="36" cy="38" r="4" />
-            <rect x="14" y="14" width="10" height="8" rx="1.5" />
-            <rect x="25" y="14" width="10" height="8" rx="1.5" />
-            <line x1="3" y1="29" x2="45" y2="29" />
-        </svg>
+        <img
+            src="https://res.cloudinary.com/dgz3rhiv4/image/upload/v1781593098/car_s8v0sp.png"
+            alt="Car"
+            style={{ width: size, height: size, objectFit: 'contain' }}
+        />
     );
 };
 
@@ -589,7 +577,7 @@ const BookingPage = () => {
                     if (statusInfo.isPaid) {
                         setPolling(false);
                         clearInterval(interval);
-                        
+
                         saveToMyTickets(successBooking);
                         setShowSuccessToast(true);
                         setCheckoutProcessing(false);
@@ -1740,7 +1728,7 @@ const BookingPage = () => {
                         {currentStep === 1 && (
                             <div className="bk-card">
                                 <div className="bk-step-header">
-                                    <div className="bk-step-icon">🚗</div>
+
                                     <div>
                                         <div className="bk-step-title">Select Vehicle Type</div>
                                         <div className="bk-step-sub">Step 1 of 6 — Choose your vehicle category</div>
@@ -1794,7 +1782,7 @@ const BookingPage = () => {
                         {currentStep === 2 && (
                             <div className="bk-card">
                                 <div className="bk-step-header">
-                                    <div className="bk-step-icon">🪪</div>
+                                    {/* <div className="bk-step-icon">🪪</div> */}
                                     <div>
                                         <div className="bk-step-title">Enter License Plate</div>
                                         <div className="bk-step-sub">Step 2 of 6 — Your vehicle's identification number</div>
@@ -1912,7 +1900,7 @@ const BookingPage = () => {
                                     {licensePlate.length >= 4 && (
                                         <div style={{ display: 'flex', justifyContent: 'center', marginTop: 20 }}>
                                             <div className="lp-plate-preview">
-                                                <span className="lp-flag">🇻🇳</span>
+                                                {/* <span className="lp-flag">🇻🇳</span> */}
                                                 {licensePlate}
                                             </div>
                                         </div>
@@ -2000,7 +1988,7 @@ const BookingPage = () => {
                             return (
                                 <div className="bk-card">
                                     <div className="bk-step-header">
-                                        <div className="bk-step-icon">📅</div>
+                                        {/* <div className="bk-step-icon">📅</div> */}
                                         <div>
                                             <div className="bk-step-title">When do you want to park?</div>
                                             <div className="bk-step-sub">Step 3 of 6 — Pick date, arrival time & duration</div>
@@ -2026,7 +2014,7 @@ const BookingPage = () => {
 
                                         return (
                                             <div style={{ position: 'relative', marginBottom: 28 }}>
-                                                <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>📆 Booking Date</div>
+                                                <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}> Booking Date</div>
                                                 <button
                                                     onClick={() => {
                                                         if (showCalendar) setShowCalendar(false);
@@ -2050,7 +2038,7 @@ const BookingPage = () => {
                                                     }}
                                                 >
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                                        <span style={{ fontSize: 16 }}>📅</span>
+                                                        {/* <span style={{ fontSize: 16 }}>📅</span> */}
                                                         <span>{fmtCalBtnDate(fromDt)}</span>
                                                     </div>
                                                     <span style={{ color: '#94a3b8', fontSize: 10 }}>▼</span>
@@ -2061,7 +2049,7 @@ const BookingPage = () => {
                                     {/* ── 2. ARRIVAL TIME — Dual Drum Spinner ── */}
                                     <div style={{ marginBottom: 28 }}>
                                         <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 16 }}>
-                                            🕐 Arrival Time
+                                            Arrival Time
                                             <span style={{ fontSize: 13, fontWeight: 800, color: '#2563eb', marginLeft: 10, letterSpacing: 0, textTransform: 'none' }}>
                                                 {String(selHour).padStart(2, '0')}:{String(selMin).padStart(2, '0')}
                                             </span>
@@ -2211,7 +2199,7 @@ const BookingPage = () => {
 
                                     {/* ── 3. DURATION ── */}
                                     <div style={{ marginBottom: 24 }}>
-                                        <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>⏳ Duration</div>
+                                        <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>Duration</div>
                                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
                                             {DURATION_OPTIONS.map(opt => {
                                                 const isSel = duration === opt.val && !isCustomDur;
@@ -2260,7 +2248,7 @@ const BookingPage = () => {
                                         gap: 12,
                                     }}>
                                         <div>
-                                            <div style={{ fontSize: 10, color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>🅿️ Your Parking</div>
+                                            <div style={{ fontSize: 10, color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}> Your Parking</div>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                                                 <div style={{ textAlign: 'center' }}>
                                                     <div style={{ fontSize: 22, fontWeight: 900, color: '#60a5fa', letterSpacing: -0.5 }}>{fmtT(new Date(entryDate))}</div>
@@ -2302,7 +2290,7 @@ const BookingPage = () => {
                         {currentStep === 4 && (
                             <div className="bk-card">
                                 <div className="bk-step-header">
-                                    <div className="bk-step-icon">🏢</div>
+                                    {/* <div className="bk-step-icon">🏢</div> */}
                                     <div>
                                         <div className="bk-step-title">Select Floor</div>
                                         <div className="bk-step-sub">Step 4 of 6 — Choose which floor to park on</div>
@@ -2759,7 +2747,7 @@ const BookingPage = () => {
                                                 <div style={{ fontSize: 14, color: '#475569', fontWeight: 600, background: '#ffffff', padding: '12px 20px', borderRadius: 8, border: '1px dashed #93c5fd' }}>
                                                     Transfer Content: <strong style={{ color: '#1e293b', fontSize: 18, letterSpacing: 1 }}>{bankInfo.transferContent}</strong>
                                                 </div>
-                                                
+
                                                 <div style={{ marginTop: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
                                                     <div className="bk-spin" style={{ width: 18, height: 18, borderWidth: 2, borderColor: '#3b82f6', borderTopColor: 'transparent' }} />
                                                     <span style={{ fontSize: 13, color: '#2563eb', fontWeight: 600 }}>Waiting for payment confirmation...</span>
