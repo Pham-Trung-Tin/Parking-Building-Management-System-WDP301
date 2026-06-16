@@ -14,46 +14,52 @@ const VehicleSvgIcon = ({ code, size = 48 }: { code: string; size?: number }) =>
   const lc = 'round';
   const lj = 'round';
 
-  if (c.includes('BICYCLE') || c.includes('BIKE') || (c.includes('DAP') && !c.includes('DIEN'))) return (
-    <svg viewBox="0 0 48 48" width={size} height={size} fill="none" stroke={stroke} strokeWidth={sw} strokeLinecap={lc as any} strokeLinejoin={lj as any}>
-      <circle cx="12" cy="34" r="9" /><circle cx="36" cy="34" r="9" /><circle cx="24" cy="12" r="3" />
-      <path d="M12 34 L20 16 L28 16" /><path d="M12 34 L28 22 L36 34" /><path d="M20 16 L36 34" /><path d="M22 12 L30 12" />
-    </svg>
+  if (
+    c.includes('ELECTRIC_CAR') || 
+    c.includes('TRUCK') || 
+    c.includes('TAI') || 
+    c.includes('LORRY') || 
+    c.includes('VAN') || 
+    (c.includes('ELECTRIC') && c.includes('CAR'))
+  ) return (
+    <img 
+      src="https://res.cloudinary.com/dgz3rhiv4/image/upload/v1781593889/electric-car_gittvm.png" 
+      alt="Electric Car" 
+      style={{ width: size, height: size, objectFit: 'contain' }} 
+    />
   );
 
   if (c.includes('ELECTRIC') || c.includes('DIEN') || c.includes('EV')) return (
-    <svg viewBox="0 0 48 48" width={size} height={size} fill="none" stroke={stroke} strokeWidth={sw} strokeLinecap={lc as any} strokeLinejoin={lj as any}>
-      <circle cx="12" cy="34" r="8" /><circle cx="36" cy="34" r="8" />
-      <path d="M12 34 L20 16 L28 16" /><path d="M20 16 L36 34" /><path d="M12 34 L28 22 L36 34" />
-      <path d="M26 8 L22 18 L27 18 L23 28" strokeWidth="2.2" />
-    </svg>
+    <img 
+      src="https://res.cloudinary.com/dgz3rhiv4/image/upload/v1781593348/electric-motor_tijdux.png" 
+      alt="Electric Bicycle" 
+      style={{ width: size, height: size, objectFit: 'contain' }} 
+    />
   );
 
   if (c.includes('MOTOR') || c.includes('MOTO') || c.includes('SCOOTER') || c.includes('MAY')) return (
-    <svg viewBox="0 0 48 48" width={size} height={size} fill="none" stroke={stroke} strokeWidth={sw} strokeLinecap={lc as any} strokeLinejoin={lj as any}>
-      <circle cx="10" cy="32" r="8" /><circle cx="38" cy="32" r="8" />
-      <path d="M10 32 C14 20 20 16 26 16" /><path d="M26 16 L32 16 L38 24 L38 32" />
-      <path d="M18 24 L30 24 L34 32" /><path d="M24 16 L26 10 L32 10" /><path d="M18 24 L14 28" />
-    </svg>
+    <img 
+      src="https://res.cloudinary.com/dgz3rhiv4/image/upload/v1781592993/bike_uzksng.png" 
+      alt="Motorcycle" 
+      style={{ width: size, height: size, objectFit: 'contain' }} 
+    />
   );
 
-  if (c.includes('TRUCK') || c.includes('TAI') || c.includes('LORRY') || c.includes('VAN')) return (
-    <svg viewBox="0 0 48 48" width={size} height={size} fill="none" stroke={stroke} strokeWidth={sw} strokeLinecap={lc as any} strokeLinejoin={lj as any}>
-      <rect x="2" y="14" width="28" height="20" rx="2" />
-      <path d="M30 20 L44 20 L46 34 L30 34" /><path d="M30 20 L36 14 L44 14 L44 20" />
-      <circle cx="10" cy="36" r="4" /><circle cx="36" cy="36" r="4" /><line x1="2" y1="22" x2="30" y2="22" />
-    </svg>
+  if (c.includes('BICYCLE') || c.includes('BIKE') || c.includes('DAP')) return (
+    <img 
+      src="https://res.cloudinary.com/dgz3rhiv4/image/upload/v1781593172/bike_1_dbeqbj.png" 
+      alt="Bicycle" 
+      style={{ width: size, height: size, objectFit: 'contain' }} 
+    />
   );
 
   // Default: Car
   return (
-    <svg viewBox="0 0 48 48" width={size} height={size} fill="none" stroke={stroke} strokeWidth={sw} strokeLinecap={lc as any} strokeLinejoin={lj as any}>
-      <rect x="3" y="22" width="42" height="16" rx="3" />
-      <path d="M8 22 L13 12 L35 12 L40 22" />
-      <circle cx="12" cy="38" r="4" /><circle cx="36" cy="38" r="4" />
-      <rect x="14" y="14" width="10" height="8" rx="1.5" /><rect x="25" y="14" width="10" height="8" rx="1.5" />
-      <line x1="3" y1="29" x2="45" y2="29" />
-    </svg>
+    <img 
+      src="https://res.cloudinary.com/dgz3rhiv4/image/upload/v1781593098/car_s8v0sp.png" 
+      alt="Car" 
+      style={{ width: size, height: size, objectFit: 'contain' }} 
+    />
   );
 };
 
