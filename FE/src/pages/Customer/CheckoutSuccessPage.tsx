@@ -118,7 +118,7 @@ const CheckoutSuccessPage = () => {
     const cardLast4 = data.cardLast4;
 
     // Receipt ID
-    const receiptId = `PB-${Date.now().toString(36).toUpperCase().slice(-8)}`;
+    const receiptId = data.transactionId || `PB-${Date.now().toString(36).toUpperCase().slice(-8)}`;
 
     const [showConfetti, setShowConfetti] = useState(true);
     useEffect(() => {
@@ -127,11 +127,12 @@ const CheckoutSuccessPage = () => {
     }, []);
 
     const payMethodLabel = {
+        bank_transfer: 'Bank Transfer (VietQR)',
         card: cardLast4 ? `Card ···· ${cardLast4}` : 'Credit Card',
         momo: 'MoMo Wallet',
         zalopay: 'ZaloPay',
         cash: 'Cash at Counter',
-    }[payMethod];
+    }[payMethod] || 'Unknown Method';
 
     const formatTime = (d) => d.toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true });
 

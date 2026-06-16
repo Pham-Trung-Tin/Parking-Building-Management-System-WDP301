@@ -5,10 +5,74 @@ import floorService, { Floor } from '../../services/api/floorService';
 import zoneService, { Zone } from '../../services/api/zoneService';
 import parkingSlotService, { ParkingSlot } from '../../services/api/parkingSlotService';
 import vehicleTypeService, { VehicleType } from '../../services/api/vehicleTypeService';
+import { vehicleService } from '../../services/api';
+import type { Vehicle } from '../../services/api/vehicleService';
+import bookingService from '../../services/api/bookingService';
+import paymentService from '../../services/api/paymentService';
+import parkingLotService from '../../services/api/parkingLotService';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const getZoneId = (z: ParkingSlot['zone']): string =>
     typeof z === 'string' ? z : (z as any)?._id ?? '';
+
+const getCalendarDays = (year: number, month: number) => {
+    const firstDayIndex = new Date(year, month, 1).getDay();
+    const currentMonthDays = new Date(year, month + 1, 0).getDate();
+    const prevMonthDays = new Date(year, month, 0).getDate();
+
+    const days = [];
+
+    // Prev month days
+    for (let i = firstDayIndex - 1; i >= 0; i--) {
+        days.push({
+            day: prevMonthDays - i,
+            month: month === 0 ? 11 : month - 1,
+            year: month === 0 ? year - 1 : year,
+            isCurrentMonth: false,
+        });
+    }
+
+    // Current month days
+    for (let i = 1; i <= currentMonthDays; i++) {
+        days.push({
+            day: i,
+            month: month,
+            year: year,
+            isCurrentMonth: true,
+        });
+    }
+
+    // Next month days to fill 42 cells
+    const remaining = 42 - days.length;
+    for (let i = 1; i <= remaining; i++) {
+        days.push({
+            day: i,
+            month: month === 11 ? 0 : month + 1,
+            year: month === 11 ? year + 1 : year,
+            isCurrentMonth: false,
+        });
+    }
+
+    return days;
+};
+
+const isSameDay = (d1: Date, d2: Date) => {
+    return d1.getFullYear() === d2.getFullYear() &&
+        d1.getMonth() === d2.getMonth() &&
+        d1.getDate() === d2.getDate();
+};
+
+const isBeforeDay = (d1: Date, d2: Date) => {
+    const t1 = new Date(d1.getFullYear(), d1.getMonth(), d1.getDate()).getTime();
+    const t2 = new Date(d2.getFullYear(), d2.getMonth(), d2.getDate()).getTime();
+    return t1 < t2;
+};
+
+const isAfterDay = (d1: Date, d2: Date) => {
+    const t1 = new Date(d1.getFullYear(), d1.getMonth(), d1.getDate()).getTime();
+    const t2 = new Date(d2.getFullYear(), d2.getMonth(), d2.getDate()).getTime();
+    return t1 > t2;
+};
 
 // Vietnamese license plate validation
 const LP_REGEX = /^[0-9]{2}[A-Z]{1,2}-[0-9]{4,5}$|^[0-9]{2}-[A-Z][0-9]{4,5}$/i;
@@ -51,6 +115,11 @@ const CashIcon = ({ size = 24 }: { size?: number }) => (
     <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <rect x="1" y="4" width="22" height="16" rx="2" />
         <circle cx="12" cy="12" r="3" /><path d="M5 12h.01M19 12h.01" />
+    </svg>
+);
+const QrCodeIcon = ({ size = 24 }: { size?: number }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect width="5" height="5" x="3" y="3" rx="1"/><rect width="5" height="5" x="16" y="3" rx="1"/><rect width="5" height="5" x="3" y="16" rx="1"/><path d="M21 16h-3a2 2 0 0 0-2 2v3"/><path d="M21 21v.01"/><path d="M12 7v3a2 2 0 0 1-2 2H7"/><path d="M3 12h.01"/><path d="M12 3h.01"/><path d="M12 16v.01"/><path d="M16 12h1"/><path d="M21 12v.01"/><path d="M12 21v-1"/>
     </svg>
 );
 const LockIcon = () => (
@@ -352,7 +421,20 @@ const SlotMapGrid = ({ slots, selectedSlot, onSelect, vehicleType }: {
 const BookingPage = () => {
     const navigate = useNavigate();
     const location = useLocation();
-    const parkingSpot = location.state?.spot || { title: 'Bitexco Financial Tower Parking', price: 50000 };
+    const [parkingSpot, setParkingSpot] = useState<any>(location.state?.spot || { title: 'Bitexco Financial Tower Parking', price: 50000 });
+
+    useEffect(() => {
+        if (!parkingSpot._id) {
+            parkingLotService.getParkingLots({ status: 'active', limit: 1 })
+                .then((res: any) => {
+                    const lots = res.data?.data || res.data || res;
+                    if (Array.isArray(lots) && lots.length > 0) {
+                        setParkingSpot({ ...lots[0], title: lots[0].name, price: lots[0].settings?.pricePerHour || 50000 });
+                    }
+                })
+                .catch(console.error);
+        }
+    }, []);
 
     // ── Step state ──
     const [currentStep, setCurrentStep] = useState(1);
@@ -360,15 +442,42 @@ const BookingPage = () => {
     // ── Step 1: License Plate ──
     const [licensePlate, setLicensePlate] = useState('');
     const [plateError, setPlateError] = useState('');
+    const [savedVehicles, setSavedVehicles] = useState<Vehicle[]>([]);
+    const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
 
     // ── Step 2: Vehicle Type ──
     const [vehicleType, setVehicleType] = useState<VehicleType | null>(null);
     const [vehicleTypes, setVehicleTypes] = useState<VehicleType[]>([]);
     const [vehicleTypesLoading, setVehicleTypesLoading] = useState(false);
 
-    // ── Step 3: Date & Time ──
     const [entryDate, setEntryDate] = useState(() => new Date().toISOString().slice(0, 16));
     const [duration, setDuration] = useState(2);
+
+    const [showCalendar, setShowCalendar] = useState(false);
+    const [calMonth, setCalMonth] = useState(() => new Date().getMonth());
+    const [calYear, setCalYear] = useState(() => new Date().getFullYear());
+    const [activeInput, setActiveInput] = useState<'from' | 'to'>('from');
+
+    // Temporal calendar values
+    const [tempFromDate, setTempFromDate] = useState<Date>(() => new Date());
+    const [tempToDate, setTempToDate] = useState<Date>(() => {
+        const d = new Date();
+        d.setHours(d.getHours() + 2);
+        return d;
+    });
+
+    const openCalendar = (mode: 'from' | 'to') => {
+        const fromDate = new Date(entryDate.slice(0, 10));
+        const toDate = new Date(entryDate);
+        toDate.setHours(toDate.getHours() + duration);
+
+        setTempFromDate(fromDate);
+        setTempToDate(toDate);
+        setCalMonth(fromDate.getMonth());
+        setCalYear(fromDate.getFullYear());
+        setActiveInput(mode);
+        setShowCalendar(true);
+    };
 
     // ── Step 4: Floor ──
     const [floors, setFloors] = useState<Floor[]>([]);
@@ -406,18 +515,16 @@ const BookingPage = () => {
     }, [currentStep]);
 
     // ── Integrated Checkout States ──
-    const [checkoutPhase, setCheckoutPhase] = useState<'review' | 'payment'>('review');
-    const [payMethod, setPayMethod] = useState<'card' | 'momo' | 'zalopay' | 'cash'>('card');
-    const [cardNumber, setCardNumber] = useState('');
-    const [cardName, setCardName] = useState('');
-    const [expiry, setExpiry] = useState('');
-    const [cvv, setCvv] = useState('');
-    const [saveCard, setSaveCard] = useState(false);
+    const [checkoutPhase, setCheckoutPhase] = useState<'review' | 'payment' | 'qr'>('review');
+    const [payMethod, setPayMethod] = useState<'bank_transfer' | 'momo' | 'cash'>('bank_transfer');
     const [checkoutProcessing, setCheckoutProcessing] = useState(false);
     const [checkoutErrors, setCheckoutErrors] = useState<Record<string, string>>({});
 
     const [showSuccessToast, setShowSuccessToast] = useState(false);
     const [successBooking, setSuccessBooking] = useState<any>(null);
+    const [mockTransferContent, setMockTransferContent] = useState('');
+    const [bankInfo, setBankInfo] = useState<any>(null);
+    const [polling, setPolling] = useState(false);
 
     useEffect(() => {
         if (showSuccessToast) {
@@ -431,82 +538,135 @@ const BookingPage = () => {
     useEffect(() => {
         if (!showConfirmModal) {
             setCheckoutPhase('review');
-            setCardNumber('');
-            setCardName('');
-            setExpiry('');
-            setCvv('');
             setCheckoutErrors({});
             setCheckoutProcessing(false);
+            setPolling(false);
+            setBankInfo(null);
         }
     }, [showConfirmModal]);
 
-    const validateCard = () => {
-        const e: Record<string, string> = {};
-        if (payMethod === 'card') {
-            if (cardNumber.replace(/\s/g, '').length < 16) e.cardNumber = 'Enter a valid 16-digit card number';
-            if (!cardName.trim()) e.cardName = 'Cardholder name is required';
-            if (expiry.length < 5) e.expiry = 'Enter valid expiry MM/YY';
-            if (cvv.length < 3) e.cvv = 'Enter valid CVV';
+    // ── Compatibility for TicketsPage & Header ──
+    const saveToMyTickets = (backendData: any) => {
+        const hourlyRate = vehicleType?.pricing?.hourlyRate || (parkingSpot.settings?.pricePerHour ?? parkingSpot.price ?? 20000);
+        const estimatedPrice = hourlyRate * duration;
+        const grandTotal = Math.round(estimatedPrice);
+        const rawExit = exitTime;
+
+        const bookingDetails = {
+            receiptId: `REC-${Math.floor(100000 + Math.random() * 900000)}`,
+            bookingId: backendData._id || backendData.data?._id,
+            spot: parkingSpot,
+            vehicleType: vehicleType?.code || 'CAR',
+            floorName: selectedFloor?.name || `Floor ${selectedFloor?.floorNumber ?? 1}`,
+            slotCode: selectedSlot?.slotCode ?? '',
+            licensePlate: formatPlate(licensePlate),
+            entryDate: new Date(entryDate).toISOString(),
+            exitTime: rawExit.toISOString(),
+            elapsed: duration * 3600,
+            totalAmount: grandTotal,
+            payMethod,
+        };
+
+        const existingRaw = localStorage.getItem('myTickets');
+        let ticketsList = [];
+        if (existingRaw) {
+            try { ticketsList = JSON.parse(existingRaw); } catch (e) { ticketsList = []; }
         }
-        return e;
+        const updatedTicketsList = [bookingDetails, ...ticketsList];
+        localStorage.setItem('myTickets', JSON.stringify(updatedTicketsList));
+        localStorage.setItem('activeBooking', JSON.stringify(bookingDetails));
+
+        window.dispatchEvent(new Event('bookingUpdated'));
     };
 
-    const handleConfirmPayment = () => {
-        const e = validateCard();
-        if (Object.keys(e).length) { setCheckoutErrors(e); return; }
+    useEffect(() => {
+        let interval: ReturnType<typeof setInterval>;
+        if (polling && bankInfo?.payment?._id) {
+            interval = setInterval(async () => {
+                try {
+                    const res = await paymentService.checkBankTransferStatus(bankInfo.payment._id);
+                    const statusInfo = (res as any).data || res;
+                    if (statusInfo.isPaid) {
+                        setPolling(false);
+                        clearInterval(interval);
+                        
+                        saveToMyTickets(successBooking);
+                        setShowSuccessToast(true);
+                        setCheckoutProcessing(false);
+                        setShowConfirmModal(false);
+
+                        // Reset states
+                        setLicensePlate('');
+                        setSelectedFloor(null);
+                        setSelectedZone(null);
+                        setSelectedSlot(null);
+                        setCurrentStep(1);
+                    }
+                } catch (err) {
+                    console.error('Polling error:', err);
+                }
+            }, 3000);
+        }
+        return () => clearInterval(interval);
+    }, [polling, bankInfo, successBooking]);
+
+    const handleConfirmPayment = async () => {
         setCheckoutErrors({});
         setCheckoutProcessing(true);
 
-        const slotCode = selectedSlot?.slotCode ?? '';
         const rawExit = exitTime;
 
-        setTimeout(() => {
-            const bookingDetails = {
-                receiptId: `REC-${Math.floor(100000 + Math.random() * 900000)}`,
-                spot: parkingSpot,
-                vehicleType: vehicleType?.code || 'CAR',
-                floorName: selectedFloor?.name || `Floor ${selectedFloor?.floorNumber ?? 1}`,
-                slotCode,
-                licensePlate: formatPlate(licensePlate),
-                entryDate: new Date(entryDate).toISOString(),
-                exitTime: rawExit.toISOString(),
-                elapsed: duration * 3600,
-                totalAmount: estimatedPrice,
-                payMethod,
+        try {
+            // 1. Call API to create booking
+            const bookingData = {
+                parkingLot: parkingSpot._id,
+                vehicleType: vehicleType?._id,
+                scheduledDate: new Date(entryDate).toISOString(),
+                startTime: `${String(new Date(entryDate).getHours()).padStart(2, '0')}:${String(new Date(entryDate).getMinutes()).padStart(2, '0')}`,
+                endTime: `${String(rawExit.getHours()).padStart(2, '0')}:${String(rawExit.getMinutes()).padStart(2, '0')}`,
+                vehicleInfo: {
+                    licensePlate: formatPlate(licensePlate),
+                },
+                floorId: selectedFloor?._id,
+                zoneId: selectedZone?._id,
+                assignedSlot: selectedSlot?._id,
             };
 
-            // Save to localStorage
-            const existingRaw = localStorage.getItem('myTickets');
-            let ticketsList = [];
-            if (existingRaw) {
-                try {
-                    ticketsList = JSON.parse(existingRaw);
-                } catch (e) {
-                    ticketsList = [];
-                }
+            const bookingRes = await bookingService.create(bookingData);
+            const bookingId = bookingRes.data?._id || bookingRes._id;
+            setSuccessBooking(bookingRes.data || bookingRes); // Save for success toast
+
+            if (payMethod === 'bank_transfer') {
+                // 2. Initiate Bank Transfer
+                const paymentRes = await paymentService.initiateBookingBankTransfer(bookingId);
+                const paymentInfo = (paymentRes as any).data || paymentRes;
+
+                setBankInfo(paymentInfo);
+                setMockTransferContent(paymentInfo.transferContent);
+                setCheckoutPhase('qr'); // Switch to qr phase to show QR
+                setPolling(true);
+                setCheckoutProcessing(false);
+            } else {
+                // Cash/Momo (Mock for now): directly show success
+                saveToMyTickets(bookingRes.data || bookingRes);
+                setShowSuccessToast(true);
+                setCheckoutProcessing(false);
+                setShowConfirmModal(false);
+                // Reset states
+                setLicensePlate('');
+                setSelectedFloor(null);
+                setSelectedZone(null);
+                setSelectedSlot(null);
+                setCurrentStep(1);
             }
-            const updatedTicketsList = [bookingDetails, ...ticketsList];
-            localStorage.setItem('myTickets', JSON.stringify(updatedTicketsList));
-            localStorage.setItem('activeBooking', JSON.stringify(bookingDetails));
-
-            // Notify header
-            window.dispatchEvent(new Event('bookingUpdated'));
-
-            // Show Toast & Save Booking Details
-            setSuccessBooking(bookingDetails);
-            setShowSuccessToast(true);
-
-            // Clean up and close modal
+        } catch (error: any) {
+            let formMsg = error.response?.data?.message || 'Failed to create booking';
+            if (error.response?.data?.errors && Array.isArray(error.response.data.errors)) {
+                formMsg = error.response.data.errors.map((e: any) => `${e.field}: ${e.message}`).join(' | ');
+            }
+            setCheckoutErrors({ form: formMsg });
             setCheckoutProcessing(false);
-            setShowConfirmModal(false);
-
-            // Reset states
-            setLicensePlate('');
-            setSelectedFloor(null);
-            setSelectedZone(null);
-            setSelectedSlot(null);
-            setCurrentStep(1);
-        }, 1800);
+        }
     };
 
     // ─── isFloorAllowed helper ──────────────────────────────────────────────
@@ -532,6 +692,14 @@ const BookingPage = () => {
                 { _id: 'motorcycle', name: 'Motorcycle', code: 'MOTORBIKE', size: 'small', isActive: true, pricing: { hourlyRate: 5000, dailyRate: 40000 } },
             ]))
             .finally(() => setVehicleTypesLoading(false));
+
+        // Fetch saved vehicles
+        vehicleService.getMyVehicles(1, 50)
+            .then((res: any) => {
+                const list = Array.isArray(res?.data) ? res.data : (res?.data?.docs || res?.docs || (Array.isArray(res) ? res : []));
+                setSavedVehicles(list);
+            })
+            .catch(() => { /* not logged in or no vehicles */ });
     }, []);
 
     useEffect(() => {
@@ -658,7 +826,231 @@ const BookingPage = () => {
         <>
             <style>{`
                 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
-                * { box-sizing: border-box; margin: 0; padding: 0; }
+                .time-drum-input {
+                    height: 60px;
+                    width: 90px;
+                    font-size: 44px;
+                    font-weight: 900;
+                    color: #1e293b;
+                    letter-spacing: -2px;
+                    background: white;
+                    border-radius: 16px;
+                    border: 2.5px solid #e2e8f0;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+                    text-align: center;
+                    outline: none;
+                    cursor: text;
+                    padding: 0;
+                    transition: all 0.2s ease;
+                    -moz-appearance: textfield;
+                }
+                .time-drum-input::-webkit-outer-spin-button,
+                .time-drum-input::-webkit-inner-spin-button {
+                    -webkit-appearance: none;
+                    margin: 0;
+                }
+                .time-drum-input:hover {
+                    border-color: #cbd5e1;
+                    box-shadow: 0 4px 15px rgba(0,0,0,0.06);
+                }
+                .time-drum-input:focus {
+                    border-color: #2563eb;
+                    box-shadow: 0 6px 20px rgba(37,99,235,0.18);
+                }
+
+                /* ── Calendar UI ── */
+                .cal-container {
+                    background: #f0f6fa;
+                    border-radius: 20px;
+                    border: 1.5px solid #e2e8f0;
+                    padding: 20px;
+                    box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+                    margin-bottom: 24px;
+                    position: relative;
+                }
+                .cal-header-title {
+                    font-size: 20px;
+                    font-weight: 850;
+                    color: #1e293b;
+                    margin-bottom: 16px;
+                    font-family: 'Inter', sans-serif;
+                }
+                .cal-triggers-row {
+                    display: flex;
+                    align-items: center;
+                    gap: 12px;
+                }
+                .cal-trigger-label {
+                    font-size: 13px;
+                    font-weight: 700;
+                    color: #64748b;
+                }
+                .cal-trigger-btn {
+                    flex: 1;
+                    background: white;
+                    border: 1.5px solid #e2e8f0;
+                    border-radius: 12px;
+                    padding: 10px 16px;
+                    font-size: 14px;
+                    font-weight: 700;
+                    color: #334155;
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    cursor: pointer;
+                    transition: all 0.2s ease;
+                }
+                .cal-trigger-btn:hover {
+                    border-color: #cbd5e1;
+                    background: #f8fafc;
+                }
+                .cal-trigger-btn.active {
+                    border-color: #2563eb;
+                    box-shadow: 0 0 0 3px rgba(37,99,235,0.15);
+                }
+                .cal-modal-overlay {
+                    position: fixed;
+                    inset: 0;
+                    background: rgba(15, 23, 42, 0.45);
+                    backdrop-filter: blur(4px);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    z-index: 1000;
+                    animation: calFadeIn 0.2s ease-out;
+                }
+                .cal-modal-content {
+                    background: white;
+                    border-radius: 24px;
+                    box-shadow: 0 20px 50px rgba(15, 23, 42, 0.15);
+                    width: 95%;
+                    max-width: 400px;
+                    padding: 24px;
+                    position: relative;
+                    animation: calScaleIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+                }
+                @keyframes calFadeIn {
+                    from { opacity: 0; }
+                    to { opacity: 1; }
+                }
+                @keyframes calScaleIn {
+                    from { transform: scale(0.9) translateY(10px); opacity: 0; }
+                    to { transform: scale(1) translateY(0); opacity: 1; }
+                }
+                .cal-popover-header {
+                    display: flex;
+                    justify-content: center;
+                    gap: 8px;
+                    margin-bottom: 16px;
+                }
+                .cal-select {
+                    padding: 6px 12px;
+                    border-radius: 10px;
+                    border: 1.5px solid #e2e8f0;
+                    font-size: 13px;
+                    font-weight: 700;
+                    color: #334155;
+                    background: #f8fafc;
+                    outline: none;
+                    cursor: pointer;
+                }
+                .cal-select:hover {
+                    border-color: #cbd5e1;
+                }
+                .cal-weekdays {
+                    display: grid;
+                    grid-template-columns: repeat(7, 1fr);
+                    text-align: center;
+                    margin-bottom: 8px;
+                }
+                .cal-weekday {
+                    font-size: 11px;
+                    font-weight: 700;
+                    color: #94a3b8;
+                    text-transform: uppercase;
+                    letter-spacing: 0.05em;
+                }
+                .cal-days-grid {
+                    display: grid;
+                    grid-template-columns: repeat(7, 1fr);
+                    gap: 4px;
+                }
+                .cal-day-cell {
+                    aspect-ratio: 1;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 13px;
+                    font-weight: 700;
+                    border-radius: 50%;
+                    cursor: pointer;
+                    position: relative;
+                    transition: all 0.15s ease;
+                    color: #334155;
+                }
+                .cal-day-cell.other-month {
+                    color: #cbd5e1;
+                }
+                .cal-day-cell.disabled {
+                    color: #e2e8f0;
+                    cursor: not-allowed;
+                    text-decoration: line-through;
+                }
+                .cal-day-cell.in-range {
+                    background: #eff6ff;
+                    border-radius: 0;
+                }
+                .cal-day-cell.range-start {
+                    background: #2563eb !important;
+                    color: white !important;
+                    border-radius: 50% 0 0 50%;
+                }
+                .cal-day-cell.range-end {
+                    background: #2563eb !important;
+                    color: white !important;
+                    border-radius: 0 50% 50% 0;
+                }
+                .cal-day-cell.range-start-end-same {
+                    background: #2563eb !important;
+                    color: white !important;
+                    border-radius: 50% !important;
+                }
+                .cal-day-cell:not(.disabled):not(.range-start):not(.range-end):hover {
+                    background: #f1f5f9;
+                    border-radius: 50%;
+                }
+                .cal-popover-footer {
+                    display: flex;
+                    justify-content: center;
+                    margin-top: 16px;
+                    padding-top: 12px;
+                    border-top: 1.5px solid #f1f5f9;
+                }
+                .cal-btn {
+                    padding: 10px 20px;
+                    border-radius: 12px;
+                    font-size: 14px;
+                    font-weight: 700;
+                    cursor: pointer;
+                    border: none;
+                    transition: all 0.2s ease;
+                }
+                .cal-btn-close {
+                    background: #fef2f2;
+                    color: #ef4444;
+                    width: 100%;
+                    text-align: center;
+                }
+                .cal-btn-close:hover {
+                    background: #fee2e2;
+                }
+                .cal-btn-confirm {
+                    background: #ecfdf5;
+                    color: #10b981;
+                }
+                .cal-btn-confirm:hover {
+                    background: #d1fae5;
+                }
 
                 .bk-root {
                     min-height: 100vh;
@@ -1427,6 +1819,78 @@ const BookingPage = () => {
                                         </div>
                                     )}
 
+                                    {/* ── Saved Vehicles Quick Select ── */}
+                                    {(() => {
+                                        const matching = savedVehicles.filter(v => {
+                                            const vtId = typeof v.vehicleType === 'object' ? v.vehicleType._id : v.vehicleType;
+                                            return vtId === vehicleType?._id;
+                                        });
+                                        if (matching.length === 0) return null;
+                                        return (
+                                            <div style={{ marginBottom: 16, width: '100%', maxWidth: 420, marginLeft: 'auto', marginRight: 'auto' }}>
+                                                <div style={{ fontSize: 12, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, textAlign: 'left' }}>
+                                                    My Vehicles
+                                                </div>
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                                    {matching.map(v => {
+                                                        const isSelected = selectedVehicleId === v._id;
+                                                        return (
+                                                            <button
+                                                                key={v._id}
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setLicensePlate(v.licensePlate);
+                                                                    setSelectedVehicleId(v._id);
+                                                                    setPlateError('');
+                                                                }}
+                                                                style={{
+                                                                    display: 'flex', alignItems: 'center', gap: 12,
+                                                                    padding: '12px 16px',
+                                                                    borderRadius: 14,
+                                                                    border: isSelected ? '2px solid #2563eb' : '1.5px solid #e2e8f0',
+                                                                    background: isSelected ? '#eff6ff' : '#ffffff',
+                                                                    cursor: 'pointer',
+                                                                    transition: 'all 0.15s',
+                                                                    textAlign: 'left',
+                                                                    width: '100%',
+                                                                    boxShadow: isSelected ? '0 2px 8px rgba(37,99,235,0.15)' : '0 1px 3px rgba(0,0,0,0.04)',
+                                                                }}
+                                                            >
+                                                                <div style={{
+                                                                    width: 42, height: 42, borderRadius: 10,
+                                                                    background: isSelected ? '#dbeafe' : '#f8fafc',
+                                                                    border: `1px solid ${isSelected ? '#93c5fd' : '#e2e8f0'}`,
+                                                                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                                                                }}>
+                                                                    <VehicleSvgIcon code={vehicleType?.code ?? 'CAR'} size={26} />
+                                                                </div>
+                                                                <div style={{ flex: 1, minWidth: 0 }}>
+                                                                    <div style={{ fontWeight: 800, fontSize: 14, color: '#1e293b', letterSpacing: 0.5 }}>
+                                                                        {v.licensePlate}
+                                                                    </div>
+                                                                    <div style={{ fontSize: 12, color: '#64748b', fontWeight: 500 }}>
+                                                                        {[v.vehicleBrand, v.vehicleModel].filter(Boolean).join(' ') || 'No details'}
+                                                                        {v.vehicleColor ? ` · ${v.vehicleColor}` : ''}
+                                                                        {v.nickname ? ` — "${v.nickname}"` : ''}
+                                                                    </div>
+                                                                </div>
+                                                                {isSelected && (
+                                                                    <div style={{ color: '#2563eb', fontWeight: 800, fontSize: 16 }}>✓</div>
+                                                                )}
+                                                                {v.isDefault && !isSelected && (
+                                                                    <div style={{ fontSize: 10, fontWeight: 700, color: '#2563eb', background: '#dbeafe', padding: '2px 8px', borderRadius: 6 }}>Default</div>
+                                                                )}
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                                <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 8, textAlign: 'center', fontWeight: 500 }}>
+                                                    Select a saved vehicle or enter a new plate below
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
+
                                     <div className="lp-input-wrap">
                                         <input
                                             id="license-plate-input"
@@ -1434,6 +1898,7 @@ const BookingPage = () => {
                                             value={licensePlate}
                                             onChange={e => {
                                                 setLicensePlate(formatPlate(e.target.value));
+                                                setSelectedVehicleId(null);
                                                 setPlateError('');
                                             }}
                                             onKeyDown={e => { if (e.key === 'Enter' && canProceed(2)) handleNext(); }}
@@ -1476,11 +1941,11 @@ const BookingPage = () => {
 
                         {/* ── STEP 3: Date & Time ── */}
                         {currentStep === 3 && (() => {
-                            const now          = new Date();
-                            const todayStr     = now.toISOString().slice(0, 10);
+                            const now = new Date();
+                            const todayStr = now.toISOString().slice(0, 10);
                             const selectedDate = entryDate.slice(0, 10);
-                            const selHour      = parseInt(entryDate.slice(11, 13)) || 0;
-                            const selMin       = parseInt(entryDate.slice(14, 16)) || 0;
+                            const selHour = parseInt(entryDate.slice(11, 13)) || 0;
+                            const selMin = parseInt(entryDate.slice(14, 16)) || 0;
 
                             // Build next 7 day options
                             const dayOptions = Array.from({ length: 7 }, (_, i) => {
@@ -1488,11 +1953,11 @@ const BookingPage = () => {
                                 d.setDate(d.getDate() + i);
                                 const iso = d.toISOString().slice(0, 10);
                                 const labels = ['Today', 'Tomorrow'];
-                                const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+                                const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
                                 return {
                                     val: iso,
                                     line1: labels[i] ?? dayNames[d.getDay()],
-                                    line2: `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`,
+                                    line2: `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`,
                                 };
                             });
 
@@ -1503,271 +1968,331 @@ const BookingPage = () => {
                                     const isToday = selectedDate === todayStr;
                                     const disabled = isToday && (h < now.getHours() || (h === now.getHours() && m <= now.getMinutes()));
                                     timeSlots.push({
-                                        label: `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`,
+                                        label: `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`,
                                         h, m, disabled,
                                     });
                                 }
                             }
 
                             const setSlot = (h: number, m: number) => {
-                                setEntryDate(`${selectedDate}T${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`);
+                                setEntryDate(`${selectedDate}T${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
                             };
                             const setDay = (dateStr: string) => {
-                                setEntryDate(`${dateStr}T${String(selHour).padStart(2,'0')}:${String(selMin).padStart(2,'0')}`);
+                                setEntryDate(`${dateStr}T${String(selHour).padStart(2, '0')}:${String(selMin).padStart(2, '0')}`);
                             };
 
                             const exitDt = new Date(new Date(entryDate).getTime() + duration * 3600000);
-                            const fmtT   = (d: Date) => `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
-                            const fmtD   = (d: Date) => `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
+                            const fmtT = (d: Date) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+                            const fmtD = (d: Date) => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
 
                             const DURATION_OPTIONS = [
-                                { label: '1h',     val: 1  },
-                                { label: '2h',     val: 2  },
-                                { label: '3h',     val: 3  },
-                                { label: '4h',     val: 4  },
-                                { label: '6h',     val: 6  },
-                                { label: '8h',     val: 8  },
-                                { label: '12h',    val: 12 },
-                                { label: 'All day',val: 24 },
+                                { label: '1h', val: 1 },
+                                { label: '2h', val: 2 },
+                                { label: '3h', val: 3 },
+                                { label: '4h', val: 4 },
+                                { label: '6h', val: 6 },
+                                { label: '8h', val: 8 },
+                                { label: '12h', val: 12 },
+                                { label: 'All day', val: 24 },
                             ];
                             const isCustomDur = !DURATION_OPTIONS.find(o => o.val === duration);
 
                             return (
-                            <div className="bk-card">
-                                <div className="bk-step-header">
-                                    <div className="bk-step-icon">📅</div>
-                                    <div>
-                                        <div className="bk-step-title">When do you want to park?</div>
-                                        <div className="bk-step-sub">Step 3 of 6 — Pick date, arrival time & duration</div>
-                                    </div>
-                                </div>
-
-                                {/* ── 1. DATE ── */}
-                                <div style={{ marginBottom: 28 }}>
-                                    <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>📆 Date</div>
-                                    <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4, scrollbarWidth: 'none' }}>
-                                        {dayOptions.map(opt => {
-                                            const isSel = selectedDate === opt.val;
-                                            return (
-                                                <button key={opt.val} onClick={() => setDay(opt.val)}
-                                                    style={{
-                                                        flexShrink: 0,
-                                                        minWidth: 68,
-                                                        padding: '12px 10px',
-                                                        border: `2px solid ${isSel ? '#2563eb' : '#e2e8f0'}`,
-                                                        borderRadius: 14,
-                                                        background: isSel ? 'linear-gradient(135deg,#2563eb,#1d4ed8)' : 'white',
-                                                        color: isSel ? 'white' : '#374151',
-                                                        cursor: 'pointer',
-                                                        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
-                                                        transition: 'all 0.2s cubic-bezier(0.34,1.56,0.64,1)',
-                                                        boxShadow: isSel ? '0 6px 16px rgba(37,99,235,0.35)' : '0 1px 4px rgba(0,0,0,0.05)',
-                                                        transform: isSel ? 'scale(1.05)' : 'scale(1)',
-                                                    }}>
-                                                    <span style={{ fontSize: 12, fontWeight: 700, opacity: isSel ? 1 : 0.6 }}>{opt.line1}</span>
-                                                    <span style={{ fontSize: 15, fontWeight: 900 }}>{opt.line2}</span>
-                                                </button>
-                                            );
-                                        })}
-                                        {/* Hidden custom date behind a styled button */}
-                                        <label style={{
-                                            flexShrink: 0, minWidth: 68, padding: '12px 10px',
-                                            border: '2px dashed #e2e8f0', borderRadius: 14, cursor: 'pointer',
-                                            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
-                                            color: '#94a3b8', position: 'relative', background: '#fafbfc',
-                                        }}>
-                                            <span style={{ fontSize: 18 }}>＋</span>
-                                            <span style={{ fontSize: 11, fontWeight: 700 }}>More</span>
-                                            <input type="date" value={selectedDate} min={todayStr}
-                                                onChange={e => setDay(e.target.value)}
-                                                style={{ position: 'absolute', inset: 0, opacity: 0, width: '100%', height: '100%', cursor: 'pointer' }} />
-                                        </label>
-                                    </div>
-                                </div>
-
-                                {/* ── 2. ARRIVAL TIME — Dual Drum Spinner ── */}
-                                <div style={{ marginBottom: 28 }}>
-                                    <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 16 }}>
-                                        🕐 Arrival Time
-                                        <span style={{ fontSize: 13, fontWeight: 800, color: '#2563eb', marginLeft: 10, letterSpacing: 0, textTransform: 'none' }}>
-                                            {String(selHour).padStart(2,'0')}:{String(selMin).padStart(2,'0')}
-                                        </span>
-                                    </div>
-
-                                    {/* Drum spinner container */}
-                                    <div style={{
-                                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0,
-                                        background: 'linear-gradient(135deg,#f8fafc,#f1f5f9)',
-                                        borderRadius: 22, border: '1.5px solid #e2e8f0',
-                                        padding: '16px 24px',
-                                        boxShadow: '0 4px 20px rgba(0,0,0,0.06)',
-                                    }}>
-                                        {/* ── HOUR drum ── */}
-                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0, flex: 1 }}>
-                                            <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Hour</div>
-                                            <button
-                                                onClick={() => setSlot((selHour - 1 + 24) % 24, selMin)}
-                                                style={{ width: 48, height: 36, border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}>
-                                                <svg width="18" height="12" viewBox="0 0 18 12" fill="none"><path d="M1 10L9 2L17 10" stroke="#94a3b8" strokeWidth="2.5" strokeLinecap="round"/></svg>
-                                            </button>
-                                            {/* prev */}
-                                            <div style={{ height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, fontWeight: 900, color: '#d1d5db', opacity: 0.5, letterSpacing: -1 }}>
-                                                {String((selHour - 1 + 24) % 24).padStart(2,'0')}
-                                            </div>
-                                            {/* selected — highlight */}
-                                            <div style={{
-                                                height: 60, width: 90, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                fontSize: 44, fontWeight: 900, color: '#1e293b', letterSpacing: -2,
-                                                background: 'white', borderRadius: 16,
-                                                border: '2.5px solid #2563eb',
-                                                boxShadow: '0 6px 20px rgba(37,99,235,0.18)',
-                                                transition: 'all 0.2s',
-                                            }}>
-                                                {String(selHour).padStart(2,'0')}
-                                            </div>
-                                            {/* next */}
-                                            <div style={{ height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, fontWeight: 900, color: '#d1d5db', opacity: 0.5, letterSpacing: -1 }}>
-                                                {String((selHour + 1) % 24).padStart(2,'0')}
-                                            </div>
-                                            <button
-                                                onClick={() => setSlot((selHour + 1) % 24, selMin)}
-                                                style={{ width: 48, height: 36, border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}>
-                                                <svg width="18" height="12" viewBox="0 0 18 12" fill="none"><path d="M1 2L9 10L17 2" stroke="#94a3b8" strokeWidth="2.5" strokeLinecap="round"/></svg>
-                                            </button>
+                                <div className="bk-card">
+                                    <div className="bk-step-header">
+                                        <div className="bk-step-icon">📅</div>
+                                        <div>
+                                            <div className="bk-step-title">When do you want to park?</div>
+                                            <div className="bk-step-sub">Step 3 of 6 — Pick date, arrival time & duration</div>
                                         </div>
-
-                                        {/* colon */}
-                                        <div style={{ fontSize: 44, fontWeight: 900, color: '#1e293b', padding: '0 4px', lineHeight: 1, marginTop: 8 }}>:</div>
-
-                                        {/* ── MINUTE drum ── */}
-                                        {(() => {
-                                            const MINS = [0, 15, 30, 45];
-                                            const selIdx = MINS.indexOf(selMin) === -1 ? 0 : MINS.indexOf(selMin);
-                                            const prevMin = MINS[(selIdx - 1 + MINS.length) % MINS.length];
-                                            const nextMin = MINS[(selIdx + 1) % MINS.length];
-                                            return (
-                                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0, flex: 1 }}>
-                                                    <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Min</div>
-                                                    <button
-                                                        onClick={() => setSlot(selHour, prevMin)}
-                                                        style={{ width: 48, height: 36, border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}>
-                                                        <svg width="18" height="12" viewBox="0 0 18 12" fill="none"><path d="M1 10L9 2L17 10" stroke="#94a3b8" strokeWidth="2.5" strokeLinecap="round"/></svg>
-                                                    </button>
-                                                    <div style={{ height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, fontWeight: 900, color: '#d1d5db', opacity: 0.5, letterSpacing: -1 }}>
-                                                        {String(prevMin).padStart(2,'0')}
-                                                    </div>
-                                                    <div style={{
-                                                        height: 60, width: 90, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                        fontSize: 44, fontWeight: 900, color: '#1e293b', letterSpacing: -2,
-                                                        background: 'white', borderRadius: 16,
-                                                        border: '2.5px solid #2563eb',
-                                                        boxShadow: '0 6px 20px rgba(37,99,235,0.18)',
-                                                        transition: 'all 0.2s',
-                                                    }}>
-                                                        {String(selMin).padStart(2,'0')}
-                                                    </div>
-                                                    <div style={{ height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, fontWeight: 900, color: '#d1d5db', opacity: 0.5, letterSpacing: -1 }}>
-                                                        {String(nextMin).padStart(2,'0')}
-                                                    </div>
-                                                    <button
-                                                        onClick={() => setSlot(selHour, nextMin)}
-                                                        style={{ width: 48, height: 36, border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}>
-                                                        <svg width="18" height="12" viewBox="0 0 18 12" fill="none"><path d="M1 2L9 10L17 2" stroke="#94a3b8" strokeWidth="2.5" strokeLinecap="round"/></svg>
-                                                    </button>
-                                                </div>
-                                            );
-                                        })()}
                                     </div>
-                                    <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 10, textAlign: 'center', fontWeight: 500 }}>
-                                        Tap ▲▼ to adjust hour & minute
-                                    </div>
-                                </div>
 
+                                    {/* ── 1. DATE (Single trigger + Calendar Popover) ── */}
+                                    {(() => {
+                                        const MONTH_NAMES = [
+                                            'January', 'February', 'March', 'April', 'May', 'June',
+                                            'July', 'August', 'September', 'October', 'November', 'December'
+                                        ];
+                                        const fromDt = new Date(entryDate.slice(0, 10));
+                                        const toDt = new Date(entryDate);
+                                        toDt.setHours(toDt.getHours() + duration);
 
-                                {/* ── 3. DURATION ── */}
-                                <div style={{ marginBottom: 24 }}>
-                                    <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>⏳ Duration</div>
-                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
-                                        {DURATION_OPTIONS.map(opt => {
-                                            const isSel = duration === opt.val && !isCustomDur;
-                                            return (
-                                                <button key={opt.val} onClick={() => setDuration(opt.val)}
+                                        const fmtCalBtnDate = (d: Date) => {
+                                            const day = String(d.getDate()).padStart(2, '0');
+                                            const month = MONTH_NAMES[d.getMonth()];
+                                            const year = d.getFullYear();
+                                            return `${day} ${month}, ${year}`;
+                                        };
+
+                                        return (
+                                            <div style={{ position: 'relative', marginBottom: 28 }}>
+                                                <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>📆 Booking Date</div>
+                                                <button
+                                                    onClick={() => {
+                                                        if (showCalendar) setShowCalendar(false);
+                                                        else openCalendar('from');
+                                                    }}
                                                     style={{
-                                                        padding: '14px 20px',
-                                                        border: `2px solid ${isSel ? '#2563eb' : '#e2e8f0'}`,
+                                                        width: '100%',
+                                                        background: 'white',
+                                                        border: showCalendar ? '1.5px solid #2563eb' : '1.5px solid #e2e8f0',
                                                         borderRadius: 14,
-                                                        background: isSel ? 'linear-gradient(135deg,#2563eb,#1d4ed8)' : 'white',
-                                                        color: isSel ? 'white' : '#374151',
-                                                        fontWeight: isSel ? 800 : 700,
+                                                        padding: '14px 18px',
                                                         fontSize: 15,
+                                                        fontWeight: 700,
+                                                        color: '#334155',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'space-between',
                                                         cursor: 'pointer',
-                                                        transition: 'all 0.2s cubic-bezier(0.34,1.56,0.64,1)',
-                                                        boxShadow: isSel ? '0 6px 18px rgba(37,99,235,0.35)' : '0 1px 4px rgba(0,0,0,0.05)',
-                                                        transform: isSel ? 'scale(1.06)' : 'scale(1)',
-                                                    }}>
-                                                    {opt.label}
-                                                </button>
-                                            );
-                                        })}
-                                        {/* Custom stepper */}
+                                                        boxShadow: showCalendar ? '0 0 0 3px rgba(37,99,235,0.15)' : '0 1px 3px rgba(0,0,0,0.05)',
+                                                        transition: 'all 0.2s',
+                                                    }}
+                                                >
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                                        <span style={{ fontSize: 16 }}>📅</span>
+                                                        <span>{fmtCalBtnDate(fromDt)}</span>
+                                                    </div>
+                                                    <span style={{ color: '#94a3b8', fontSize: 10 }}>▼</span>
+                                                </button>                                            </div>
+                                        );
+                                    })()}
+
+                                    {/* ── 2. ARRIVAL TIME — Dual Drum Spinner ── */}
+                                    <div style={{ marginBottom: 28 }}>
+                                        <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 16 }}>
+                                            🕐 Arrival Time
+                                            <span style={{ fontSize: 13, fontWeight: 800, color: '#2563eb', marginLeft: 10, letterSpacing: 0, textTransform: 'none' }}>
+                                                {String(selHour).padStart(2, '0')}:{String(selMin).padStart(2, '0')}
+                                            </span>
+                                        </div>
+
+                                        {/* Drum spinner container */}
                                         <div style={{
-                                            display: 'flex', alignItems: 'center', gap: 0,
-                                            border: `2px solid ${isCustomDur ? '#2563eb' : '#e2e8f0'}`,
-                                            borderRadius: 14, overflow: 'hidden', background: isCustomDur ? '#eff6ff' : 'white',
+                                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0,
+                                            background: 'linear-gradient(135deg,#f8fafc,#f1f5f9)',
+                                            borderRadius: 22, border: '1.5px solid #e2e8f0',
+                                            padding: '16px 24px',
+                                            boxShadow: '0 4px 20px rgba(0,0,0,0.06)',
                                         }}>
-                                            <button onClick={() => setDuration(d => Math.max(1, d - 1))}
-                                                style={{ width: 38, height: 52, border: 'none', background: 'transparent', fontSize: 20, fontWeight: 900, color: '#1e293b', cursor: 'pointer' }}>−</button>
-                                            <div style={{ padding: '0 8px', textAlign: 'center', borderLeft: '1.5px solid #e2e8f0', borderRight: '1.5px solid #e2e8f0', minWidth: 52 }}>
-                                                <div style={{ fontSize: 18, fontWeight: 900, color: isCustomDur ? '#2563eb' : '#64748b', lineHeight: 1 }}>{duration}</div>
-                                                <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 600 }}>hr</div>
+                                            {/* ── HOUR drum ── */}
+                                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0, flex: 1 }}>
+                                                <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Hour</div>
+                                                <button
+                                                    onClick={() => setSlot((selHour - 1 + 24) % 24, selMin)}
+                                                    style={{ width: 48, height: 36, border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}>
+                                                    <svg width="18" height="12" viewBox="0 0 18 12" fill="none"><path d="M1 10L9 2L17 10" stroke="#94a3b8" strokeWidth="2.5" strokeLinecap="round" /></svg>
+                                                </button>
+                                                {/* prev */}
+                                                <div style={{ height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, fontWeight: 900, color: '#d1d5db', opacity: 0.5, letterSpacing: -1 }}>
+                                                    {String((selHour - 1 + 24) % 24).padStart(2, '0')}
+                                                </div>
+                                                {/* selected hour — click to edit */}
+                                                <input
+                                                    type="number"
+                                                    className="time-drum-input"
+                                                    min={0}
+                                                    max={23}
+                                                    value={String(selHour).padStart(2, '0')}
+                                                    onChange={e => {
+                                                        if (e.target.value === '') {
+                                                            setSlot(0, selMin);
+                                                            return;
+                                                        }
+                                                        const v = parseInt(e.target.value);
+                                                        if (!isNaN(v)) setSlot(Math.min(23, Math.max(0, v)), selMin);
+                                                    }}
+                                                    onFocus={e => e.target.select()}
+                                                    onBlur={e => {
+                                                        const v = parseInt(e.target.value);
+                                                        if (isNaN(v)) setSlot(0, selMin);
+                                                        else setSlot(Math.min(23, Math.max(0, v)), selMin);
+                                                    }}
+                                                    onKeyDown={e => {
+                                                        if (e.key === 'ArrowUp') { e.preventDefault(); setSlot((selHour + 1) % 24, selMin); }
+                                                        if (e.key === 'ArrowDown') { e.preventDefault(); setSlot((selHour - 1 + 24) % 24, selMin); }
+                                                        if (e.key === 'Enter') { e.currentTarget.blur(); }
+                                                    }}
+                                                />
+                                                {/* next */}
+                                                <div style={{ height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, fontWeight: 900, color: '#d1d5db', opacity: 0.5, letterSpacing: -1 }}>
+                                                    {String((selHour + 1) % 24).padStart(2, '0')}
+                                                </div>
+                                                <button
+                                                    onClick={() => setSlot((selHour + 1) % 24, selMin)}
+                                                    style={{ width: 48, height: 36, border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}>
+                                                    <svg width="18" height="12" viewBox="0 0 18 12" fill="none"><path d="M1 2L9 10L17 2" stroke="#94a3b8" strokeWidth="2.5" strokeLinecap="round" /></svg>
+                                                </button>
                                             </div>
-                                            <button onClick={() => setDuration(d => Math.min(72, d + 1))}
-                                                style={{ width: 38, height: 52, border: 'none', background: 'transparent', fontSize: 20, fontWeight: 900, color: '#1e293b', cursor: 'pointer' }}>+</button>
+
+                                            {/* colon */}
+                                            <div style={{ fontSize: 44, fontWeight: 900, color: '#1e293b', padding: '0 4px', lineHeight: 1, marginTop: 8 }}>:</div>
+
+                                            {/* ── MINUTE drum ── */}
+                                            {(() => {
+                                                const MINS = [0, 15, 30, 45];
+                                                const selIdx = MINS.indexOf(selMin) === -1 ? 0 : MINS.indexOf(selMin);
+                                                const prevMin = MINS[(selIdx - 1 + MINS.length) % MINS.length];
+                                                const nextMin = MINS[(selIdx + 1) % MINS.length];
+                                                return (
+                                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0, flex: 1 }}>
+                                                        <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Min</div>
+                                                        <button
+                                                            onClick={() => setSlot(selHour, prevMin)}
+                                                            style={{ width: 48, height: 36, border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}>
+                                                            <svg width="18" height="12" viewBox="0 0 18 12" fill="none"><path d="M1 10L9 2L17 10" stroke="#94a3b8" strokeWidth="2.5" strokeLinecap="round" /></svg>
+                                                        </button>
+                                                        <div style={{ height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, fontWeight: 900, color: '#d1d5db', opacity: 0.5, letterSpacing: -1 }}>
+                                                            {String(prevMin).padStart(2, '0')}
+                                                        </div>
+                                                        {/* selected minute — click to edit */}
+                                                        <input
+                                                            type="number"
+                                                            className="time-drum-input"
+                                                            min={0}
+                                                            max={59}
+                                                            value={String(selMin).padStart(2, '0')}
+                                                            onChange={e => {
+                                                                if (e.target.value === '') {
+                                                                    setSlot(selHour, 0);
+                                                                    return;
+                                                                }
+                                                                const v = parseInt(e.target.value);
+                                                                if (!isNaN(v)) {
+                                                                    const clamped = Math.min(59, Math.max(0, v));
+                                                                    setSlot(selHour, clamped);
+                                                                }
+                                                            }}
+                                                            onFocus={e => e.target.select()}
+                                                            onBlur={e => {
+                                                                const v = parseInt(e.target.value);
+                                                                if (isNaN(v)) {
+                                                                    setSlot(selHour, 0);
+                                                                } else {
+                                                                    const clamped = Math.min(59, Math.max(0, v));
+                                                                    setSlot(selHour, clamped);
+                                                                }
+                                                            }}
+                                                            onKeyDown={e => {
+                                                                const MINS = [0, 15, 30, 45];
+                                                                const selIdx = MINS.indexOf(selMin) === -1 ? 0 : MINS.indexOf(selMin);
+                                                                if (e.key === 'ArrowUp') {
+                                                                    e.preventDefault();
+                                                                    const prevMin = MINS[(selIdx - 1 + MINS.length) % MINS.length];
+                                                                    setSlot(selHour, prevMin);
+                                                                }
+                                                                if (e.key === 'ArrowDown') {
+                                                                    e.preventDefault();
+                                                                    const nextMin = MINS[(selIdx + 1) % MINS.length];
+                                                                    setSlot(selHour, nextMin);
+                                                                }
+                                                                if (e.key === 'Enter') {
+                                                                    e.currentTarget.blur();
+                                                                }
+                                                            }}
+                                                        />
+                                                        <div style={{ height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, fontWeight: 900, color: '#d1d5db', opacity: 0.5, letterSpacing: -1 }}>
+                                                            {String(nextMin).padStart(2, '0')}
+                                                        </div>
+                                                        <button
+                                                            onClick={() => setSlot(selHour, nextMin)}
+                                                            style={{ width: 48, height: 36, border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}>
+                                                            <svg width="18" height="12" viewBox="0 0 18 12" fill="none"><path d="M1 2L9 10L17 2" stroke="#94a3b8" strokeWidth="2.5" strokeLinecap="round" /></svg>
+                                                        </button>
+                                                    </div>
+                                                );
+                                            })()}
+                                        </div>
+                                        <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 10, textAlign: 'center', fontWeight: 500 }}>
+                                            Tap ▲▼ to adjust &nbsp;·&nbsp; Click number to type directly
                                         </div>
                                     </div>
-                                </div>
 
-                                {/* ── 4. SUMMARY CARD ── */}
-                                <div style={{
-                                    background: 'linear-gradient(135deg,#0f172a,#1e293b)',
-                                    borderRadius: 20, padding: '18px 22px',
-                                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                                    gap: 12,
-                                }}>
-                                    <div>
-                                        <div style={{ fontSize: 10, color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>🅿️ Your Parking</div>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                            <div style={{ textAlign: 'center' }}>
-                                                <div style={{ fontSize: 22, fontWeight: 900, color: '#60a5fa', letterSpacing: -0.5 }}>{fmtT(new Date(entryDate))}</div>
-                                                <div style={{ fontSize: 10, color: '#475569', marginTop: 1 }}>{fmtD(new Date(entryDate))}</div>
-                                            </div>
-                                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, flex: 1 }}>
-                                                <div style={{ fontSize: 11, color: '#64748b', fontWeight: 700 }}>{duration}h</div>
-                                                <div style={{ height: 2, background: 'linear-gradient(90deg,#60a5fa,#34d399)', borderRadius: 1, width: '100%' }} />
-                                            </div>
-                                            <div style={{ textAlign: 'center' }}>
-                                                <div style={{ fontSize: 22, fontWeight: 900, color: '#34d399', letterSpacing: -0.5 }}>{fmtT(exitDt)}</div>
-                                                <div style={{ fontSize: 10, color: '#475569', marginTop: 1 }}>{fmtD(exitDt)}</div>
+
+                                    {/* ── 3. DURATION ── */}
+                                    <div style={{ marginBottom: 24 }}>
+                                        <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>⏳ Duration</div>
+                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+                                            {DURATION_OPTIONS.map(opt => {
+                                                const isSel = duration === opt.val && !isCustomDur;
+                                                return (
+                                                    <button key={opt.val} onClick={() => setDuration(opt.val)}
+                                                        style={{
+                                                            padding: '14px 20px',
+                                                            border: `2px solid ${isSel ? '#2563eb' : '#e2e8f0'}`,
+                                                            borderRadius: 14,
+                                                            background: isSel ? 'linear-gradient(135deg,#2563eb,#1d4ed8)' : 'white',
+                                                            color: isSel ? 'white' : '#374151',
+                                                            fontWeight: isSel ? 800 : 700,
+                                                            fontSize: 15,
+                                                            cursor: 'pointer',
+                                                            transition: 'all 0.2s cubic-bezier(0.34,1.56,0.64,1)',
+                                                            boxShadow: isSel ? '0 6px 18px rgba(37,99,235,0.35)' : '0 1px 4px rgba(0,0,0,0.05)',
+                                                            transform: isSel ? 'scale(1.06)' : 'scale(1)',
+                                                        }}>
+                                                        {opt.label}
+                                                    </button>
+                                                );
+                                            })}
+                                            {/* Custom stepper */}
+                                            <div style={{
+                                                display: 'flex', alignItems: 'center', gap: 0,
+                                                border: `2px solid ${isCustomDur ? '#2563eb' : '#e2e8f0'}`,
+                                                borderRadius: 14, overflow: 'hidden', background: isCustomDur ? '#eff6ff' : 'white',
+                                            }}>
+                                                <button onClick={() => setDuration(d => Math.max(1, d - 1))}
+                                                    style={{ width: 38, height: 52, border: 'none', background: 'transparent', fontSize: 20, fontWeight: 900, color: '#1e293b', cursor: 'pointer' }}>−</button>
+                                                <div style={{ padding: '0 8px', textAlign: 'center', borderLeft: '1.5px solid #e2e8f0', borderRight: '1.5px solid #e2e8f0', minWidth: 52 }}>
+                                                    <div style={{ fontSize: 18, fontWeight: 900, color: isCustomDur ? '#2563eb' : '#64748b', lineHeight: 1 }}>{duration}</div>
+                                                    <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 600 }}>hr</div>
+                                                </div>
+                                                <button onClick={() => setDuration(d => Math.min(72, d + 1))}
+                                                    style={{ width: 38, height: 52, border: 'none', background: 'transparent', fontSize: 20, fontWeight: 900, color: '#1e293b', cursor: 'pointer' }}>+</button>
                                             </div>
                                         </div>
                                     </div>
-                                    {vehicleType && (
-                                        <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                                            <div style={{ fontSize: 10, color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Est. Cost</div>
-                                            <div style={{ fontSize: 20, fontWeight: 900, color: '#fbbf24', letterSpacing: -0.5 }}>
-                                                {new Intl.NumberFormat('vi-VN').format(Math.round((vehicleType.pricing?.hourlyRate ?? 0) * duration))}₫
+
+                                    {/* ── 4. SUMMARY CARD ── */}
+                                    <div style={{
+                                        background: 'linear-gradient(135deg,#0f172a,#1e293b)',
+                                        borderRadius: 20, padding: '18px 22px',
+                                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                        gap: 12,
+                                    }}>
+                                        <div>
+                                            <div style={{ fontSize: 10, color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>🅿️ Your Parking</div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                                <div style={{ textAlign: 'center' }}>
+                                                    <div style={{ fontSize: 22, fontWeight: 900, color: '#60a5fa', letterSpacing: -0.5 }}>{fmtT(new Date(entryDate))}</div>
+                                                    <div style={{ fontSize: 10, color: '#475569', marginTop: 1 }}>{fmtD(new Date(entryDate))}</div>
+                                                </div>
+                                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, flex: 1 }}>
+                                                    <div style={{ fontSize: 11, color: '#64748b', fontWeight: 700 }}>{duration}h</div>
+                                                    <div style={{ height: 2, background: 'linear-gradient(90deg,#60a5fa,#34d399)', borderRadius: 1, width: '100%' }} />
+                                                </div>
+                                                <div style={{ textAlign: 'center' }}>
+                                                    <div style={{ fontSize: 22, fontWeight: 900, color: '#34d399', letterSpacing: -0.5 }}>{fmtT(exitDt)}</div>
+                                                    <div style={{ fontSize: 10, color: '#475569', marginTop: 1 }}>{fmtD(exitDt)}</div>
+                                                </div>
                                             </div>
                                         </div>
-                                    )}
-                                </div>
+                                        {vehicleType && (
+                                            <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                                                <div style={{ fontSize: 10, color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Est. Cost</div>
+                                                <div style={{ fontSize: 20, fontWeight: 900, color: '#fbbf24', letterSpacing: -0.5 }}>
+                                                    {new Intl.NumberFormat('vi-VN').format(Math.round((vehicleType.pricing?.hourlyRate ?? 0) * duration))}₫
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
 
-                                <div className="bk-nav">
-                                    <button className="bk-btn-back" onClick={handleBack}>← Back</button>
-                                    <button id="step3-next-btn" className="bk-btn-next" onClick={handleNext}>
-                                        Continue → Select Floor
-                                    </button>
+                                    <div className="bk-nav">
+                                        <button className="bk-btn-back" onClick={handleBack}>← Back</button>
+                                        <button id="step3-next-btn" className="bk-btn-next" onClick={handleNext}>
+                                            Continue → Select Floor
+                                        </button>
+                                    </div>
                                 </div>
-                            </div>
                             );
                         })()}
 
@@ -2028,18 +2553,16 @@ const BookingPage = () => {
 
             {/* ── Confirm Modal ── */}
             {showConfirmModal && (() => {
-                const serviceFee = Math.round(estimatedPrice * 0.05);
-                const grandTotal = Math.round(estimatedPrice) + serviceFee;
+                const grandTotal = Math.round(estimatedPrice);
                 const payMethods = [
-                    { id: 'card', label: 'Credit / Debit Card', icon: <CreditCardIcon size={22} />, color: '#2563eb' },
+                    { id: 'bank_transfer', label: 'Bank Transfer (VietQR)', icon: <QrCodeIcon size={22} />, color: '#2563eb' },
                     { id: 'momo', label: 'MoMo Wallet', icon: <MomoIcon />, color: '#ae2070' },
-                    { id: 'zalopay', label: 'ZaloPay', icon: <ZaloPayIcon />, color: '#0068ff' },
                     { id: 'cash', label: 'Pay at Counter', icon: <CashIcon size={22} />, color: '#10b981' },
                 ];
                 return (
                     <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget && !checkoutProcessing) setShowConfirmModal(false); }}>
                         <div className="modal-box">
-                            {checkoutPhase === 'review' ? (
+                            {checkoutPhase === 'review' && (
                                 <>
                                     <div className="modal-title">🎉 Confirm Your Booking</div>
                                     <div className="modal-sub">Please review all details before confirming.</div>
@@ -2110,7 +2633,8 @@ const BookingPage = () => {
                                         </button>
                                     </div>
                                 </>
-                            ) : (
+                            )}
+                            {checkoutPhase === 'payment' && (
                                 <>
                                     <div className="modal-title">💳 Secure Checkout</div>
                                     <div className="modal-sub">Select payment method and complete your reservation.</div>
@@ -2127,9 +2651,8 @@ const BookingPage = () => {
                                                 <div className="pay-method-info">
                                                     <div className="pay-method-name">{m.label}</div>
                                                     <div className="pay-method-sub">
-                                                        {m.id === 'card' && 'Visa, Mastercard, JCB, Amex'}
+                                                        {m.id === 'bank_transfer' && 'Scan VietQR code to pay via Banking App'}
                                                         {m.id === 'momo' && 'Instant payment via MoMo app'}
-                                                        {m.id === 'zalopay' && 'Instant payment via ZaloPay app'}
                                                         {m.id === 'cash' && 'Pay at parking booth before exit'}
                                                     </div>
                                                 </div>
@@ -2140,91 +2663,8 @@ const BookingPage = () => {
                                         ))}
                                     </div>
 
-                                    {/* Card form */}
-                                    {payMethod === 'card' && (
-                                        <div className="card-form">
-                                            {/* Visual card */}
-                                            <div className="card-visual">
-                                                <div className="card-chip"></div>
-                                                <div className="card-number-display">
-                                                    {cardNumber || '•••• •••• •••• ••••'}
-                                                </div>
-                                                <div className="card-bottom">
-                                                    <div>
-                                                        <div className="card-holder">Card Holder</div>
-                                                        <div className="card-holder-name">{cardName || 'YOUR NAME'}</div>
-                                                    </div>
-                                                    <div style={{ textAlign: 'right' }}>
-                                                        <div className="card-exp-label">EXPIRES</div>
-                                                        <div className="card-exp-value">{expiry || 'MM/YY'}</div>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            <div className="form-field">
-                                                <label className="form-label">Card Number</label>
-                                                <input
-                                                    id="card-number"
-                                                    className={`form-input ${checkoutErrors.cardNumber ? 'error' : ''}`}
-                                                    placeholder="1234 5678 9012 3456"
-                                                    value={cardNumber}
-                                                    onChange={e => setCardNumber(formatCard(e.target.value))}
-                                                    maxLength={19}
-                                                />
-                                                {checkoutErrors.cardNumber && <span className="form-error">{checkoutErrors.cardNumber}</span>}
-                                            </div>
-
-                                            <div className="form-field">
-                                                <label className="form-label">Cardholder Name</label>
-                                                <input
-                                                    id="card-name"
-                                                    className={`form-input ${checkoutErrors.cardName ? 'error' : ''}`}
-                                                    placeholder="NGUYEN VAN A"
-                                                    value={cardName}
-                                                    onChange={e => setCardName(e.target.value.toUpperCase())}
-                                                />
-                                                {checkoutErrors.cardName && <span className="form-error">{checkoutErrors.cardName}</span>}
-                                            </div>
-
-                                            <div className="form-row">
-                                                <div className="form-field">
-                                                    <label className="form-label">Expiry Date</label>
-                                                    <input
-                                                        id="card-expiry"
-                                                        className={`form-input ${checkoutErrors.expiry ? 'error' : ''}`}
-                                                        placeholder="MM/YY"
-                                                        value={expiry}
-                                                        onChange={e => setExpiry(formatExpiry(e.target.value))}
-                                                        maxLength={5}
-                                                    />
-                                                    {checkoutErrors.expiry && <span className="form-error">{checkoutErrors.expiry}</span>}
-                                                </div>
-                                                <div className="form-field">
-                                                    <label className="form-label">CVV</label>
-                                                    <input
-                                                        id="card-cvv"
-                                                        className={`form-input ${checkoutErrors.cvv ? 'error' : ''}`}
-                                                        placeholder="•••"
-                                                        value={cvv}
-                                                        type="password"
-                                                        onChange={e => setCvv(formatCVV(e.target.value))}
-                                                        maxLength={3}
-                                                    />
-                                                    {checkoutErrors.cvv && <span className="form-error">{checkoutErrors.cvv}</span>}
-                                                </div>
-                                            </div>
-
-                                            <div className="save-card-row" onClick={() => setSaveCard(!saveCard)}>
-                                                <div className={`save-checkbox ${saveCard ? 'checked' : ''}`}>
-                                                    {saveCard && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>}
-                                                </div>
-                                                <span className="save-card-text">Save this card for future payments</span>
-                                            </div>
-                                        </div>
-                                    )}
-
                                     {/* QR instruction for e-wallets */}
-                                    {(payMethod === 'momo' || payMethod === 'zalopay') && (
+                                    {(payMethod === 'momo') && (
                                         <div style={{
                                             marginTop: 20, padding: '20px',
                                             background: payMethod === 'momo' ? 'linear-gradient(135deg,#fdf2f8,#fce7f3)' : 'linear-gradient(135deg,#eff6ff,#dbeafe)',
@@ -2236,7 +2676,7 @@ const BookingPage = () => {
                                                 {payMethod === 'momo' ? '📱' : '📲'}
                                             </div>
                                             <div style={{ fontWeight: 700, fontSize: 14, color: payMethod === 'momo' ? '#9d174d' : '#1d4ed8', marginBottom: 6 }}>
-                                                Open {payMethod === 'momo' ? 'MoMo' : 'ZaloPay'} app and confirm payment
+                                                Open {payMethod === 'momo' ? 'MoMo' : 'E-wallet'} app and confirm payment
                                             </div>
                                             <div style={{ fontSize: 12, color: '#64748b', fontWeight: 500 }}>
                                                 Amount: <strong>{fmtVND(grandTotal)}</strong> will be deducted from your wallet
@@ -2265,7 +2705,6 @@ const BookingPage = () => {
                                     <div className="modal-total" style={{ marginTop: '20px' }}>
                                         <div>
                                             <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', textAlign: 'left' }}>parking fee: {fmtVND(estimatedPrice)}</div>
-                                            <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', textAlign: 'left', marginTop: '2px' }}>service fee (5%): {fmtVND(serviceFee)}</div>
                                         </div>
                                         <div style={{ textAlign: 'right' }}>
                                             <div className="modal-total-label">Grand Total</div>
@@ -2274,8 +2713,8 @@ const BookingPage = () => {
                                     </div>
 
                                     <div className="modal-actions" style={{ marginTop: '24px' }}>
-                                        <button className="modal-cancel" onClick={() => setCheckoutPhase('review')} disabled={checkoutProcessing}>
-                                            ← Back
+                                        <button className="modal-cancel" onClick={() => setShowConfirmModal(false)} disabled={checkoutProcessing}>
+                                            Cancel
                                         </button>
                                         <button
                                             id="confirm-payment-btn"
@@ -2290,11 +2729,45 @@ const BookingPage = () => {
                                                 </>
                                             ) : (
                                                 <>
-                                                    <LockIcon />
-                                                    Pay {fmtVND(grandTotal)}
+                                                    Confirm Reservation
                                                 </>
                                             )}
                                         </button>
+                                    </div>
+                                </>
+                            )}
+                            {checkoutPhase === 'qr' && (
+                                <>
+                                    <div className="modal-header">
+                                        <div className="modal-title">Payment</div>
+                                        <div className="modal-subtitle">Scan to complete reservation</div>
+                                    </div>
+                                    <div className="modal-body" style={{ textAlign: 'center', padding: '20px' }}>
+                                        {payMethod === 'bank_transfer' && bankInfo ? (
+                                            <div style={{
+                                                background: 'linear-gradient(135deg,#eff6ff,#dbeafe)',
+                                                borderRadius: 16,
+                                                padding: '24px',
+                                                border: '1px solid #bfdbfe'
+                                            }}>
+                                                <div style={{ fontWeight: 800, fontSize: 18, color: '#1d4ed8', marginBottom: 16 }}>
+                                                    Scan to Pay via VietQR
+                                                </div>
+                                                <div style={{ background: 'white', padding: 16, borderRadius: 16, display: 'inline-block', marginBottom: 16, boxShadow: '0 8px 24px rgba(37,99,235,0.15)' }}>
+                                                    <img src={bankInfo.qrUrl} alt="VietQR" style={{ width: 220, height: 220, objectFit: 'contain' }} />
+                                                </div>
+                                                <div style={{ fontSize: 14, color: '#475569', fontWeight: 600, background: '#ffffff', padding: '12px 20px', borderRadius: 8, border: '1px dashed #93c5fd' }}>
+                                                    Transfer Content: <strong style={{ color: '#1e293b', fontSize: 18, letterSpacing: 1 }}>{bankInfo.transferContent}</strong>
+                                                </div>
+                                                
+                                                <div style={{ marginTop: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+                                                    <div className="bk-spin" style={{ width: 18, height: 18, borderWidth: 2, borderColor: '#3b82f6', borderTopColor: 'transparent' }} />
+                                                    <span style={{ fontSize: 13, color: '#2563eb', fontWeight: 600 }}>Waiting for payment confirmation...</span>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div>Payment processing...</div>
+                                        )}
                                     </div>
                                 </>
                             )}
@@ -2335,7 +2808,7 @@ const BookingPage = () => {
                             Motorbikes are only allowed on designated floors (highlighted below). Other floors will be locked.
                         </div>
                     </div>
-                    <button 
+                    <button
                         onClick={() => setShowMotorbikeToast(false)}
                         style={{
                             background: 'transparent',
@@ -2403,7 +2876,7 @@ const BookingPage = () => {
                             View QR Ticket
                         </button>
                     </div>
-                    <button 
+                    <button
                         onClick={() => setShowSuccessToast(false)}
                         style={{
                             background: 'transparent',
@@ -2421,6 +2894,108 @@ const BookingPage = () => {
                     </button>
                 </div>
             )}
+            {/* ── Calendar Modal (escapes transformed parents) ── */}
+            {showCalendar && (() => {
+                const MONTH_NAMES = [
+                    'January', 'February', 'March', 'April', 'May', 'June',
+                    'July', 'August', 'September', 'October', 'November', 'December'
+                ];
+                const calDays = getCalendarDays(calYear, calMonth);
+                const now = new Date();
+                const todayOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+                const fmtCalBtnDate = (d: Date) => {
+                    const day = String(d.getDate()).padStart(2, '0');
+                    const month = MONTH_NAMES[d.getMonth()];
+                    const year = d.getFullYear();
+                    return `${day} ${month}, ${year}`;
+                };
+
+                return (
+                    <div className="cal-modal-overlay" onClick={() => setShowCalendar(false)}>
+                        <div className="cal-modal-content" onClick={e => e.stopPropagation()}>
+                            {/* Title inside Modal */}
+                            <div style={{ textAlign: 'center', marginBottom: 16, fontSize: 16, fontWeight: 800, color: '#1e293b' }}>
+                                Select Booking Date
+                            </div>
+
+                            <div className="cal-popover-header">
+                                <select
+                                    className="cal-select"
+                                    value={calMonth}
+                                    onChange={e => setCalMonth(parseInt(e.target.value))}
+                                >
+                                    {MONTH_NAMES.map((name, idx) => {
+                                        const isPastMonth = calYear === now.getFullYear() && idx < now.getMonth();
+                                        return (
+                                            <option key={name} value={idx} disabled={isPastMonth}>{name}</option>
+                                        );
+                                    })}
+                                </select>
+                                <select
+                                    className="cal-select"
+                                    value={calYear}
+                                    onChange={e => {
+                                        const selectedYear = parseInt(e.target.value);
+                                        setCalYear(selectedYear);
+                                        if (selectedYear === now.getFullYear() && calMonth < now.getMonth()) {
+                                            setCalMonth(now.getMonth());
+                                        }
+                                    }}
+                                >
+                                    {Array.from({ length: 3 }, (_, i) => now.getFullYear() + i).map(yr => (
+                                        <option key={yr} value={yr}>{yr}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div className="cal-weekdays">
+                                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => (
+                                    <div key={d} className="cal-weekday">{d}</div>
+                                ))}
+                            </div>
+
+                            <div className="cal-days-grid">
+                                {calDays.map((cell, idx) => {
+                                    const cellDate = new Date(cell.year, cell.month, cell.day);
+                                    const isPast = isBeforeDay(cellDate, todayOnly);
+
+                                    const isSelected = isSameDay(cellDate, tempFromDate);
+
+                                    let cellClass = 'cal-day-cell';
+                                    if (!cell.isCurrentMonth) cellClass += ' other-month';
+                                    if (isPast) cellClass += ' disabled';
+                                    else if (isSelected) cellClass += ' range-start-end-same';
+
+                                    return (
+                                        <div
+                                            key={idx}
+                                            className={cellClass}
+                                            onClick={() => {
+                                                if (isPast) return;
+                                                const selHour = parseInt(entryDate.slice(11, 13)) || 0;
+                                                const selMin = parseInt(entryDate.slice(14, 16)) || 0;
+                                                const dateStr = `${cellDate.getFullYear()}-${String(cellDate.getMonth() + 1).padStart(2, '0')}-${String(cellDate.getDate()).padStart(2, '0')}`;
+                                                setEntryDate(`${dateStr}T${String(selHour).padStart(2, '0')}:${String(selMin).padStart(2, '0')}`);
+
+                                                setTempFromDate(cellDate);
+                                                setTempToDate(cellDate);
+                                                setShowCalendar(false);
+                                            }}
+                                        >
+                                            {cell.day}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+
+                            <div className="cal-popover-footer">
+                                <button className="cal-btn cal-btn-close" onClick={() => setShowCalendar(false)}>Close</button>
+                            </div>
+                        </div>
+                    </div>
+                );
+            })()}
         </>
     );
 };

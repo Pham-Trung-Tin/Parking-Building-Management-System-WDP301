@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import Header from '../../components/Header/Header';
+import paymentService, { PaymentInitiateBankTransferResponse } from '../../services/api/paymentService';
 
 // ── Icons ─────────────────────────────────────────────────────────────────────
 const ArrowLeftIcon = () => (
@@ -48,6 +49,14 @@ const ZaloPayIcon = () => (
         <text x="12" y="15" textAnchor="middle" fill="white" fontSize="6" fontWeight="900" fontFamily="sans-serif">ZaloPay</text>
     </svg>
 );
+const BankIcon = ({ size = 24 }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect width="20" height="14" x="2" y="6" rx="2" />
+        <path d="M2 10h20" />
+        <path d="M7 15h.01" />
+        <path d="M12 15h.01" />
+    </svg>
+);
 const CashIcon = ({ size = 24 }) => (
     <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <rect x="1" y="4" width="22" height="16" rx="2" />
@@ -87,7 +96,7 @@ const CheckoutPage = () => {
     const exitTime = new Date();
 
     // Payment state
-    const [payMethod, setPayMethod] = useState('card'); // 'card' | 'momo' | 'zalopay' | 'cash'
+    const [payMethod, setPayMethod] = useState('bank_transfer'); // 'card' | 'momo' | 'zalopay' | 'cash' | 'bank_transfer'
     const [cardNumber, setCardNumber] = useState('');
     const [cardName, setCardName] = useState('');
     const [expiry, setExpiry] = useState('');
@@ -95,6 +104,43 @@ const CheckoutPage = () => {
     const [saveCard, setSaveCard] = useState(false);
     const [processing, setProcessing] = useState(false);
     const [errors, setErrors] = useState<Record<string, string>>({});
+    
+    const sessionId = data.sessionId || data.session?._id;
+    
+    // Bank Transfer State
+    const [bankInfo, setBankInfo] = useState<PaymentInitiateBankTransferResponse | null>(null);
+    const [polling, setPolling] = useState(false);
+    const [pollingError, setPollingError] = useState('');
+
+    useEffect(() => {
+        let interval: ReturnType<typeof setInterval>;
+        if (polling && bankInfo?.payment?._id) {
+            interval = setInterval(async () => {
+                try {
+                    const status = await paymentService.checkBankTransferStatus(bankInfo.payment._id);
+                    if (status.isPaid) {
+                        setPolling(false);
+                        clearInterval(interval);
+                        navigate('/checkoutsuccess', {
+                            state: {
+                                spot, vehicleType, floor, slot, slotCode,
+                                licensePlate, entryDate: entryDate.toISOString(),
+                                exitTime: exitTime.toISOString(),
+                                elapsed, totalAmount,
+                                payMethod,
+                                transactionId: status.invoiceCode
+                            }
+                        });
+                    }
+                } catch (err: any) {
+                    console.error('Polling error:', err);
+                }
+            }, 3000); // poll every 3 seconds
+        }
+        return () => {
+            if (interval) clearInterval(interval);
+        };
+    }, [polling, bankInfo, navigate]);
 
     const validate = () => {
         const e: Record<string, string> = {};
@@ -107,10 +153,31 @@ const CheckoutPage = () => {
         return e;
     };
 
-    const handlePay = () => {
+    const handlePay = async () => {
         const e = validate();
         if (Object.keys(e).length) { setErrors(e); return; }
         setErrors({});
+        
+        if (payMethod === 'bank_transfer') {
+            if (!sessionId) {
+                setPollingError('No active parking session found to pay for.');
+                return;
+            }
+            setProcessing(true);
+            setPollingError('');
+            try {
+                const res = await paymentService.initiateBankTransfer(sessionId);
+                setBankInfo(res);
+                setPolling(true);
+            } catch (error: any) {
+                console.error(error);
+                setPollingError(error.response?.data?.message || 'Failed to generate QR code. Session might not be completed.');
+            } finally {
+                setProcessing(false);
+            }
+            return;
+        }
+
         setProcessing(true);
         setTimeout(() => {
             setProcessing(false);
@@ -127,7 +194,7 @@ const CheckoutPage = () => {
         }, 1800);
     };
 
-    const formatTime = (d) => d.toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true });
+    const formatTime = (d: any) => d.toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true });
     const formatHMS = (s) => {
         const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
         return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
@@ -137,6 +204,7 @@ const CheckoutPage = () => {
     const grandTotal = Math.round(totalAmount) + serviceFee;
 
     const payMethods = [
+        { id: 'bank_transfer', label: 'Bank Transfer (QR)', icon: <BankIcon size={22} />, color: '#0ea5e9' },
         { id: 'card', label: 'Credit / Debit Card', icon: <CreditCardIcon size={22} />, color: '#2563eb' },
         { id: 'momo', label: 'MoMo Wallet', icon: <MomoIcon />, color: '#ae2070' },
         { id: 'zalopay', label: 'ZaloPay', icon: <ZaloPayIcon />, color: '#0068ff' },
@@ -529,6 +597,7 @@ const CheckoutPage = () => {
                                         <div className="pay-method-info">
                                             <div className="pay-method-name">{m.label}</div>
                                             <div className="pay-method-sub">
+                                                {m.id === 'bank_transfer' && 'Scan VietQR to transfer securely'}
                                                 {m.id === 'card' && 'Visa, Mastercard, JCB, Amex'}
                                                 {m.id === 'momo' && 'Instant payment via MoMo app'}
                                                 {m.id === 'zalopay' && 'Instant payment via ZaloPay app'}
@@ -663,6 +732,64 @@ const CheckoutPage = () => {
                                     </div>
                                 </div>
                             )}
+
+                            {/* Bank Transfer QR */}
+                            {payMethod === 'bank_transfer' && bankInfo && (
+                                <div style={{
+                                    marginTop: 20, padding: '24px',
+                                    background: '#f8fafc',
+                                    borderRadius: 14,
+                                    border: '1px solid #e2e8f0',
+                                    textAlign: 'center'
+                                }}>
+                                    <div style={{ fontSize: 16, fontWeight: 800, color: '#0f172a', marginBottom: 6 }}>
+                                        Scan QR to Pay
+                                    </div>
+                                    <div style={{ fontSize: 13, color: '#64748b', marginBottom: 16 }}>
+                                        Use any banking app that supports VietQR
+                                    </div>
+                                    
+                                    <div style={{ 
+                                        display: 'inline-block', padding: 12, background: 'white', 
+                                        borderRadius: 16, border: '2px solid #e2e8f0',
+                                        boxShadow: '0 8px 24px rgba(0,0,0,0.06)'
+                                    }}>
+                                        <img src={bankInfo.qrUrl} alt="VietQR" style={{ width: 220, height: 220, borderRadius: 8 }} />
+                                    </div>
+
+                                    <div style={{ marginTop: 20, padding: '12px', background: '#eff6ff', borderRadius: 10, border: '1px solid #bfdbfe', textAlign: 'left' }}>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 12px', fontSize: 13 }}>
+                                            <div style={{ color: '#64748b', fontWeight: 600 }}>Bank:</div>
+                                            <div style={{ fontWeight: 700, color: '#1e3a8a' }}>{bankInfo.bankInfo.bankName}</div>
+                                            
+                                            <div style={{ color: '#64748b', fontWeight: 600 }}>Account Name:</div>
+                                            <div style={{ fontWeight: 700, color: '#1e3a8a' }}>{bankInfo.bankInfo.accountName}</div>
+                                            
+                                            <div style={{ color: '#64748b', fontWeight: 600 }}>Account No:</div>
+                                            <div style={{ fontWeight: 800, color: '#1d4ed8', fontFamily: 'monospace', fontSize: 14 }}>{bankInfo.bankInfo.accountNumber}</div>
+                                            
+                                            <div style={{ color: '#64748b', fontWeight: 600 }}>Amount:</div>
+                                            <div style={{ fontWeight: 800, color: '#ef4444', fontSize: 15 }}>{bankInfo.amount.toLocaleString('vi-VN')} ₫</div>
+                                            
+                                            <div style={{ color: '#64748b', fontWeight: 600 }}>Content:</div>
+                                            <div style={{ fontWeight: 800, color: '#0f172a', fontFamily: 'monospace', fontSize: 14, background: '#f1f5f9', padding: '2px 6px', borderRadius: 4, display: 'inline-block' }}>
+                                                {bankInfo.transferContent}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, color: '#2563eb', fontSize: 13, fontWeight: 600 }}>
+                                        <div className="spinner" style={{ width: 14, height: 14, borderWidth: 2, borderTopColor: '#2563eb', borderColor: 'rgba(37,99,235,0.2)' }}></div>
+                                        Waiting for payment confirmation...
+                                    </div>
+                                </div>
+                            )}
+
+                            {payMethod === 'bank_transfer' && pollingError && (
+                                <div style={{ marginTop: 16, padding: '12px 16px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10, color: '#ef4444', fontSize: 13, fontWeight: 600 }}>
+                                    ⚠️ {pollingError}
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -716,14 +843,24 @@ const CheckoutPage = () => {
                         <div className="co-card co-in-2" style={{ padding: '20px' }}>
                             <button
                                 id="confirm-payment-btn"
-                                className={`co-pay-btn ${processing ? 'processing' : 'active'}`}
+                                className={`co-pay-btn ${processing || polling ? 'processing' : 'active'}`}
                                 onClick={handlePay}
-                                disabled={processing}
+                                disabled={processing || polling || (payMethod === 'bank_transfer' && bankInfo !== null)}
                             >
                                 {processing ? (
                                     <>
                                         <div className="spinner"></div>
-                                        Processing Payment...
+                                        Processing...
+                                    </>
+                                ) : polling ? (
+                                    <>
+                                        <div className="spinner"></div>
+                                        Awaiting Transfer...
+                                    </>
+                                ) : payMethod === 'bank_transfer' ? (
+                                    <>
+                                        <BankIcon />
+                                        Generate QR Code
                                     </>
                                 ) : (
                                     <>

@@ -8,4 +8,6 @@ export { default as parkingLotService } from './parkingLotService';
 export { default as parkingSlotService } from './parkingSlotService';
 export { default as parkingSessionService } from './parkingSessionService';
 export { default as lprService } from './lprService';
+export { default as vehicleService } from './vehicleService';
+
 
