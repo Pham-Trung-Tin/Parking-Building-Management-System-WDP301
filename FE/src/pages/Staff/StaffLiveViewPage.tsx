@@ -9,41 +9,61 @@ import {
   User, 
   Search,
   Filter,
-  Clock,
-  RefreshCw
+  RefreshCw,
+  Clock
 } from 'lucide-react';
 import useProfile from '../../hooks/useProfile';
+import parkingSessionService from '../../services/api/parkingSessionService';
 
 const StaffLiveViewPage = () => {
   const { profile } = useProfile();
   const navigate = useNavigate();
   
-  const mockSessions = [
-    { id: 'S-901', plate: 'ABC-1234', type: 'SUV', entry: '08:14 AM', zone: 'North - Level 3', duration: '06h 42m', status: 'Parked' },
-    { id: 'S-902', plate: 'GHI-5542', type: 'CAR', entry: '09:30 AM', zone: 'South - Level 1', duration: '05h 26m', status: 'Exiting' },
-    { id: 'S-903', plate: 'LMN-4567', type: 'TRUCK', entry: '10:15 AM', zone: 'Ground Floor', duration: '04h 41m', status: 'Parked' },
-    { id: 'S-904', plate: 'XYZ-9876', type: 'MOTORCYCLE', entry: '11:05 AM', zone: 'East - Level 2', duration: '03h 51m', status: 'Parked' },
-    { id: 'S-905', plate: 'DEF-1122', type: 'CAR', entry: '01:20 PM', zone: 'West - Level 1', duration: '01h 36m', status: 'Entering' },
-  ];
-
+  const [sessions, setSessions] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('All');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState('Just now');
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
+  const [stats, setStats] = useState({ total: 0, entering: 0, exiting: 0, overstayed: 0 });
 
-  const filteredSessions = mockSessions.filter(session => {
-    const matchesSearch = session.plate.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesStatus = filterStatus === 'All' || session.status === filterStatus;
+  const fetchSessions = async () => {
+    setIsRefreshing(true);
+    try {
+      const res = await parkingSessionService.getSessions({ limit: 100, status: 'active' });
+      const activeSessions = res.data?.docs || res.data || [];
+      setSessions(activeSessions);
+      setLastUpdated(new Date().toLocaleTimeString());
+      
+      setStats({
+        total: activeSessions.length,
+        entering: activeSessions.filter((s: any) => !s.exitTime).length,
+        exiting: 0,
+        overstayed: activeSessions.filter((s: any) => s.isOvertime).length,
+      });
+    } catch (error) {
+      console.error('Failed to fetch sessions', error);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  React.useEffect(() => {
+    fetchSessions();
+    // Refresh every 30 seconds
+    const interval = setInterval(fetchSessions, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const filteredSessions = sessions.filter(session => {
+    const matchesSearch = (session.vehicleInfo?.licensePlate || '').toLowerCase().includes(searchQuery.toLowerCase());
+    const sessionStatus = session.status === 'active' ? 'Parked' : session.status;
+    const matchesStatus = filterStatus === 'All' || sessionStatus.toLowerCase() === filterStatus.toLowerCase();
     return matchesSearch && matchesStatus;
   });
 
   const handleRefresh = () => {
-    setIsRefreshing(true);
-    setTimeout(() => {
-      setIsRefreshing(false);
-      setLastUpdated(new Date().toLocaleTimeString());
-    }, 800);
+    fetchSessions();
   };
 
   const handleLogout = () => {
@@ -78,6 +98,10 @@ const StaffLiveViewPage = () => {
             <Link to="/staff/exceptions" className="flex items-center px-6 py-3 text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition-colors w-full text-left">
               <AlertTriangle className="w-5 h-5 mr-3 text-gray-400" />
               Exceptions
+            </Link>
+            <Link to="/staff/profile" className="flex items-center px-6 py-3 text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition-colors w-full text-left">
+              <User className="w-5 h-5 mr-3 text-gray-400" />
+              Profile
             </Link>
           </nav>
         </div>
@@ -182,19 +206,19 @@ const StaffLiveViewPage = () => {
             <div className="grid grid-cols-4 gap-6 mb-8">
               <div className="bg-white border border-gray-200 p-6 shadow-sm border-t-4 border-t-blue-500">
                 <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Total Active</h3>
-                <p className="text-3xl font-black text-gray-900">142</p>
+                <p className="text-3xl font-black text-gray-900">{stats.total}</p>
               </div>
               <div className="bg-white border border-gray-200 p-6 shadow-sm border-t-4 border-t-green-500">
                 <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Entering</h3>
-                <p className="text-3xl font-black text-gray-900">3</p>
+                <p className="text-3xl font-black text-gray-900">{stats.entering}</p>
               </div>
               <div className="bg-white border border-gray-200 p-6 shadow-sm border-t-4 border-t-orange-500">
                 <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Exiting</h3>
-                <p className="text-3xl font-black text-gray-900">5</p>
+                <p className="text-3xl font-black text-gray-900">{stats.exiting}</p>
               </div>
               <div className="bg-white border border-gray-200 p-6 shadow-sm border-t-4 border-t-purple-500">
                 <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Overstayed</h3>
-                <p className="text-3xl font-black text-gray-900">2</p>
+                <p className="text-3xl font-black text-gray-900">{stats.overstayed}</p>
               </div>
             </div>
 
@@ -220,25 +244,35 @@ const StaffLiveViewPage = () => {
                 </thead>
                 <tbody className="divide-y divide-gray-100 text-gray-700">
                   {filteredSessions.length > 0 ? (
-                    filteredSessions.map((session, index) => (
-                      <tr key={index} className="hover:bg-gray-50 transition-colors">
-                        <td className="px-6 py-4 font-medium text-gray-500">{session.id}</td>
-                        <td className="px-6 py-4 font-bold text-gray-900">{session.plate}</td>
-                        <td className="px-6 py-4">{session.type}</td>
-                        <td className="px-6 py-4">{session.entry}</td>
-                        <td className="px-6 py-4">{session.zone}</td>
-                        <td className="px-6 py-4 font-medium">{session.duration}</td>
-                        <td className="px-6 py-4">
-                          <span className={`text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider ${
-                            session.status === 'Parked' ? 'bg-blue-50 text-blue-600' :
-                            session.status === 'Exiting' ? 'bg-orange-50 text-orange-600' :
-                            'bg-green-50 text-green-600'
-                          }`}>
-                            {session.status}
-                          </span>
-                        </td>
-                      </tr>
-                    ))
+                    filteredSessions.map((session, index) => {
+                      const displayStatus = session.status === 'active' ? 'Parked' : session.status;
+                      return (
+                        <tr key={index} className="hover:bg-gray-50 transition-colors">
+                          <td className="px-6 py-4 font-medium text-gray-500">{session.sessionCode}</td>
+                          <td className="px-6 py-4 font-bold text-gray-900">{session.vehicleInfo?.licensePlate}</td>
+                          <td className="px-6 py-4">{session.vehicleType?.name}</td>
+                          <td className="px-6 py-4">{new Date(session.entryTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
+                          <td className="px-6 py-4">{session.zone?.name || 'Unassigned'}</td>
+                          <td className="px-6 py-4 font-medium">{
+                            (() => {
+                              const diff = new Date().getTime() - new Date(session.entryTime).getTime();
+                              const hours = Math.floor(diff / (1000 * 60 * 60));
+                              const minutes = Math.floor((diff / (1000 * 60)) % 60);
+                              return `${hours.toString().padStart(2, '0')}h ${minutes.toString().padStart(2, '0')}m`;
+                            })()
+                          }</td>
+                          <td className="px-6 py-4">
+                            <span className={`text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider ${
+                              displayStatus === 'Parked' ? 'bg-blue-50 text-blue-600' :
+                              displayStatus === 'Exiting' ? 'bg-orange-50 text-orange-600' :
+                              'bg-green-50 text-green-600'
+                            }`}>
+                              {displayStatus}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })
                   ) : (
                     <tr>
                       <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
