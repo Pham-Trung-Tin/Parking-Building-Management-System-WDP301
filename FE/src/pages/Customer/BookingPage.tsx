@@ -147,51 +147,55 @@ const VehicleSvgIcon = ({ code, size = 96 }: { code: string; size?: number }) =>
     const lc = 'round';
     const lj = 'round';
 
+    // Electric Car / Truck / Van
+    if (
+        c.includes('ELECTRIC_CAR') ||
+        c.includes('TRUCK') ||
+        c.includes('TAI') ||
+        c.includes('LORRY') ||
+        c.includes('VAN') ||
+        (c.includes('ELECTRIC') && c.includes('CAR'))
+    ) return (
+        <img
+            src="https://res.cloudinary.com/dgz3rhiv4/image/upload/v1781593889/electric-car_gittvm.png"
+            alt="Electric Car"
+            style={{ width: size, height: size, objectFit: 'contain' }}
+        />
+    );
+
     // Electric bicycle / scooter
     if (c.includes('ELECTRIC') || c.includes('DIEN') || c.includes('EV')) return (
-        <img 
-            src="https://res.cloudinary.com/dgz3rhiv4/image/upload/v1781593348/electric-motor_tijdux.png" 
-            alt="Electric Bicycle" 
-            style={{ width: size, height: size, objectFit: 'contain' }} 
+        <img
+            src="https://res.cloudinary.com/dgz3rhiv4/image/upload/v1781593348/electric-motor_tijdux.png"
+            alt="Electric Bicycle"
+            style={{ width: size, height: size, objectFit: 'contain' }}
         />
     );
 
     // Motorcycle / motorbike
     if (c.includes('MOTOR') || c.includes('MOTO') || c.includes('SCOOTER') || c.includes('MAY')) return (
-        <img 
-            src="https://res.cloudinary.com/dgz3rhiv4/image/upload/v1781592993/bike_uzksng.png" 
-            alt="Motorcycle" 
-            style={{ width: size, height: size, objectFit: 'contain' }} 
+        <img
+            src="https://res.cloudinary.com/dgz3rhiv4/image/upload/v1781592993/bike_uzksng.png"
+            alt="Motorcycle"
+            style={{ width: size, height: size, objectFit: 'contain' }}
         />
     );
 
     // Bicycle
     if (c.includes('BICYCLE') || c.includes('BIKE') || c.includes('DAP')) return (
-        <img 
-            src="https://res.cloudinary.com/dgz3rhiv4/image/upload/v1781593172/bike_1_dbeqbj.png" 
-            alt="Bicycle" 
-            style={{ width: size, height: size, objectFit: 'contain' }} 
+        <img
+            src="https://res.cloudinary.com/dgz3rhiv4/image/upload/v1781593172/bike_1_dbeqbj.png"
+            alt="Bicycle"
+            style={{ width: size, height: size, objectFit: 'contain' }}
         />
-    );
-
-    // Truck / tải
-    if (c.includes('TRUCK') || c.includes('TAI') || c.includes('LORRY') || c.includes('VAN')) return (
-        <svg viewBox="0 0 48 48" width={size} height={size} fill="none" stroke={stroke} strokeWidth={sw} strokeLinecap={lc as any} strokeLinejoin={lj as any}>
-            <rect x="2" y="14" width="28" height="20" rx="2" />
-            <path d="M30 20 L44 20 L46 34 L30 34" />
-            <path d="M30 20 L36 14 L44 14 L44 20" />
-            <circle cx="10" cy="36" r="4" />
-            <circle cx="36" cy="36" r="4" />
-            <line x1="2" y1="22" x2="30" y2="22" />
-        </svg>
     );
 
     // Default: Car / sedan
     return (
-        <img 
-            src="https://res.cloudinary.com/dgz3rhiv4/image/upload/v1781593098/car_s8v0sp.png" 
-            alt="Car" 
-            style={{ width: size, height: size, objectFit: 'contain' }} 
+        <img
+            src="https://res.cloudinary.com/dgz3rhiv4/image/upload/v1781593098/car_s8v0sp.png"
+            alt="Car"
+            style={{ width: size, height: size, objectFit: 'contain' }}
         />
     );
 };
@@ -1778,7 +1782,7 @@ const BookingPage = () => {
                         {currentStep === 2 && (
                             <div className="bk-card">
                                 <div className="bk-step-header">
-                                    <div className="bk-step-icon">🪪</div>
+                                    {/* <div className="bk-step-icon">🪪</div> */}
                                     <div>
                                         <div className="bk-step-title">Enter License Plate</div>
                                         <div className="bk-step-sub">Step 2 of 6 — Your vehicle's identification number</div>
@@ -1896,7 +1900,7 @@ const BookingPage = () => {
                                     {licensePlate.length >= 4 && (
                                         <div style={{ display: 'flex', justifyContent: 'center', marginTop: 20 }}>
                                             <div className="lp-plate-preview">
-                                                <span className="lp-flag">🇻🇳</span>
+                                                {/* <span className="lp-flag">🇻🇳</span> */}
                                                 {licensePlate}
                                             </div>
                                         </div>
@@ -1984,7 +1988,7 @@ const BookingPage = () => {
                             return (
                                 <div className="bk-card">
                                     <div className="bk-step-header">
-                                        <div className="bk-step-icon">📅</div>
+                                        {/* <div className="bk-step-icon">📅</div> */}
                                         <div>
                                             <div className="bk-step-title">When do you want to park?</div>
                                             <div className="bk-step-sub">Step 3 of 6 — Pick date, arrival time & duration</div>
@@ -2010,7 +2014,7 @@ const BookingPage = () => {
 
                                         return (
                                             <div style={{ position: 'relative', marginBottom: 28 }}>
-                                                <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>📆 Booking Date</div>
+                                                <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}> Booking Date</div>
                                                 <button
                                                     onClick={() => {
                                                         if (showCalendar) setShowCalendar(false);
@@ -2034,7 +2038,7 @@ const BookingPage = () => {
                                                     }}
                                                 >
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                                        <span style={{ fontSize: 16 }}>📅</span>
+                                                        {/* <span style={{ fontSize: 16 }}>📅</span> */}
                                                         <span>{fmtCalBtnDate(fromDt)}</span>
                                                     </div>
                                                     <span style={{ color: '#94a3b8', fontSize: 10 }}>▼</span>
@@ -2045,7 +2049,7 @@ const BookingPage = () => {
                                     {/* ── 2. ARRIVAL TIME — Dual Drum Spinner ── */}
                                     <div style={{ marginBottom: 28 }}>
                                         <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 16 }}>
-                                            🕐 Arrival Time
+                                            Arrival Time
                                             <span style={{ fontSize: 13, fontWeight: 800, color: '#2563eb', marginLeft: 10, letterSpacing: 0, textTransform: 'none' }}>
                                                 {String(selHour).padStart(2, '0')}:{String(selMin).padStart(2, '0')}
                                             </span>
@@ -2195,7 +2199,7 @@ const BookingPage = () => {
 
                                     {/* ── 3. DURATION ── */}
                                     <div style={{ marginBottom: 24 }}>
-                                        <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>⏳ Duration</div>
+                                        <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>Duration</div>
                                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
                                             {DURATION_OPTIONS.map(opt => {
                                                 const isSel = duration === opt.val && !isCustomDur;
@@ -2244,7 +2248,7 @@ const BookingPage = () => {
                                         gap: 12,
                                     }}>
                                         <div>
-                                            <div style={{ fontSize: 10, color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>🅿️ Your Parking</div>
+                                            <div style={{ fontSize: 10, color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}> Your Parking</div>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                                                 <div style={{ textAlign: 'center' }}>
                                                     <div style={{ fontSize: 22, fontWeight: 900, color: '#60a5fa', letterSpacing: -0.5 }}>{fmtT(new Date(entryDate))}</div>
@@ -2286,7 +2290,7 @@ const BookingPage = () => {
                         {currentStep === 4 && (
                             <div className="bk-card">
                                 <div className="bk-step-header">
-                                    <div className="bk-step-icon">🏢</div>
+                                    {/* <div className="bk-step-icon">🏢</div> */}
                                     <div>
                                         <div className="bk-step-title">Select Floor</div>
                                         <div className="bk-step-sub">Step 4 of 6 — Choose which floor to park on</div>
