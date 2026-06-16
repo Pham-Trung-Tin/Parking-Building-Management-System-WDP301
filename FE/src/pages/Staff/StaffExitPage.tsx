@@ -10,9 +10,12 @@ import {
   Search,
   CheckCircle2,
   RefreshCw,
-  VideoOff
+  VideoOff,
+  Camera
 } from 'lucide-react';
 import useProfile from '../../hooks/useProfile';
+import lprService from '../../services/api/lprService';
+import { useCallback } from 'react';
 
 const StaffExitPage = () => {
   const { profile } = useProfile();
@@ -28,6 +31,7 @@ const StaffExitPage = () => {
 
   const [isExitCamActive, setIsExitCamActive] = useState(true);
   const videoRefExit = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   
   useEffect(() => {
     let stream: MediaStream | null = null;
@@ -63,23 +67,61 @@ const StaffExitPage = () => {
     navigate('/login');
   };
 
-  const handleRescan = () => {
+  const handleRescan = useCallback(async () => {
+    const video = videoRefExit.current;
+    const canvas = canvasRef.current;
+
+    if (!video || !canvas || !isExitCamActive) {
+      showNotification('Camera is not active. Please turn on camera first.', 'error');
+      return;
+    }
+
+    if (video.readyState < 2 || video.videoWidth === 0) {
+      showNotification('Camera not ready yet. Please wait...', 'error');
+      return;
+    }
+
     setIsSearching(true);
     setSearchQuery('');
     setConfidence(null);
     setSessionFound(false);
-    
-    setTimeout(() => {
-      const randomPlates = ['XYZ-9876', 'LMN-4567', 'DEF-1122', 'GHI-5542'];
-      const scannedPlate = randomPlates[Math.floor(Math.random() * randomPlates.length)];
-      setSearchQuery(scannedPlate);
-      setConfidence(Math.floor(Math.random() * 15) + 85); // 85 to 99
+
+    try {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('Canvas context failed');
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      const imageBase64 = canvas.toDataURL('image/jpeg', 0.85);
+      const response = await lprService.recognizeFromBase64(imageBase64);
+      const data = response.data;
+
+      if (data && data.licensePlate && data.licensePlate !== 'UNRECOGNIZED') {
+        setSearchQuery(data.licensePlate);
+        setConfidence(data.confidence);
+        setIsManual(false);
+        setSessionFound(true);
+        showNotification(
+          `AI recognized: ${data.licensePlate} (${data.confidence}% confidence)`,
+          'success'
+        );
+      } else {
+        showNotification(
+          'Could not recognize plate. Try repositioning the vehicle or use Manual Override.',
+          'error'
+        );
+      }
+    } catch (err: any) {
+      console.error('LPR Error:', err);
+      showNotification(
+        err?.message || 'AI recognition failed. Please enter plate manually.',
+        'error'
+      );
+    } finally {
       setIsSearching(false);
-      setIsManual(false);
-      setSessionFound(true);
-      showNotification(`Session found for plate: ${scannedPlate}`, 'success');
-    }, 1500);
-  };
+    }
+  }, [isExitCamActive]);
 
   const handleManualSearch = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -255,8 +297,8 @@ const StaffExitPage = () => {
                   disabled={isSearching}
                   className="flex items-center text-sm font-bold text-gray-700 hover:text-gray-900 transition-colors disabled:opacity-50"
                 >
-                  <RefreshCw className={`w-4 h-4 mr-2 ${isSearching ? 'animate-spin' : ''}`} />
-                  RE-SCAN
+                  <Camera className={`w-4 h-4 mr-2 ${isSearching ? 'animate-pulse' : ''}`} />
+                  {isSearching ? 'SCANNING...' : 'AI SCAN'}
                 </button>
               </div>
             </section>
@@ -386,6 +428,8 @@ const StaffExitPage = () => {
                       LPR-CAM-02
                     </div>
                   </div>
+                  {/* Hidden canvas for capturing camera frame */}
+                  <canvas ref={canvasRef} className="hidden" />
                 </section>
 
                 <div className="bg-white border border-gray-200 shadow-sm p-8 flex flex-col space-y-6">
