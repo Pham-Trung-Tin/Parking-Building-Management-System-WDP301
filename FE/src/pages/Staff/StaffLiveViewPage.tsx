@@ -9,7 +9,8 @@ import {
   User, 
   Search,
   Filter,
-  Clock
+  Clock,
+  Users
 } from 'lucide-react';
 import useProfile from '../../hooks/useProfile';
 
@@ -58,6 +59,16 @@ const StaffLiveViewPage = () => {
               <AlertTriangle className="w-5 h-5 mr-3 text-gray-400" />
               Exceptions
             </Link>
+            <Link to="/staff/profile" className="flex items-center px-6 py-3 text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition-colors w-full text-left">
+              <User className="w-5 h-5 mr-3 text-gray-400" />
+              My Profile
+            </Link>
+            {profile?.role === 'parking_manager' && (
+              <Link to="/admin/staff-assignment" className="flex items-center px-6 py-3 text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition-colors w-full text-left">
+                <Users className="w-5 h-5 mr-3 text-gray-400" />
+                Staff Assignment
+              </Link>
+            )}
           </nav>
         </div>
 

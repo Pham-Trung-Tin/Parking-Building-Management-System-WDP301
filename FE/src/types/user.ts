@@ -7,6 +7,18 @@ export interface UserAvatar {
   publicId: string;
 }
 
+export interface AssignedParkingLotInfo {
+  _id: string;
+  name: string;
+  code: string;
+  address?: {
+    street?: string;
+    ward?: string;
+    district?: string;
+    city?: string;
+  };
+}
+
 export interface User {
   id: string;
   _id: string;
@@ -18,7 +30,7 @@ export interface User {
   avatarUrl: string;
   isEmailVerified: boolean;
   status: UserStatus;
-  assignedParkingLot?: string | null;
+  assignedParkingLot?: string | AssignedParkingLotInfo | null;
   createdAt: string;
   updatedAt: string;
 }

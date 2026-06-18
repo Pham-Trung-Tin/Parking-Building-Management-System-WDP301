@@ -44,6 +44,18 @@ export interface GetParkingLotsParams {
     search?: string;
     page?: number;
     limit?: number;
+    manager?: string;
+}
+
+export interface StaffMember {
+    _id: string;
+    fullName: string;
+    email: string;
+    phone?: string;
+    avatar?: { url: string; publicId: string };
+    avatarUrl?: string;
+    status: string;
+    createdAt: string;
 }
 
 const parkingLotService = {
@@ -52,6 +64,23 @@ const parkingLotService = {
     },
     getParkingLotById: (id: string): Promise<ParkingLot> => {
         return axiosClient.get(`/parking-lots/${id}`);
+    },
+
+    // ─── Staff Assignment APIs ───
+    getStaff: (parkingLotId: string): Promise<any> => {
+        return axiosClient.get(`/parking-lots/${parkingLotId}/staff`);
+    },
+    assignStaff: (parkingLotId: string, staffId: string): Promise<any> => {
+        return axiosClient.post(`/parking-lots/${parkingLotId}/staff`, { staffId });
+    },
+    removeStaff: (parkingLotId: string, staffId: string): Promise<any> => {
+        return axiosClient.delete(`/parking-lots/${parkingLotId}/staff/${staffId}`);
+    },
+    getAvailableStaff: (search?: string): Promise<any> => {
+        return axiosClient.get('/parking-lots/available-staff', { params: search ? { search } : {} });
+    },
+    updateManager: (parkingLotId: string, managerId: string | null): Promise<any> => {
+        return axiosClient.put(`/parking-lots/${parkingLotId}`, { manager: managerId });
     },
 };
 

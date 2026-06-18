@@ -4,6 +4,7 @@ import Header from '../../components/Header/Header';
 import Footer from '../../components/Footer/Footer';
 import useProfile from '../../hooks/useProfile';
 import { authService } from '../../services/api';
+import { LogIn, LogOut, Eye, AlertTriangle, User, Users } from 'lucide-react';
 
 const ProfilePage = () => {
   const navigate = useNavigate();
@@ -140,20 +141,20 @@ const ProfilePage = () => {
       .substring(0, 2);
   };
 
-  return (
-    <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
-      <Header />
+  const isStaffOrManager = user?.role === 'parking_staff' || user?.role === 'parking_manager';
+  const isManager = user?.role === 'parking_manager' || user?.role === 'system_admin';
 
-      <main className="flex-grow max-w-4xl w-full mx-auto px-4 py-12">
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden transition-all hover:shadow-md duration-300">
+  const profileContent = (
+    <main className="flex-grow max-w-4xl w-full mx-auto px-4 py-12">
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden transition-all hover:shadow-md duration-300">
 
           {/* Cover Header */}
           <div className="h-44 bg-gradient-to-r from-blue-600 via-indigo-600 to-primary-600 relative">
             <Link
-              to="/"
+              to={isManager ? '/admin' : isStaffOrManager ? '/staff' : '/'}
               className="absolute top-6 left-6 text-white/90 hover:text-white flex items-center gap-1.5 font-semibold text-sm no-underline bg-white/10 backdrop-blur-md px-3.5 py-2 rounded-lg transition-all"
             >
-              &larr; Back to Home
+              &larr; {isManager ? 'Back to Admin Portal' : isStaffOrManager ? 'Back to Staff Suite' : 'Back to Home'}
             </Link>
           </div>
 
@@ -307,6 +308,92 @@ const ProfilePage = () => {
               )}
             </div>
 
+            {/* Assigned Workplace Section (for staff/manager) */}
+            {(user.role === 'parking_staff' || user.role === 'parking_manager') && (
+              <div className="mt-8 border-t border-slate-100 pt-8">
+                <h2 className="text-lg font-bold text-slate-900 mb-6 flex items-center gap-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
+                    fill="none" stroke="#475569" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z" />
+                    <path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2" />
+                    <path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2" />
+                    <path d="M10 6h4" />
+                    <path d="M10 10h4" />
+                    <path d="M10 14h4" />
+                    <path d="M10 18h4" />
+                  </svg>
+                  Assigned Workplace
+                </h2>
+
+                {user.assignedParkingLot && typeof user.assignedParkingLot === 'object' ? (
+                  <div className="p-5 bg-gradient-to-r from-blue-50/80 to-indigo-50/60 border border-blue-100 rounded-xl">
+                    <div className="flex items-start gap-4">
+                      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-sm shrink-0">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24"
+                          fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z" />
+                          <path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2" />
+                          <path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2" />
+                          <path d="M10 6h4" />
+                          <path d="M10 10h4" />
+                          <path d="M10 14h4" />
+                          <path d="M10 18h4" />
+                        </svg>
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-bold text-slate-900">
+                          {(user.assignedParkingLot as any).name}
+                        </h3>
+                        <span className="inline-block text-xs font-bold text-blue-600 bg-blue-100 px-2 py-0.5 rounded-md mt-1 border border-blue-200">
+                          {(user.assignedParkingLot as any).code}
+                        </span>
+                        {(user.assignedParkingLot as any).address && (
+                          <p className="text-sm text-slate-500 mt-2 flex items-center gap-1.5">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
+                              fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
+                              <circle cx="12" cy="10" r="3" />
+                            </svg>
+                            {[(user.assignedParkingLot as any).address.street,
+                              (user.assignedParkingLot as any).address.district,
+                              (user.assignedParkingLot as any).address.city,
+                            ].filter(Boolean).join(', ')}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ) : user.assignedParkingLot && typeof user.assignedParkingLot === 'string' ? (
+                  <div className="p-4 bg-slate-50/50 border border-slate-100 rounded-xl flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
+                        fill="none" stroke="#2563eb" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z" />
+                        <path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2" />
+                        <path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2" />
+                      </svg>
+                    </div>
+                    <div>
+                      <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">Parking Lot ID</span>
+                      <span className="text-sm font-bold text-slate-800">{user.assignedParkingLot}</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-4 bg-amber-50/50 border border-amber-100 rounded-xl flex items-center gap-3">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
+                      fill="none" stroke="#d97706" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="10" />
+                      <line x1="12" y1="8" x2="12" y2="12" />
+                      <line x1="12" y1="16" x2="12.01" y2="16" />
+                    </svg>
+                    <span className="text-sm text-amber-700 font-medium">
+                      You have not been assigned to any parking lot yet. Please contact your manager.
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Change Password Section */}
             <div className="mt-8 border-t border-slate-100 pt-8">
               <div className="flex items-center justify-between mb-6">
@@ -445,7 +532,91 @@ const ProfilePage = () => {
           </div>
         </div>
       </main>
+    );
 
+  if (isStaffOrManager) {
+    const isActive = (path: string) => window.location.pathname === path;
+    const linkClass = (path: string) => 
+      `flex items-center px-6 py-3 transition-colors w-full text-left ${isActive(path) ? 'bg-gray-50 border-r-4 border-gray-900 text-gray-900 font-medium' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'}`;
+    const iconClass = (path: string) => 
+      `w-5 h-5 mr-3 ${isActive(path) ? 'text-gray-700' : 'text-gray-400'}`;
+
+    return (
+      <div className="flex h-screen bg-gray-50 font-sans text-gray-800">
+        {/* --- STAFF SIDEBAR --- */}
+        <div className="w-64 bg-white border-r border-gray-200 flex flex-col justify-between shrink-0 z-20">
+          <div>
+            <div className="p-6">
+              <h1 className="text-xl font-bold tracking-tight text-gray-900">ParkingOps</h1>
+              <p className="text-xs text-gray-500 uppercase tracking-wider mt-1">Staff Suite</p>
+            </div>
+
+            <nav className="mt-6 flex flex-col space-y-1">
+              <Link to="/staff" className={linkClass('/staff')}>
+                <LogIn className={iconClass('/staff')} />
+                Entry
+              </Link>
+              <Link to="/staff/exit" className={linkClass('/staff/exit')}>
+                <LogOut className={iconClass('/staff/exit')} />
+                Exit
+              </Link>
+              <Link to="/staff/live-view" className={linkClass('/staff/live-view')}>
+                <Eye className={iconClass('/staff/live-view')} />
+                Live View
+              </Link>
+              <Link to="/staff/exceptions" className={linkClass('/staff/exceptions')}>
+                <AlertTriangle className={iconClass('/staff/exceptions')} />
+                Exceptions
+              </Link>
+              <Link to="/staff/profile" className={linkClass('/staff/profile')}>
+                <User className={iconClass('/staff/profile')} />
+                My Profile
+              </Link>
+              {user?.role === 'parking_manager' && (
+                <Link to="/admin/staff-assignment" className={linkClass('/admin/staff-assignment')}>
+                  <Users className={iconClass('/admin/staff-assignment')} />
+                  Staff Assignment
+                </Link>
+              )}
+            </nav>
+          </div>
+
+          <div className="p-6 border-t border-gray-200 flex items-center justify-between">
+            <div className="flex items-center overflow-hidden">
+              <div className="w-10 h-10 rounded-full bg-gray-900 flex items-center justify-center text-white mr-3 shrink-0 overflow-hidden">
+                {user?.avatarUrl ? (
+                  <img src={user.avatarUrl} alt={user.fullName} className="w-full h-full object-cover" />
+                ) : (
+                  <User size={20} />
+                )}
+              </div>
+              <div className="overflow-hidden pr-2">
+                <p className="text-sm font-semibold text-gray-900 truncate" title={user?.fullName}>{user?.fullName || 'Loading...'}</p>
+                <p className="text-[10px] text-gray-500 uppercase truncate">{user?.role ? user.role.replace('_', ' ') : 'Staff'}</p>
+              </div>
+            </div>
+            <button
+              onClick={logout}
+              className="p-2 text-red-600 bg-red-50 hover:bg-red-100 hover:text-red-700 rounded-md transition-colors shrink-0"
+              title="Logout"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* --- PROFILE CONTENT --- */}
+        <div className="flex-1 overflow-auto">
+          {profileContent}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen font-sans flex flex-col bg-slate-50">
+      <Header />
+      {profileContent}
       <Footer />
     </div>
   );
