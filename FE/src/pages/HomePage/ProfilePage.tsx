@@ -308,8 +308,8 @@ const ProfilePage = () => {
               )}
             </div>
 
-            {/* Assigned Workplace Section (for staff/manager) */}
-            {(user.role === 'parking_staff' || user.role === 'parking_manager') && (
+            {/* Assigned Workplace Section (for staff) */}
+            {user.role === 'parking_staff' && (
               <div className="mt-8 border-t border-slate-100 pt-8">
                 <h2 className="text-lg font-bold text-slate-900 mb-6 flex items-center gap-2">
                   <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"

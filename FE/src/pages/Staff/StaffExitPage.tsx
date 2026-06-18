@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { 
-  LogIn, 
-  LogOut, 
-  Eye, 
-  AlertTriangle, 
-  Bell, 
-  User, 
+import {
+  LogIn,
+  LogOut,
+  Eye,
+  AlertTriangle,
+  Bell,
+  User,
+  Users,
   Search,
   CheckCircle2,
   RefreshCw,
@@ -20,7 +21,7 @@ import { useCallback } from 'react';
 const StaffExitPage = () => {
   const { profile } = useProfile();
   const navigate = useNavigate();
-  
+
   // FE Flow States
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
@@ -32,7 +33,7 @@ const StaffExitPage = () => {
   const [isExitCamActive, setIsExitCamActive] = useState(true);
   const videoRefExit = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  
+
   useEffect(() => {
     let stream: MediaStream | null = null;
     if (isExitCamActive) {
@@ -46,9 +47,9 @@ const StaffExitPage = () => {
         .catch(err => console.error("Camera access denied:", err));
     } else {
       if (videoRefExit.current && videoRefExit.current.srcObject) {
-         const s = videoRefExit.current.srcObject as MediaStream;
-         s.getTracks().forEach(t => t.stop());
-         videoRefExit.current.srcObject = null;
+        const s = videoRefExit.current.srcObject as MediaStream;
+        s.getTracks().forEach(t => t.stop());
+        videoRefExit.current.srcObject = null;
       }
     }
     return () => {
@@ -129,10 +130,10 @@ const StaffExitPage = () => {
       showNotification('Please enter a license plate to search', 'error');
       return;
     }
-    
+
     setIsSearching(true);
     setSessionFound(false);
-    
+
     setTimeout(() => {
       setIsSearching(false);
       setSessionFound(true);
@@ -161,11 +162,10 @@ const StaffExitPage = () => {
     <div className="flex h-screen bg-gray-50 font-sans text-gray-800 relative">
       {/* Toast Notification */}
       {notification && (
-        <div className={`fixed top-6 right-6 px-6 py-4 rounded shadow-xl z-50 flex items-center animate-[fade-in-up_0.3s_ease-out] border ${
-          notification.type === 'success' ? 'bg-green-50 border-green-200 text-green-800' :
+        <div className={`fixed top-6 right-6 px-6 py-4 rounded shadow-xl z-50 flex items-center animate-[fade-in-up_0.3s_ease-out] border ${notification.type === 'success' ? 'bg-green-50 border-green-200 text-green-800' :
           notification.type === 'error' ? 'bg-red-50 border-red-200 text-red-800' :
-          'bg-blue-50 border-blue-200 text-blue-800'
-        }`}>
+            'bg-blue-50 border-blue-200 text-blue-800'
+          }`}>
           {notification.type === 'success' && <div className="w-2 h-2 rounded-full bg-green-500 mr-3 animate-pulse" />}
           {notification.type === 'error' && <AlertTriangle className="w-5 h-5 text-red-500 mr-3" />}
           {notification.type === 'info' && <div className="w-2 h-2 rounded-full bg-blue-500 mr-3 animate-pulse" />}
@@ -179,7 +179,7 @@ const StaffExitPage = () => {
             <h1 className="text-xl font-bold tracking-tight text-gray-900">ParkingOps</h1>
             <p className="text-xs text-gray-500 uppercase tracking-wider mt-1">Staff Suite</p>
           </div>
-          
+
           <nav className="mt-6 flex flex-col space-y-1">
             <Link to="/staff" className="flex items-center px-6 py-3 text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition-colors w-full text-left">
               <LogIn className="w-5 h-5 mr-3 text-gray-400" />
@@ -203,12 +203,10 @@ const StaffExitPage = () => {
             </Link>
             {profile?.role === 'parking_manager' && (
               <Link to="/admin/staff-assignment" className="flex items-center px-6 py-3 text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition-colors w-full text-left">
-                <User className="w-5 h-5 mr-3 text-gray-400" />
-                Staff Assignment
+                <Users className="w-5 h-5 mr-3 text-gray-400" />
+                Personnel Management
               </Link>
             )}
-              Profile
-            </Link>
           </nav>
         </div>
 
@@ -226,7 +224,7 @@ const StaffExitPage = () => {
               <p className="text-[10px] text-gray-500 uppercase truncate">{profile?.role ? profile.role.replace('_', ' ') : 'Staff'}</p>
             </div>
           </div>
-          <button 
+          <button
             onClick={handleLogout}
             className="p-2 text-red-600 bg-red-50 hover:bg-red-100 hover:text-red-700 rounded-md transition-colors shrink-0"
             title="Logout"
@@ -261,17 +259,16 @@ const StaffExitPage = () => {
               <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center justify-between">
                 License Plate Scanner (Exit Gate)
                 {!isSearching && (
-                  <button 
+                  <button
                     onClick={() => setIsManual(!isManual)}
-                    className={`text-[10px] px-2 py-1 rounded font-bold uppercase tracking-wider transition-colors ${
-                      isManual ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                    }`}
+                    className={`text-[10px] px-2 py-1 rounded font-bold uppercase tracking-wider transition-colors ${isManual ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                      }`}
                   >
                     {isManual ? 'Disable Manual' : 'Enable Manual Entry'}
                   </button>
                 )}
               </h3>
-              
+
               <div className={`bg-white border p-8 flex items-center justify-center min-h-[160px] shadow-sm relative transition-colors ${isManual ? 'border-blue-400 ring-1 ring-blue-400' : 'border-gray-200'}`}>
                 {isSearching ? (
                   <div className="flex flex-col items-center text-gray-400">
@@ -280,8 +277,8 @@ const StaffExitPage = () => {
                   </div>
                 ) : (
                   <form onSubmit={handleManualSearch} className="w-full flex items-center justify-center">
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value.toUpperCase())}
                       readOnly={!isManual}
@@ -289,7 +286,7 @@ const StaffExitPage = () => {
                       placeholder={isManual ? 'ENTER PLATE' : ''}
                     />
                     {isManual && (
-                      <button 
+                      <button
                         type="submit"
                         className="absolute right-8 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 text-sm font-bold rounded uppercase tracking-wider transition-colors shadow-md"
                       >
@@ -299,12 +296,12 @@ const StaffExitPage = () => {
                   </form>
                 )}
               </div>
-              
+
               <div className="flex justify-between items-center mt-3 h-6">
                 <span className="text-sm text-gray-500">
                   {isSearching ? 'Processing image feed...' : confidence ? `Automatic recognition confidence: ${confidence}%` : 'Waiting for vehicle scan...'}
                 </span>
-                <button 
+                <button
                   onClick={handleRescan}
                   disabled={isSearching}
                   className="flex items-center text-sm font-bold text-gray-700 hover:text-gray-900 transition-colors disabled:opacity-50"
@@ -318,7 +315,7 @@ const StaffExitPage = () => {
             <div className={`flex gap-8 transition-opacity duration-300 ${isSearching ? 'opacity-50' : ''}`}>
               {/* Left Column */}
               <div className="flex-1 flex flex-col space-y-6">
-                
+
                 {/* Active Session Details */}
                 <section>
                   <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Active Session Details</h3>
@@ -361,7 +358,7 @@ const StaffExitPage = () => {
                         </p>
                       </div>
                     </div>
-                    
+
                     <div className="border-t border-gray-100 pt-4 flex items-center justify-between">
                       <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Payment Verification</span>
                       {sessionFound ? (
@@ -406,16 +403,15 @@ const StaffExitPage = () => {
 
               {/* Right Column (Amount Due & Camera) */}
               <div className="w-[380px] flex flex-col space-y-6">
-                
+
                 {/* Camera View */}
                 <section>
                   <div className="flex justify-between items-center mb-3">
                     <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Live Feed</h3>
                     <button
                       onClick={() => setIsExitCamActive(!isExitCamActive)}
-                      className={`text-[10px] px-2 py-1 rounded font-bold uppercase tracking-wider transition-colors ${
-                        isExitCamActive ? 'bg-red-100 text-red-700 hover:bg-red-200' : 'bg-green-100 text-green-700 hover:bg-green-200'
-                      }`}
+                      className={`text-[10px] px-2 py-1 rounded font-bold uppercase tracking-wider transition-colors ${isExitCamActive ? 'bg-red-100 text-red-700 hover:bg-red-200' : 'bg-green-100 text-green-700 hover:bg-green-200'
+                        }`}
                     >
                       {isExitCamActive ? 'Turn Off Cam' : 'Turn On Cam'}
                     </button>
@@ -451,7 +447,7 @@ const StaffExitPage = () => {
                       {sessionFound ? '$18.00' : '$0.00'}
                     </p>
                   </div>
-                  
+
                   <div className="flex flex-col space-y-3 pt-4 border-t border-gray-100">
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-500">Base Rate (Daily)</span>
@@ -474,7 +470,7 @@ const StaffExitPage = () => {
                   </div>
 
                   <div className="pt-6 flex flex-col space-y-4">
-                    <button 
+                    <button
                       onClick={handleProcessAndRelease}
                       disabled={!sessionFound}
                       className="w-full bg-black text-white py-4 text-sm font-bold flex items-center justify-center hover:bg-gray-900 transition-colors shadow-lg group disabled:opacity-50 disabled:cursor-not-allowed"
@@ -482,7 +478,7 @@ const StaffExitPage = () => {
                       <CheckCircle2 className="w-5 h-5 mr-3 group-hover:scale-110 transition-transform" />
                       Process & Release
                     </button>
-                    <button 
+                    <button
                       onClick={handleManualOverride}
                       className="w-full bg-white border border-gray-200 py-4 text-sm font-bold text-gray-700 hover:bg-gray-50 transition-colors shadow-sm uppercase tracking-wider"
                     >

@@ -33,11 +33,10 @@ import type { StaffMember } from '../../services/api/parkingLotService';
 function Toast({ message, type = 'success' }: { message: string; type?: 'success' | 'error' }) {
   return (
     <div
-      className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 text-sm px-5 py-3.5 rounded-2xl shadow-xl animate-slide-up ${
-        type === 'success'
-          ? 'bg-gray-900 text-white'
-          : 'bg-red-600 text-white'
-      }`}
+      className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 text-sm px-5 py-3.5 rounded-2xl shadow-xl animate-slide-up ${type === 'success'
+        ? 'bg-gray-900 text-white'
+        : 'bg-red-600 text-white'
+        }`}
     >
       {type === 'success' ? (
         <Check className="w-4 h-4 text-emerald-400" />
@@ -570,14 +569,14 @@ export default function StaffAssignmentPage() {
                   <AlertTriangle className="w-5 h-5 mr-3 text-gray-400" />
                   Exceptions
                 </Link>
+                <div className="flex items-center px-6 py-3 bg-gray-50 border-r-4 border-gray-900 text-gray-900 font-medium w-full text-left mt-2">
+                  <Users className="w-5 h-5 mr-3 text-gray-700" />
+                  Personnel Management
+                </div>
                 <Link to="/staff/profile" className="flex items-center px-6 py-3 text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition-colors w-full text-left">
                   <User className="w-5 h-5 mr-3 text-gray-400" />
                   My Profile
                 </Link>
-                <div className="flex items-center px-6 py-3 bg-gray-50 border-r-4 border-gray-900 text-gray-900 font-medium w-full text-left mt-2">
-                  <Users className="w-5 h-5 mr-3 text-gray-700" />
-                  Staff Assignment
-                </div>
               </nav>
             </div>
 
@@ -665,9 +664,8 @@ export default function StaffAssignmentPage() {
                           setSelectedLot(lot);
                           setLotDropdownOpen(false);
                         }}
-                        className={`w-full px-5 py-3 text-left hover:bg-gray-50 transition-colors flex items-center gap-3 ${
-                          selectedLot?._id === lot._id ? 'bg-gray-50' : ''
-                        }`}
+                        className={`w-full px-5 py-3 text-left hover:bg-gray-50 transition-colors flex items-center gap-3 ${selectedLot?._id === lot._id ? 'bg-gray-50' : ''
+                          }`}
                       >
                         <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center shrink-0">
                           <Building2 className="w-4 h-4 text-blue-600" />
@@ -716,7 +714,7 @@ export default function StaffAssignmentPage() {
                     </button>
                   )}
                 </div>
-                
+
                 {/* Manager List */}
                 <div className="divide-y divide-gray-50">
                   {!selectedLot.manager ? (
