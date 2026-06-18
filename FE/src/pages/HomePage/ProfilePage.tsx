@@ -568,10 +568,12 @@ const ProfilePage = () => {
                 <AlertTriangle className={iconClass('/staff/exceptions')} />
                 Exceptions
               </Link>
-              <Link to="/staff/profile" className={linkClass('/staff/profile')}>
-                <User className={iconClass('/staff/profile')} />
-                My Profile
-              </Link>
+              {user?.role !== 'parking_manager' && (
+                <Link to="/staff/profile" className={linkClass('/staff/profile')}>
+                  <User className={iconClass('/staff/profile')} />
+                  My Profile
+                </Link>
+              )}
               {user?.role === 'parking_manager' && (
                 <Link to="/admin/staff-assignment" className={linkClass('/admin/staff-assignment')}>
                   <Users className={iconClass('/admin/staff-assignment')} />

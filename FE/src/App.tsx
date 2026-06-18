@@ -15,7 +15,7 @@ import CheckoutSuccessPage from './pages/Customer/CheckoutSuccessPage';
 import MyTicketsPage from './pages/Customer/MyTicketsPage';
 import MyVehiclesPage from './pages/Customer/MyVehiclesPage';
 import AdminPortal from './pages/Admin/AdminPortal';
-import StaffAssignmentPage from './pages/Admin/StaffAssignmentPage';
+import StaffAssignmentPage from './pages/Staff/StaffAssignmentPage';
 import StaffPage from './pages/Staff/StaffPage';
 import StaffExitPage from './pages/Staff/StaffExitPage';
 import StaffExceptionsPage from './pages/Staff/StaffExceptionsPage';

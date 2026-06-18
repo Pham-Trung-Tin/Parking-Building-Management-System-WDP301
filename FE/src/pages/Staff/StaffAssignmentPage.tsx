@@ -569,14 +569,16 @@ export default function StaffAssignmentPage() {
                   <AlertTriangle className="w-5 h-5 mr-3 text-gray-400" />
                   Exceptions
                 </Link>
-                <div className="flex items-center px-6 py-3 bg-gray-50 border-r-4 border-gray-900 text-gray-900 font-medium w-full text-left mt-2">
-                  <Users className="w-5 h-5 mr-3 text-gray-700" />
-                  Personnel Management
+                <div className="flex items-center px-6 py-3 bg-gray-50 border-r-4 border-gray-900 text-gray-900 font-medium w-full text-left mt-2 whitespace-nowrap">
+                  <Users className="w-5 h-5 mr-3 text-gray-700 shrink-0" />
+                  <span className="truncate">Staff Assignment</span>
                 </div>
-                <Link to="/staff/profile" className="flex items-center px-6 py-3 text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition-colors w-full text-left">
-                  <User className="w-5 h-5 mr-3 text-gray-400" />
-                  My Profile
-                </Link>
+                {user?.role !== 'parking_manager' && (
+                  <Link to="/staff/profile" className="flex items-center px-6 py-3 text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition-colors w-full text-left">
+                    <User className="w-5 h-5 mr-3 text-gray-400" />
+                    My Profile
+                  </Link>
+                )}
               </nav>
             </div>
 
