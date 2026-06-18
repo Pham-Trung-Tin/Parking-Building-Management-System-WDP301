@@ -31,6 +31,9 @@ import { Scanner } from '@yudiel/react-qr-scanner';
 import useProfile from '../../hooks/useProfile';
 import { verifyQRToken } from '../../utils/qrToken';
 import lprService from '../../services/api/lprService';
+import parkingSessionService from '../../services/api/parkingSessionService';
+import vehicleTypeService from '../../services/api/vehicleTypeService';
+import parkingLotService from '../../services/api/parkingLotService';
 
 // Interface for mock booking data
 interface BookingData {
@@ -84,7 +87,23 @@ const StaffPage = () => {
     };
   }, [entryMode, isStandardCamActive]);
 
-  const [selectedVehicle, setSelectedVehicle] = useState('car');
+  const [vehicleTypesList, setVehicleTypesList] = useState<any[]>([]);
+  const [selectedVehicle, setSelectedVehicle] = useState('');
+  const [defaultLotId, setDefaultLotId] = useState('');
+  
+  useEffect(() => {
+    vehicleTypeService.getAll().then((res: any) => {
+      const types = res.data || res;
+      setVehicleTypesList(types);
+      if (types.length > 0) setSelectedVehicle(types[0]._id);
+    }).catch(console.error);
+
+    parkingLotService.getParkingLots({ limit: 1 }).then((res: any) => {
+      const lots = res.data?.docs || res.data || [];
+      if (lots.length > 0) setDefaultLotId(lots[0]._id);
+    }).catch(console.error);
+  }, []);
+
   const [plate, setPlate] = useState('ABC-1234');
   const [confidence, setConfidence] = useState<number | null>(98);
   const [isScanningStandard, setIsScanningStandard] = useState(false);
@@ -187,21 +206,36 @@ const StaffPage = () => {
     }
   }, [isStandardCamActive]);
 
-  const handleCreateSessionStandard = () => {
+  const handleCreateSessionStandard = async () => {
     if (!plate || isScanningStandard) {
       showNotification('Please wait for scan or enter a valid license plate', 'error');
       return;
     }
-    showNotification(`Session created for ${plate} (${selectedVehicle.toUpperCase()}). Opening gate...`, 'success');
-    setGateStatus('Open');
+    const lotId = (profile as any)?.assignedParkingLot?._id || (profile as any)?.assignedParkingLot || defaultLotId;
+    if (!lotId) {
+      showNotification('System is still loading parking lot info or no lot available.', 'error');
+      return;
+    }
 
-    setTimeout(() => {
-      setPlate('');
-      setConfidence(null);
-      setGateStatus('Closed');
-      setSelectedVehicle('car');
-      showNotification('Gate closed. Ready for next vehicle.', 'info');
-    }, 4000);
+    try {
+      await parkingSessionService.checkIn({
+        licensePlate: plate,
+        vehicleTypeId: selectedVehicle,
+        parkingLotId: lotId
+      });
+      showNotification(`Session created for ${plate}. Opening gate...`, 'success');
+      setGateStatus('Open');
+
+      setTimeout(() => {
+        setPlate('');
+        setConfidence(null);
+        setGateStatus('Closed');
+        if (vehicleTypesList.length > 0) setSelectedVehicle(vehicleTypesList[0]._id);
+        showNotification('Gate closed. Ready for next vehicle.', 'info');
+      }, 4000);
+    } catch (err: any) {
+      showNotification(err?.response?.data?.message || err?.message || 'Failed to create session', 'error');
+    }
   };
 
   const handlePrintTicket = () => {
@@ -217,12 +251,14 @@ const StaffPage = () => {
     }, 5000);
   };
 
-  const vehicleTypes = [
-    { id: 'car', label: 'CAR', icon: Car },
-    { id: 'suv', label: 'SUV', icon: CarFront },
-    { id: 'motorcycle', label: 'MOTORCYCLE', icon: Bike },
-    { id: 'truck', label: 'TRUCK', icon: Truck },
-  ];
+  const getIconForType = (code: string) => {
+    switch (code?.toLowerCase()) {
+      case 'suv': return CarFront;
+      case 'motorcycle': return Bike;
+      case 'truck': return Truck;
+      default: return Car;
+    }
+  };
 
 
   // ==========================================
@@ -373,14 +409,8 @@ const StaffPage = () => {
             </Link>
             <Link to="/staff/profile" className="flex items-center px-6 py-3 text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition-colors w-full text-left">
               <User className="w-5 h-5 mr-3 text-gray-400" />
-              My Profile
+              Profile
             </Link>
-            {profile?.role === 'parking_manager' && (
-              <Link to="/admin/staff-assignment" className="flex items-center px-6 py-3 text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition-colors w-full text-left">
-                <Users className="w-5 h-5 mr-3 text-gray-400" />
-                Staff Assignment
-              </Link>
-            )}
           </nav>
         </div>
 
@@ -529,13 +559,13 @@ const StaffPage = () => {
                 <section>
                   <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Vehicle Classification</h3>
                   <div className="grid grid-cols-4 gap-4">
-                    {vehicleTypes.map((type) => {
-                      const Icon = type.icon;
-                      const isSelected = selectedVehicle === type.id;
+                    {vehicleTypesList.map((type) => {
+                      const Icon = getIconForType(type.code);
+                      const isSelected = selectedVehicle === type._id;
                       return (
                         <button
-                          key={type.id}
-                          onClick={() => setSelectedVehicle(type.id)}
+                          key={type._id}
+                          onClick={() => setSelectedVehicle(type._id)}
                           className={`flex flex-col items-center justify-center p-6 border rounded-xl transition-all ${isSelected
                               ? 'border-gray-900 shadow-md bg-white'
                               : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50 text-gray-400'
@@ -543,7 +573,7 @@ const StaffPage = () => {
                         >
                           <Icon className={`w-8 h-8 mb-3 ${isSelected ? 'text-gray-900' : 'text-gray-400'}`} />
                           <span className={`text-xs font-bold tracking-wider ${isSelected ? 'text-gray-900' : 'text-gray-500'}`}>
-                            {type.label}
+                            {type.name.toUpperCase()}
                           </span>
                         </button>
                       )

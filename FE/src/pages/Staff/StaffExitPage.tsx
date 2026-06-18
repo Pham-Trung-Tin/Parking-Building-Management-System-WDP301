@@ -207,6 +207,8 @@ const StaffExitPage = () => {
                 Staff Assignment
               </Link>
             )}
+              Profile
+            </Link>
           </nav>
         </div>
 

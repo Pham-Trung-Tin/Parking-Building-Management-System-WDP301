@@ -70,6 +70,11 @@ const parkingSessionService = {
     findActive: (params: { licensePlate?: string; sessionCode?: string; parkingLotId?: string }): Promise<ParkingSession> => {
         return axiosClient.get('/parking-sessions/find-active', { params });
     },
+
+    /** POST /parking-sessions/check-in — Check-in a vehicle */
+    checkIn: (data: { bookingId?: string; licensePlate?: string; vehicleTypeId?: string; parkingLotId: string; slotId?: string; }): Promise<any> => {
+        return axiosClient.post('/parking-sessions/check-in', data);
+    },
 };
 
 export default parkingSessionService;

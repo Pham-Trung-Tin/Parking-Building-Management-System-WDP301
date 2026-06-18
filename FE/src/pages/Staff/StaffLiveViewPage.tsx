@@ -11,20 +11,62 @@ import {
   Filter,
   Clock,
   Users
+  RefreshCw,
+  Clock
 } from 'lucide-react';
 import useProfile from '../../hooks/useProfile';
+import parkingSessionService from '../../services/api/parkingSessionService';
 
 const StaffLiveViewPage = () => {
   const { profile } = useProfile();
   const navigate = useNavigate();
   
-  const mockSessions = [
-    { id: 'S-901', plate: 'ABC-1234', type: 'SUV', entry: '08:14 AM', zone: 'North - Level 3', duration: '06h 42m', status: 'Parked' },
-    { id: 'S-902', plate: 'GHI-5542', type: 'CAR', entry: '09:30 AM', zone: 'South - Level 1', duration: '05h 26m', status: 'Exiting' },
-    { id: 'S-903', plate: 'LMN-4567', type: 'TRUCK', entry: '10:15 AM', zone: 'Ground Floor', duration: '04h 41m', status: 'Parked' },
-    { id: 'S-904', plate: 'XYZ-9876', type: 'MOTORCYCLE', entry: '11:05 AM', zone: 'East - Level 2', duration: '03h 51m', status: 'Parked' },
-    { id: 'S-905', plate: 'DEF-1122', type: 'CAR', entry: '01:20 PM', zone: 'West - Level 1', duration: '01h 36m', status: 'Entering' },
-  ];
+  const [sessions, setSessions] = useState<any[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterStatus, setFilterStatus] = useState<string>('All');
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState('Just now');
+  const [showFilterDropdown, setShowFilterDropdown] = useState(false);
+  const [stats, setStats] = useState({ total: 0, entering: 0, exiting: 0, overstayed: 0 });
+
+  const fetchSessions = async () => {
+    setIsRefreshing(true);
+    try {
+      const res = await parkingSessionService.getSessions({ limit: 100, status: 'active' });
+      const activeSessions = res.data?.docs || res.data || [];
+      setSessions(activeSessions);
+      setLastUpdated(new Date().toLocaleTimeString());
+      
+      setStats({
+        total: activeSessions.length,
+        entering: activeSessions.filter((s: any) => !s.exitTime).length,
+        exiting: 0,
+        overstayed: activeSessions.filter((s: any) => s.isOvertime).length,
+      });
+    } catch (error) {
+      console.error('Failed to fetch sessions', error);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  React.useEffect(() => {
+    fetchSessions();
+    // Refresh every 30 seconds
+    const interval = setInterval(fetchSessions, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const filteredSessions = sessions.filter(session => {
+    const matchesSearch = (session.vehicleInfo?.licensePlate || '').toLowerCase().includes(searchQuery.toLowerCase());
+    const sessionStatus = session.status === 'active' ? 'Parked' : session.status;
+    const matchesStatus = filterStatus === 'All' || sessionStatus.toLowerCase() === filterStatus.toLowerCase();
+    return matchesSearch && matchesStatus;
+  });
+
+  const handleRefresh = () => {
+    fetchSessions();
+  };
 
   const handleLogout = () => {
     localStorage.removeItem('accessToken');
@@ -61,14 +103,8 @@ const StaffLiveViewPage = () => {
             </Link>
             <Link to="/staff/profile" className="flex items-center px-6 py-3 text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition-colors w-full text-left">
               <User className="w-5 h-5 mr-3 text-gray-400" />
-              My Profile
+              Profile
             </Link>
-            {profile?.role === 'parking_manager' && (
-              <Link to="/admin/staff-assignment" className="flex items-center px-6 py-3 text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition-colors w-full text-left">
-                <Users className="w-5 h-5 mr-3 text-gray-400" />
-                Staff Assignment
-              </Link>
-            )}
           </nav>
         </div>
 
@@ -125,11 +161,45 @@ const StaffLiveViewPage = () => {
               <div className="flex gap-3">
                 <div className="bg-white border border-gray-200 px-4 py-2 flex items-center shadow-sm">
                   <Search className="w-4 h-4 text-gray-400 mr-2" />
-                  <input type="text" placeholder="Search plates..." className="outline-none text-sm w-48" />
+                  <input 
+                    type="text" 
+                    placeholder="Search plates..." 
+                    className="outline-none text-sm w-48" 
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
                 </div>
-                <button className="bg-white border border-gray-200 px-4 py-2 text-xs font-bold uppercase tracking-wider flex items-center shadow-sm hover:bg-gray-50 transition-colors">
-                  <Filter className="w-4 h-4 mr-2 text-gray-500" />
-                  Filter
+                
+                <div className="relative">
+                  <button 
+                    onClick={() => setShowFilterDropdown(!showFilterDropdown)}
+                    className="h-full bg-white border border-gray-200 px-4 py-2 text-xs font-bold uppercase tracking-wider flex items-center shadow-sm hover:bg-gray-50 transition-colors"
+                  >
+                    <Filter className="w-4 h-4 mr-2 text-gray-500" />
+                    {filterStatus === 'All' ? 'Filter' : filterStatus}
+                  </button>
+                  
+                  {showFilterDropdown && (
+                    <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 shadow-lg z-10 py-1">
+                      {['All', 'Parked', 'Entering', 'Exiting'].map(status => (
+                        <button
+                          key={status}
+                          onClick={() => { setFilterStatus(status); setShowFilterDropdown(false); }}
+                          className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 ${filterStatus === status ? 'font-bold text-gray-900 bg-gray-50' : 'text-gray-700'}`}
+                        >
+                          {status}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <button 
+                  onClick={handleRefresh}
+                  className="bg-white border border-gray-200 px-4 py-2 text-xs font-bold uppercase tracking-wider flex items-center shadow-sm hover:bg-gray-50 transition-colors"
+                >
+                  <RefreshCw className={`w-4 h-4 mr-2 text-gray-500 ${isRefreshing ? 'animate-spin' : ''}`} />
+                  Refresh
                 </button>
               </div>
             </div>
@@ -138,19 +208,19 @@ const StaffLiveViewPage = () => {
             <div className="grid grid-cols-4 gap-6 mb-8">
               <div className="bg-white border border-gray-200 p-6 shadow-sm border-t-4 border-t-blue-500">
                 <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Total Active</h3>
-                <p className="text-3xl font-black text-gray-900">142</p>
+                <p className="text-3xl font-black text-gray-900">{stats.total}</p>
               </div>
               <div className="bg-white border border-gray-200 p-6 shadow-sm border-t-4 border-t-green-500">
                 <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Entering</h3>
-                <p className="text-3xl font-black text-gray-900">3</p>
+                <p className="text-3xl font-black text-gray-900">{stats.entering}</p>
               </div>
               <div className="bg-white border border-gray-200 p-6 shadow-sm border-t-4 border-t-orange-500">
                 <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Exiting</h3>
-                <p className="text-3xl font-black text-gray-900">5</p>
+                <p className="text-3xl font-black text-gray-900">{stats.exiting}</p>
               </div>
               <div className="bg-white border border-gray-200 p-6 shadow-sm border-t-4 border-t-purple-500">
                 <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Overstayed</h3>
-                <p className="text-3xl font-black text-gray-900">2</p>
+                <p className="text-3xl font-black text-gray-900">{stats.overstayed}</p>
               </div>
             </div>
 
@@ -159,7 +229,7 @@ const StaffLiveViewPage = () => {
               <div className="px-6 py-4 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
                 <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">Current Active Sessions</h3>
                 <span className="text-xs font-medium text-gray-500 flex items-center">
-                  <Clock className="w-3 h-3 mr-1" /> Last updated: Just now
+                  <Clock className="w-3 h-3 mr-1" /> Last updated: {lastUpdated}
                 </span>
               </div>
               <table className="w-full text-left text-sm">
@@ -175,25 +245,43 @@ const StaffLiveViewPage = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 text-gray-700">
-                  {mockSessions.map((session, index) => (
-                    <tr key={index} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-6 py-4 font-medium text-gray-500">{session.id}</td>
-                      <td className="px-6 py-4 font-bold text-gray-900">{session.plate}</td>
-                      <td className="px-6 py-4">{session.type}</td>
-                      <td className="px-6 py-4">{session.entry}</td>
-                      <td className="px-6 py-4">{session.zone}</td>
-                      <td className="px-6 py-4 font-medium">{session.duration}</td>
-                      <td className="px-6 py-4">
-                        <span className={`text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider ${
-                          session.status === 'Parked' ? 'bg-blue-50 text-blue-600' :
-                          session.status === 'Exiting' ? 'bg-orange-50 text-orange-600' :
-                          'bg-green-50 text-green-600'
-                        }`}>
-                          {session.status}
-                        </span>
+                  {filteredSessions.length > 0 ? (
+                    filteredSessions.map((session, index) => {
+                      const displayStatus = session.status === 'active' ? 'Parked' : session.status;
+                      return (
+                        <tr key={index} className="hover:bg-gray-50 transition-colors">
+                          <td className="px-6 py-4 font-medium text-gray-500">{session.sessionCode}</td>
+                          <td className="px-6 py-4 font-bold text-gray-900">{session.vehicleInfo?.licensePlate}</td>
+                          <td className="px-6 py-4">{session.vehicleType?.name}</td>
+                          <td className="px-6 py-4">{new Date(session.entryTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
+                          <td className="px-6 py-4">{session.zone?.name || 'Unassigned'}</td>
+                          <td className="px-6 py-4 font-medium">{
+                            (() => {
+                              const diff = new Date().getTime() - new Date(session.entryTime).getTime();
+                              const hours = Math.floor(diff / (1000 * 60 * 60));
+                              const minutes = Math.floor((diff / (1000 * 60)) % 60);
+                              return `${hours.toString().padStart(2, '0')}h ${minutes.toString().padStart(2, '0')}m`;
+                            })()
+                          }</td>
+                          <td className="px-6 py-4">
+                            <span className={`text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider ${
+                              displayStatus === 'Parked' ? 'bg-blue-50 text-blue-600' :
+                              displayStatus === 'Exiting' ? 'bg-orange-50 text-orange-600' :
+                              'bg-green-50 text-green-600'
+                            }`}>
+                              {displayStatus}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  ) : (
+                    <tr>
+                      <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
+                        No sessions found matching your criteria.
                       </td>
                     </tr>
-                  ))}
+                  )}
                 </tbody>
               </table>
             </div>
