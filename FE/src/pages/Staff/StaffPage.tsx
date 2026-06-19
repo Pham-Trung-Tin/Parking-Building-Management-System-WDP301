@@ -35,6 +35,8 @@ import lprService from '../../services/api/lprService';
 import parkingSessionService from '../../services/api/parkingSessionService';
 import vehicleTypeService from '../../services/api/vehicleTypeService';
 import parkingLotService from '../../services/api/parkingLotService';
+import floorService from '../../services/api/floorService';
+import parkingSlotService from '../../services/api/parkingSlotService';
 
 // Interface for mock booking data
 interface BookingData {
@@ -111,6 +113,34 @@ const StaffPage = () => {
   const [isManualStandard, setIsManualStandard] = useState(false);
   const [gateStatus, setGateStatus] = useState('Closed');
   const [notification, setNotification] = useState<{ show: boolean, message: string, type: 'success' | 'info' | 'error' } | null>(null);
+
+  const [floors, setFloors] = useState<any[]>([]);
+  const [floorStats, setFloorStats] = useState<Record<string, { total: number, occupied: number }>>({});
+
+  useEffect(() => {
+    const lotId = (profile as any)?.assignedParkingLot?._id || (profile as any)?.assignedParkingLot || defaultLotId;
+    if (lotId) {
+      floorService.getFloors({ status: 'active', parkingLot: lotId }).then(async (res: any) => {
+        const fetchedFloors = res.data || res || [];
+        setFloors(fetchedFloors);
+        
+        const stats: Record<string, { total: number, occupied: number }> = {};
+        for (const f of fetchedFloors.slice(0, 3)) {
+            try {
+                const slotsRes = await parkingSlotService.getFloorMap(f._id);
+                const slots = Array.isArray(slotsRes) ? slotsRes : (slotsRes as any)?.data || [];
+                const activeSlots = slots.filter((s: any) => !s.isDeleted);
+                const total = activeSlots.length;
+                const occupied = activeSlots.filter((s: any) => s.status === 'occupied').length;
+                stats[f._id] = { total, occupied };
+            } catch (err) {
+                console.error(err);
+            }
+        }
+        setFloorStats(stats);
+      }).catch(console.error);
+    }
+  }, [profile, defaultLotId]);
 
   // ==========================================
   // STATES FOR BOOKING ENTRY (QR SCAN)
@@ -667,27 +697,30 @@ const StaffPage = () => {
                 <section>
                   <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Parking Status</h3>
                   <div className="flex flex-col space-y-3">
-                    <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm flex items-center justify-between">
-                      <div>
-                        <h4 className="text-sm font-bold text-gray-900">ZONE A: GROUND FLOOR</h4>
-                        <p className="text-xs text-gray-500 mt-0.5">Suitable for SUV/Trucks</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-xl font-bold text-gray-900">42%</p>
-                        <p className="text-[10px] text-gray-400 uppercase tracking-wider">Occupied</p>
-                      </div>
-                    </div>
-
-                    <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm flex items-center justify-between opacity-60">
-                      <div>
-                        <h4 className="text-sm font-bold text-gray-900">ZONE B: LEVEL 2</h4>
-                        <p className="text-xs text-gray-500 mt-0.5">Standard/Sedan Only</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-xl font-bold text-gray-900">88%</p>
-                        <p className="text-[10px] text-gray-400 uppercase tracking-wider">Occupied</p>
-                      </div>
-                    </div>
+                    {floors.length === 0 ? (
+                      <div className="text-center text-sm text-gray-400 py-4">No floors available</div>
+                    ) : (
+                      floors.slice(0, 3).map((floor, idx) => {
+                        const stat = floorStats[floor._id];
+                        const total = stat ? stat.total : (floor.totalSlots || 0);
+                        const occupied = stat ? stat.occupied : (total - (floor.availableSlots || 0));
+                        const percentage = total > 0 ? Math.round((occupied / total) * 100) : 0;
+                        const floorLabel = floor.name || `Floor ${floor.floorNumber < 0 ? 'B' + Math.abs(floor.floorNumber) : floor.floorNumber}`;
+                        
+                        return (
+                          <div key={floor._id} className={`bg-white border border-gray-200 rounded-xl p-4 shadow-sm flex items-center justify-between ${idx > 0 ? 'opacity-60' : ''}`}>
+                            <div>
+                              <h4 className="text-sm font-bold text-gray-900 uppercase">{floorLabel}</h4>
+                              <p className="text-xs text-gray-500 mt-0.5 capitalize">{floor.vehicleType === 'both' ? 'All Vehicles' : floor.vehicleType}</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-xl font-bold text-gray-900">{percentage}%</p>
+                              <p className="text-[10px] text-gray-400 uppercase tracking-wider">Occupied</p>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
                   </div>
                 </section>
 
