@@ -12,6 +12,7 @@ import {
   Clock,
   Users,
   RefreshCw,
+  LayoutGrid
 } from 'lucide-react';
 import useProfile from '../../hooks/useProfile';
 import parkingSessionService from '../../services/api/parkingSessionService';
@@ -100,6 +101,10 @@ const StaffLiveViewPage = () => {
             <Link to="/staff/live-view" className="flex items-center px-6 py-3 bg-gray-50 border-r-4 border-gray-900 text-gray-900 font-medium w-full text-left">
               <Eye className="w-5 h-5 mr-3 text-gray-700" />
               Live View
+            </Link>
+            <Link to="/staff/manage-slots" className="flex items-center px-6 py-3 text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition-colors w-full text-left">
+              <LayoutGrid className="w-5 h-5 mr-3 text-gray-400" />
+              Manage Slots
             </Link>
             <Link to="/staff/exceptions" className="flex items-center px-6 py-3 text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition-colors w-full text-left">
               <AlertTriangle className="w-5 h-5 mr-3 text-gray-400" />

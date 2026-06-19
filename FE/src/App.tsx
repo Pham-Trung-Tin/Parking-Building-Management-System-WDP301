@@ -20,6 +20,7 @@ import StaffPage from './pages/Staff/StaffPage';
 import StaffExitPage from './pages/Staff/StaffExitPage';
 import StaffExceptionsPage from './pages/Staff/StaffExceptionsPage';
 import StaffLiveViewPage from './pages/Staff/StaffLiveViewPage';
+import StaffManageSlotPage from './pages/Staff/StaffManageSlotPage';
 import { GuestRoute, CustomerRoute, RequireAuthRoute, AdminRoute } from './router/ProtectedRoute';
 
 function App() {
@@ -61,6 +62,7 @@ function App() {
                     <Route path="/staff/exit" element={<StaffExitPage />} />
                     <Route path="/staff/live-view" element={<StaffLiveViewPage />} />
                     <Route path="/staff/exceptions" element={<StaffExceptionsPage />} />
+                    <Route path="/staff/manage-slots" element={<StaffManageSlotPage />} />
                     <Route path="/staff/profile" element={<ProfilePage />} />
                 </Route>
             </Routes>
