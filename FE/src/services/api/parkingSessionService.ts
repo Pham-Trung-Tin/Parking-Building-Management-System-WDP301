@@ -78,7 +78,7 @@ const parkingSessionService = {
 
     /** PATCH /parking-sessions/:id/check-out — Check-out a vehicle */
     checkOut: (id: string): Promise<any> => {
-        return axiosClient.patch(`/parking-sessions/${id}/check-out`);
+        return axiosClient.patch(`/parking-sessions/${String(id).trim()}/check-out`);
     },
 };
 

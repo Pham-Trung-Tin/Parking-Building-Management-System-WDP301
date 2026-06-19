@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   LogIn,
@@ -110,7 +110,7 @@ const StaffExitPage = () => {
 
         try {
           const lotId = (profile?.assignedParkingLot as any)?._id || (profile?.assignedParkingLot as any);
-          const sessionRes = await parkingSessionService.findActive({ 
+          const sessionRes = await parkingSessionService.findActive({
             licensePlate: data.licensePlate,
             parkingLotId: lotId
           });
@@ -139,6 +139,82 @@ const StaffExitPage = () => {
     } finally {
       setIsSearching(false);
     }
+  }, [isExitCamActive, profile]);
+  // Estimated Fee Calculation
+  const estimatedFees = useMemo(() => {
+    if (!activeSession || !activeSession.entryTime || !activeSession.vehicleType?.pricing) {
+      return { baseFee: activeSession?.baseFee || 0, overtimeFee: activeSession?.overtimeFee || 0, totalFee: activeSession?.totalFee || 0 };
+    }
+
+    const now = new Date();
+    const entryTime = new Date(activeSession.entryTime);
+    const pricing = activeSession.vehicleType.pricing;
+
+    const durationMs = now.getTime() - entryTime.getTime();
+    const durationHours = durationMs / (1000 * 60 * 60);
+    const durationDays = Math.floor(durationHours / 24);
+    const remainingHours = durationHours % 24;
+
+    let fee = 0;
+    if (durationDays > 0) {
+      fee += durationDays * (pricing.dailyRate || 0);
+    }
+    if (remainingHours > 0) {
+      fee += Math.ceil(remainingHours) * (pricing.hourlyRate || 0);
+    }
+    if (fee === 0 && durationMs > 0) {
+      fee = pricing.hourlyRate || 0;
+    }
+
+    let overtimeFee = 0;
+    if (activeSession.booking?.endTime && activeSession.booking?.scheduledDate) {
+      const scheduledDateStr = activeSession.booking.scheduledDate.split('T')[0];
+      const scheduledEnd = new Date(`${scheduledDateStr}T${activeSession.booking.endTime}:00`);
+      if (now > scheduledEnd) {
+        const overtimeMs = now.getTime() - scheduledEnd.getTime();
+        const otHours = overtimeMs / (1000 * 60 * 60);
+        // Assuming default 15 mins grace period
+        if (otHours > (15 / 60)) {
+          const roundedOtHours = Math.ceil(otHours);
+          overtimeFee = roundedOtHours * (pricing.hourlyRate || 0) * 1.5;
+        }
+      }
+    }
+
+    const totalFee = fee + overtimeFee;
+    const advancePayment = activeSession.advancePayment || 0;
+    const balanceDue = Math.max(0, totalFee - advancePayment);
+
+    return { baseFee: fee, overtimeFee, totalFee: balanceDue };
+  }, [activeSession]);
+
+  useEffect(() => {
+    let interval: ReturnType<typeof setInterval>;
+    if (isExitCamActive && videoRefExit.current) {
+      navigator.mediaDevices.getUserMedia({ video: true })
+        .then(stream => {
+          if (videoRefExit.current) {
+            videoRefExit.current.srcObject = stream;
+          }
+        })
+        .catch(err => {
+          showNotification('Failed to access camera', 'error');
+          console.error(err);
+        });
+
+      // Simulate LPR scanning every 5 seconds
+      interval = setInterval(() => {
+        // In reality, this would send the frame to an LPR API
+      }, 5000);
+    } else if (videoRefExit.current && videoRefExit.current.srcObject) {
+      const tracks = (videoRefExit.current.srcObject as MediaStream).getTracks();
+      tracks.forEach(track => track.stop());
+      videoRefExit.current.srcObject = null;
+    }
+
+    return () => {
+      if (interval) clearInterval(interval);
+    };
   }, [isExitCamActive]);
 
   const handleManualSearch = async (e?: React.FormEvent) => {
@@ -154,10 +230,16 @@ const StaffExitPage = () => {
 
     try {
       const lotId = (profile?.assignedParkingLot as any)?._id || (profile?.assignedParkingLot as any);
-      const sessionRes = await parkingSessionService.findActive({ 
-        licensePlate: searchQuery.trim(),
-        parkingLotId: lotId
-      });
+
+      const isSessionCode = searchQuery.trim().toUpperCase().startsWith('PS-');
+      const params: any = { parkingLotId: lotId };
+      if (isSessionCode) {
+        params.sessionCode = searchQuery.trim();
+      } else {
+        params.licensePlate = searchQuery.trim();
+      }
+
+      const sessionRes = await parkingSessionService.findActive(params);
       if (sessionRes.data) {
         setActiveSession(sessionRes.data);
         setSessionFound(true);
@@ -175,7 +257,11 @@ const StaffExitPage = () => {
   const handleProcessAndRelease = async () => {
     if (!sessionFound || !activeSession) return;
     try {
-      await parkingSessionService.checkOut(activeSession._id);
+      const sessionId = activeSession._id || activeSession.id;
+      if (!sessionId) {
+        throw new Error('Invalid session data: Missing ID');
+      }
+      await parkingSessionService.checkOut(String(sessionId));
       showNotification('Payment verified. Releasing gate...', 'success');
       setTimeout(() => {
         setSessionFound(false);
@@ -497,7 +583,7 @@ const StaffExitPage = () => {
                   <div>
                     <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Amount Due</h3>
                     <p className={`text-5xl font-black tracking-tight ${sessionFound ? 'text-gray-900' : 'text-gray-300'}`}>
-                      {sessionFound && activeSession ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(activeSession.totalFee || 0) : '0 ₫'}
+                      {sessionFound && activeSession ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(estimatedFees.totalFee || 0) : '0 ₫'}
                     </p>
                   </div>
 
@@ -505,19 +591,19 @@ const StaffExitPage = () => {
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-500">Base Fee</span>
                       <span className={`font-medium ${sessionFound ? 'text-gray-900' : 'text-gray-400'}`}>
-                        {sessionFound && activeSession ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(activeSession.baseFee || 0) : '0 ₫'}
+                        {sessionFound && activeSession ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(estimatedFees.baseFee || 0) : '0 ₫'}
                       </span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-500">Overtime Fee</span>
                       <span className={`font-medium ${sessionFound ? 'text-gray-900' : 'text-gray-400'}`}>
-                        {sessionFound && activeSession ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(activeSession.overtimeFee || 0) : '0 ₫'}
+                        {sessionFound && activeSession ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(estimatedFees.overtimeFee || 0) : '0 ₫'}
                       </span>
                     </div>
                     <div className="flex justify-between text-sm pt-3 border-t border-gray-100">
                       <span className="font-bold text-gray-900 text-xs uppercase tracking-wider">Balance Due</span>
                       <span className={`font-bold ${sessionFound && activeSession?.paymentStatus !== 'paid' ? 'text-orange-600' : (sessionFound ? 'text-green-600' : 'text-gray-400')}`}>
-                        {sessionFound && activeSession?.paymentStatus === 'paid' ? 'PAID' : (sessionFound && activeSession ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(activeSession.totalFee || 0) : '0 ₫')}
+                        {sessionFound && activeSession?.paymentStatus === 'paid' ? 'PAID' : (sessionFound && activeSession ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(estimatedFees.totalFee || 0) : '0 ₫')}
                       </span>
                     </div>
                   </div>
