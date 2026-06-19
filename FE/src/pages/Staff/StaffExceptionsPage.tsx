@@ -23,6 +23,8 @@ const StaffExceptionsPage = () => {
     navigate('/login');
   };
 
+  const buildingName = (profile?.assignedParkingLot as any)?.name || 'Main Street Garage';
+
   return (
     <div className="flex h-screen bg-gray-50 font-sans text-gray-800">
       {/* Sidebar */}
@@ -94,7 +96,7 @@ const StaffExceptionsPage = () => {
         {/* Header */}
         <header className="h-20 bg-white border-b border-gray-200 px-8 flex items-center justify-between shrink-0">
           <div className="flex items-center">
-            <h2 className="text-2xl font-bold text-gray-900 mr-6">Main Street Garage</h2>
+            <h2 className="text-2xl font-bold text-gray-900 mr-6">{buildingName}</h2>
           </div>
           <div className="flex items-center space-x-4">
             <button className="p-2 text-gray-400 hover:text-gray-600 transition-colors">

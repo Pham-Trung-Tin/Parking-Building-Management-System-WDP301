@@ -28,18 +28,23 @@ const StaffLiveViewPage = () => {
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
   const [stats, setStats] = useState({ total: 0, entering: 0, exiting: 0, overstayed: 0 });
 
+  const buildingName = (profile?.assignedParkingLot as any)?.name || 'Main Street Garage';
+
   const fetchSessions = async () => {
     setIsRefreshing(true);
     try {
-      const res = await parkingSessionService.getSessions({ limit: 100, status: 'active' });
-      const activeSessions = res.data?.docs || res.data || [];
-      setSessions(activeSessions);
+      const lotId = (profile?.assignedParkingLot as any)?._id || (profile?.assignedParkingLot as any);
+      const res = await parkingSessionService.getSessions({ limit: 100, parkingLot: lotId });
+      const allSessions = res.data?.docs || res.data || [];
+      setSessions(allSessions);
       setLastUpdated(new Date().toLocaleTimeString());
+      
+      const activeSessions = allSessions.filter((s: any) => s.status === 'active');
       
       setStats({
         total: activeSessions.length,
-        entering: activeSessions.filter((s: any) => !s.exitTime).length,
-        exiting: 0,
+        entering: activeSessions.length, // All active are 'parked'/entering since we don't have a specific entering state
+        exiting: allSessions.filter((s: any) => s.status === 'completed').length,
         overstayed: activeSessions.filter((s: any) => s.isOvertime).length,
       });
     } catch (error) {
@@ -58,7 +63,7 @@ const StaffLiveViewPage = () => {
 
   const filteredSessions = sessions.filter(session => {
     const matchesSearch = (session.vehicleInfo?.licensePlate || '').toLowerCase().includes(searchQuery.toLowerCase());
-    const sessionStatus = session.status === 'active' ? 'Parked' : session.status;
+    const sessionStatus = session.status === 'active' ? 'Parked' : (session.status === 'completed' ? 'Exited' : session.status);
     const matchesStatus = filterStatus === 'All' || sessionStatus.toLowerCase() === filterStatus.toLowerCase();
     return matchesSearch && matchesStatus;
   });
@@ -144,7 +149,7 @@ const StaffLiveViewPage = () => {
         {/* Header */}
         <header className="h-20 bg-white border-b border-gray-200 px-8 flex items-center justify-between shrink-0">
           <div className="flex items-center">
-            <h2 className="text-2xl font-bold text-gray-900 mr-6">Main Street Garage</h2>
+            <h2 className="text-2xl font-bold text-gray-900 mr-6">{buildingName}</h2>
           </div>
           <div className="flex items-center space-x-4">
             <button className="p-2 text-gray-400 hover:text-gray-600 transition-colors">
@@ -188,7 +193,7 @@ const StaffLiveViewPage = () => {
                   
                   {showFilterDropdown && (
                     <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 shadow-lg z-10 py-1">
-                      {['All', 'Parked', 'Entering', 'Exiting'].map(status => (
+                      {['All', 'Parked', 'Exited', 'Overstayed'].map(status => (
                         <button
                           key={status}
                           onClick={() => { setFilterStatus(status); setShowFilterDropdown(false); }}
@@ -254,7 +259,7 @@ const StaffLiveViewPage = () => {
                 <tbody className="divide-y divide-gray-100 text-gray-700">
                   {filteredSessions.length > 0 ? (
                     filteredSessions.map((session, index) => {
-                      const displayStatus = session.status === 'active' ? 'Parked' : session.status;
+                      const displayStatus = session.status === 'active' ? 'Parked' : (session.status === 'completed' ? 'Exited' : session.status);
                       return (
                         <tr key={index} className="hover:bg-gray-50 transition-colors">
                           <td className="px-6 py-4 font-medium text-gray-500">{session.sessionCode}</td>

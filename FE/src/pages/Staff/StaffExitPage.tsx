@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import useProfile from '../../hooks/useProfile';
 import lprService from '../../services/api/lprService';
+import parkingSessionService from '../../services/api/parkingSessionService';
 import { useCallback } from 'react';
 
 const StaffExitPage = () => {
@@ -26,6 +27,7 @@ const StaffExitPage = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [sessionFound, setSessionFound] = useState(false);
+  const [activeSession, setActiveSession] = useState<any>(null);
   const [isManual, setIsManual] = useState(false);
   const [confidence, setConfidence] = useState<number | null>(null);
   const [notification, setNotification] = useState<{ show: boolean, message: string, type: 'success' | 'info' | 'error' } | null>(null);
@@ -33,6 +35,8 @@ const StaffExitPage = () => {
   const [isExitCamActive, setIsExitCamActive] = useState(true);
   const videoRefExit = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  const buildingName = (profile?.assignedParkingLot as any)?.name || 'Main Street Garage';
 
   useEffect(() => {
     let stream: MediaStream | null = null;
@@ -102,11 +106,23 @@ const StaffExitPage = () => {
         setSearchQuery(data.licensePlate);
         setConfidence(data.confidence);
         setIsManual(false);
-        setSessionFound(true);
-        showNotification(
-          `AI recognized: ${data.licensePlate} (${data.confidence}% confidence)`,
-          'success'
-        );
+
+        try {
+          const lotId = (profile?.assignedParkingLot as any)?._id || (profile?.assignedParkingLot as any);
+          const sessionRes = await parkingSessionService.findActive({ 
+            licensePlate: data.licensePlate,
+            parkingLotId: lotId
+          });
+          if (sessionRes.data) {
+            setActiveSession(sessionRes.data);
+            setSessionFound(true);
+            showNotification(`Session found for ${data.licensePlate} (${data.confidence}% confidence)`, 'success');
+          }
+        } catch (sessionErr: any) {
+          setActiveSession(null);
+          setSessionFound(false);
+          showNotification(sessionErr?.message || `No active session found for ${data.licensePlate}.`, 'error');
+        }
       } else {
         showNotification(
           'Could not recognize plate. Try repositioning the vehicle or use Manual Override.',
@@ -124,7 +140,7 @@ const StaffExitPage = () => {
     }
   }, [isExitCamActive]);
 
-  const handleManualSearch = (e?: React.FormEvent) => {
+  const handleManualSearch = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!searchQuery.trim()) {
       showNotification('Please enter a license plate to search', 'error');
@@ -133,22 +149,42 @@ const StaffExitPage = () => {
 
     setIsSearching(true);
     setSessionFound(false);
+    setActiveSession(null);
 
-    setTimeout(() => {
+    try {
+      const lotId = (profile?.assignedParkingLot as any)?._id || (profile?.assignedParkingLot as any);
+      const sessionRes = await parkingSessionService.findActive({ 
+        licensePlate: searchQuery.trim(),
+        parkingLotId: lotId
+      });
+      if (sessionRes.data) {
+        setActiveSession(sessionRes.data);
+        setSessionFound(true);
+        showNotification(`Session found for plate: ${searchQuery.toUpperCase()}`, 'success');
+      }
+    } catch (sessionErr: any) {
+      setActiveSession(null);
+      setSessionFound(false);
+      showNotification(sessionErr?.message || `No active session found for ${searchQuery.toUpperCase()}`, 'error');
+    } finally {
       setIsSearching(false);
-      setSessionFound(true);
-      showNotification(`Session found for plate: ${searchQuery.toUpperCase()}`, 'success');
-    }, 1200);
+    }
   };
 
-  const handleProcessAndRelease = () => {
-    if (!sessionFound) return;
-    showNotification('Payment verified. Releasing gate...', 'success');
-    setTimeout(() => {
-      setSessionFound(false);
-      setSearchQuery('');
-      showNotification('Gate closed. Session complete.', 'info');
-    }, 3500);
+  const handleProcessAndRelease = async () => {
+    if (!sessionFound || !activeSession) return;
+    try {
+      await parkingSessionService.checkOut(activeSession._id);
+      showNotification('Payment verified. Releasing gate...', 'success');
+      setTimeout(() => {
+        setSessionFound(false);
+        setActiveSession(null);
+        setSearchQuery('');
+        showNotification('Gate closed. Session complete.', 'info');
+      }, 3500);
+    } catch (err: any) {
+      showNotification(err?.message || 'Failed to check out session', 'error');
+    }
   };
 
   const handleManualOverride = () => {
@@ -241,7 +277,7 @@ const StaffExitPage = () => {
         {/* Header */}
         <header className="h-20 bg-white border-b border-gray-200 px-8 flex items-center justify-between shrink-0">
           <div className="flex items-center">
-            <h2 className="text-2xl font-bold text-gray-900 mr-6">Main Street Garage</h2>
+            <h2 className="text-2xl font-bold text-gray-900 mr-6">{buildingName}</h2>
           </div>
           <div className="flex items-center space-x-4">
             <button className="p-2 text-gray-400 hover:text-gray-600 transition-colors">
@@ -326,47 +362,57 @@ const StaffExitPage = () => {
                       <div>
                         <p className="text-xs text-gray-500 mb-1">Session ID</p>
                         <p className={`font-bold text-lg ${sessionFound ? 'text-gray-900' : 'text-gray-300'}`}>
-                          {sessionFound ? '64a7...f1a2' : '---'}
+                          {sessionFound ? activeSession?.sessionCode || 'N/A' : '---'}
                         </p>
                       </div>
                       <div>
                         <p className="text-xs text-gray-500 mb-1">Session Type</p>
                         <p className={`font-bold text-lg ${sessionFound ? 'text-gray-900' : 'text-gray-300'}`}>
-                          {sessionFound ? 'Guest' : '---'}
+                          {sessionFound ? (activeSession?.booking ? 'Pre-booked' : (activeSession?.user ? 'Registered' : 'Guest')) : '---'}
                         </p>
                       </div>
                       <div>
                         <p className="text-xs text-gray-500 mb-1">License Plate</p>
                         <p className={`font-bold text-lg ${sessionFound ? 'text-gray-900' : 'text-gray-300'}`}>
-                          {sessionFound ? searchQuery : '---'}
+                          {sessionFound ? activeSession?.vehicleInfo?.licensePlate || searchQuery : '---'}
                         </p>
                       </div>
                       <div>
                         <p className="text-xs text-gray-500 mb-1">Entry Time</p>
                         <p className={`font-bold text-lg ${sessionFound ? 'text-gray-900' : 'text-gray-300'}`}>
-                          {sessionFound ? 'Oct 24, 08:14 AM' : '--:-- --'}
+                          {sessionFound && activeSession?.entryTime ? new Date(activeSession.entryTime).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : '--:-- --'}
                         </p>
                       </div>
                       <div>
                         <p className="text-xs text-gray-500 mb-1">Duration</p>
                         <p className={`font-bold text-lg ${sessionFound ? 'text-gray-900' : 'text-gray-300'}`}>
-                          {sessionFound ? '06h 42m' : '--h --m'}
+                          {sessionFound && activeSession?.entryTime ? (
+                            (() => {
+                              const diff = new Date().getTime() - new Date(activeSession.entryTime).getTime();
+                              const h = Math.floor(diff / 3600000);
+                              const m = Math.floor((diff % 3600000) / 60000);
+                              return `${h}h ${m}m`;
+                            })()
+                          ) : '--h --m'}
                         </p>
                       </div>
                       <div>
                         <p className="text-xs text-gray-500 mb-1">Slot Code</p>
                         <p className={`font-bold text-lg ${sessionFound ? 'text-gray-900' : 'text-gray-300'}`}>
-                          {sessionFound ? 'A1-05' : '---'}
+                          {sessionFound ? activeSession?.slot?.slotCode || 'Unassigned' : '---'}
                         </p>
                       </div>
                     </div>
 
                     <div className="border-t border-gray-100 pt-4 flex items-center justify-between">
-                      <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Payment Verification</span>
+                      <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Payment Status</span>
                       {sessionFound ? (
-                        <div className="flex items-center text-green-600 text-sm font-bold">
-                          <CheckCircle2 className="w-4 h-4 mr-2" />
-                          Payment Validated
+                        <div className={`flex items-center text-sm font-bold ${activeSession?.paymentStatus === 'paid' ? 'text-green-600' : 'text-orange-500'}`}>
+                          {activeSession?.paymentStatus === 'paid' ? (
+                            <><CheckCircle2 className="w-4 h-4 mr-2" /> Paid</>
+                          ) : (
+                            <><AlertTriangle className="w-4 h-4 mr-2" /> Pending Payment</>
+                          )}
                         </div>
                       ) : (
                         <div className="flex items-center text-gray-400 text-sm font-medium">
@@ -446,27 +492,27 @@ const StaffExitPage = () => {
                   <div>
                     <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Amount Due</h3>
                     <p className={`text-5xl font-black tracking-tight ${sessionFound ? 'text-gray-900' : 'text-gray-300'}`}>
-                      {sessionFound ? '$18.00' : '$0.00'}
+                      {sessionFound && activeSession ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(activeSession.totalFee || 0) : '0 ₫'}
                     </p>
                   </div>
 
                   <div className="flex flex-col space-y-3 pt-4 border-t border-gray-100">
                     <div className="flex justify-between text-sm">
-                      <span className="text-gray-500">Base Rate (Daily)</span>
+                      <span className="text-gray-500">Base Fee</span>
                       <span className={`font-medium ${sessionFound ? 'text-gray-900' : 'text-gray-400'}`}>
-                        {sessionFound ? '$15.00' : '$0.00'}
+                        {sessionFound && activeSession ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(activeSession.baseFee || 0) : '0 ₫'}
                       </span>
                     </div>
                     <div className="flex justify-between text-sm">
-                      <span className="text-gray-500">Service Fee</span>
+                      <span className="text-gray-500">Overtime Fee</span>
                       <span className={`font-medium ${sessionFound ? 'text-gray-900' : 'text-gray-400'}`}>
-                        {sessionFound ? '$3.00' : '$0.00'}
+                        {sessionFound && activeSession ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(activeSession.overtimeFee || 0) : '0 ₫'}
                       </span>
                     </div>
                     <div className="flex justify-between text-sm pt-3 border-t border-gray-100">
                       <span className="font-bold text-gray-900 text-xs uppercase tracking-wider">Balance Due</span>
-                      <span className={`font-bold ${sessionFound ? 'text-gray-900' : 'text-gray-400'}`}>
-                        $0.00
+                      <span className={`font-bold ${sessionFound && activeSession?.paymentStatus !== 'paid' ? 'text-orange-600' : (sessionFound ? 'text-green-600' : 'text-gray-400')}`}>
+                        {sessionFound && activeSession?.paymentStatus === 'paid' ? 'PAID' : (sessionFound && activeSession ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(activeSession.totalFee || 0) : '0 ₫')}
                       </span>
                     </div>
                   </div>
