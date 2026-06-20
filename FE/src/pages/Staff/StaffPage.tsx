@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import {
   LogIn,
@@ -24,11 +24,19 @@ import {
   ShieldCheck,
   QrCode,
   Ticket,
-  ScanLine
+  ScanLine,
+  Users,
+  LayoutGrid
 } from 'lucide-react';
 import { Scanner } from '@yudiel/react-qr-scanner';
 import useProfile from '../../hooks/useProfile';
 import { verifyQRToken } from '../../utils/qrToken';
+import lprService from '../../services/api/lprService';
+import parkingSessionService from '../../services/api/parkingSessionService';
+import vehicleTypeService from '../../services/api/vehicleTypeService';
+import parkingLotService from '../../services/api/parkingLotService';
+import floorService from '../../services/api/floorService';
+import parkingSlotService from '../../services/api/parkingSlotService';
 
 // Interface for mock booking data
 interface BookingData {
@@ -49,13 +57,90 @@ const StaffPage = () => {
   // ==========================================
   // STATES FOR STANDARD ENTRY (WALK-IN)
   // ==========================================
-  const [selectedVehicle, setSelectedVehicle] = useState('car');
+  const [isStandardCamActive, setIsStandardCamActive] = useState(true);
+  const videoRefStandard = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [lprEngine, setLprEngine] = useState<string | null>(null);
+  const [lprProcessingTime, setLprProcessingTime] = useState<number | null>(null);
+
+  useEffect(() => {
+    let stream: MediaStream | null = null;
+    if (entryMode === 'standard' && isStandardCamActive) {
+      navigator.mediaDevices.getUserMedia({ video: true })
+        .then(s => {
+          stream = s;
+          if (videoRefStandard.current) {
+            videoRefStandard.current.srcObject = s;
+          }
+        })
+        .catch(err => {
+          console.error("Camera access denied:", err);
+        });
+    } else {
+      if (videoRefStandard.current && videoRefStandard.current.srcObject) {
+         const s = videoRefStandard.current.srcObject as MediaStream;
+         s.getTracks().forEach(t => t.stop());
+         videoRefStandard.current.srcObject = null;
+      }
+    }
+    return () => {
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [entryMode, isStandardCamActive]);
+
+  const [vehicleTypesList, setVehicleTypesList] = useState<any[]>([]);
+  const [selectedVehicle, setSelectedVehicle] = useState('');
+  const [defaultLotId, setDefaultLotId] = useState('');
+  
+  useEffect(() => {
+    vehicleTypeService.getAll().then((res: any) => {
+      const types = res.data || res;
+      setVehicleTypesList(types);
+      if (types.length > 0) setSelectedVehicle(types[0]._id);
+    }).catch(console.error);
+
+    parkingLotService.getParkingLots({ limit: 1 }).then((res: any) => {
+      const lots = res.data?.docs || res.data || [];
+      if (lots.length > 0) setDefaultLotId(lots[0]._id);
+    }).catch(console.error);
+  }, []);
+
   const [plate, setPlate] = useState('ABC-1234');
   const [confidence, setConfidence] = useState<number | null>(98);
   const [isScanningStandard, setIsScanningStandard] = useState(false);
   const [isManualStandard, setIsManualStandard] = useState(false);
   const [gateStatus, setGateStatus] = useState('Closed');
   const [notification, setNotification] = useState<{ show: boolean, message: string, type: 'success' | 'info' | 'error' } | null>(null);
+
+  const [floors, setFloors] = useState<any[]>([]);
+  const [floorStats, setFloorStats] = useState<Record<string, { total: number, occupied: number }>>({});
+
+  useEffect(() => {
+    const lotId = (profile as any)?.assignedParkingLot?._id || (profile as any)?.assignedParkingLot || defaultLotId;
+    if (lotId) {
+      floorService.getFloors({ status: 'active', parkingLot: lotId }).then(async (res: any) => {
+        const fetchedFloors = res.data || res || [];
+        setFloors(fetchedFloors);
+        
+        const stats: Record<string, { total: number, occupied: number }> = {};
+        for (const f of fetchedFloors.slice(0, 3)) {
+            try {
+                const slotsRes = await parkingSlotService.getFloorMap(f._id);
+                const slots = Array.isArray(slotsRes) ? slotsRes : (slotsRes as any)?.data || [];
+                const activeSlots = slots.filter((s: any) => !s.isDeleted);
+                const total = activeSlots.length;
+                const occupied = activeSlots.filter((s: any) => s.status === 'occupied').length;
+                stats[f._id] = { total, occupied };
+            } catch (err) {
+                console.error(err);
+            }
+        }
+        setFloorStats(stats);
+      }).catch(console.error);
+    }
+  }, [profile, defaultLotId]);
 
   // ==========================================
   // STATES FOR BOOKING ENTRY (QR SCAN)
@@ -84,35 +169,104 @@ const StaffPage = () => {
   // ==========================================
   // LOGIC FOR STANDARD ENTRY
   // ==========================================
-  const handleRescanStandard = () => {
+  /**
+   * Capture current video frame and send to AI LPR backend for OCR
+   */
+  const handleRescanStandard = useCallback(async () => {
+    const video = videoRefStandard.current;
+    const canvas = canvasRef.current;
+
+    if (!video || !canvas || !isStandardCamActive) {
+      showNotification('Camera is not active. Please turn on camera first.', 'error');
+      return;
+    }
+
+    // Ensure video is playing and has dimensions
+    if (video.readyState < 2 || video.videoWidth === 0) {
+      showNotification('Camera not ready yet. Please wait...', 'error');
+      return;
+    }
+
     setIsScanningStandard(true);
     setPlate('');
     setConfidence(null);
-    setTimeout(() => {
-      const randomPlates = ['XYZ-9876', 'LMN-4567', 'DEF-1122', 'GHI-5542'];
-      setPlate(randomPlates[Math.floor(Math.random() * randomPlates.length)]);
-      setConfidence(Math.floor(Math.random() * 15) + 85);
-      setIsScanningStandard(false);
-      setIsManualStandard(false);
-      showNotification('Plate scanned successfully', 'success');
-    }, 1500);
-  };
+    setLprEngine(null);
+    setLprProcessingTime(null);
 
-  const handleCreateSessionStandard = () => {
+    try {
+      // Draw current video frame to canvas
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('Canvas context failed');
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      // Convert canvas to base64
+      const imageBase64 = canvas.toDataURL('image/jpeg', 0.85);
+
+      // Send to backend AI LPR
+      const response = await lprService.recognizeFromBase64(imageBase64);
+      const data = response.data;
+
+      if (data && data.licensePlate && data.licensePlate !== 'UNRECOGNIZED') {
+        setPlate(data.licensePlate);
+        setConfidence(data.confidence);
+        setLprEngine(data.engine);
+        setLprProcessingTime(data.processingTimeMs);
+        setIsManualStandard(false);
+        showNotification(
+          `AI recognized: ${data.licensePlate} (${data.confidence}% confidence, ${data.processingTimeMs}ms)`,
+          'success'
+        );
+      } else {
+        setPlate('');
+        setConfidence(0);
+        showNotification(
+          'Could not recognize plate. Try repositioning the vehicle or use Manual Override.',
+          'error'
+        );
+      }
+    } catch (err: any) {
+      console.error('LPR Error:', err);
+      showNotification(
+        err?.message || 'AI recognition failed. Please enter plate manually.',
+        'error'
+      );
+    } finally {
+      setIsScanningStandard(false);
+    }
+  }, [isStandardCamActive]);
+
+  const handleCreateSessionStandard = async () => {
     if (!plate || isScanningStandard) {
       showNotification('Please wait for scan or enter a valid license plate', 'error');
       return;
     }
-    showNotification(`Session created for ${plate} (${selectedVehicle.toUpperCase()}). Opening gate...`, 'success');
-    setGateStatus('Open');
+    const lotId = (profile as any)?.assignedParkingLot?._id || (profile as any)?.assignedParkingLot || defaultLotId;
+    if (!lotId) {
+      showNotification('System is still loading parking lot info or no lot available.', 'error');
+      return;
+    }
 
-    setTimeout(() => {
-      setPlate('');
-      setConfidence(null);
-      setGateStatus('Closed');
-      setSelectedVehicle('car');
-      showNotification('Gate closed. Ready for next vehicle.', 'info');
-    }, 4000);
+    try {
+      await parkingSessionService.checkIn({
+        licensePlate: plate,
+        vehicleTypeId: selectedVehicle,
+        parkingLotId: lotId
+      });
+      showNotification(`Session created for ${plate}. Opening gate...`, 'success');
+      setGateStatus('Open');
+
+      setTimeout(() => {
+        setPlate('');
+        setConfidence(null);
+        setGateStatus('Closed');
+        if (vehicleTypesList.length > 0) setSelectedVehicle(vehicleTypesList[0]._id);
+        showNotification('Gate closed. Ready for next vehicle.', 'info');
+      }, 4000);
+    } catch (err: any) {
+      showNotification(err?.response?.data?.message || err?.message || 'Failed to create session', 'error');
+    }
   };
 
   const handlePrintTicket = () => {
@@ -128,12 +282,14 @@ const StaffPage = () => {
     }, 5000);
   };
 
-  const vehicleTypes = [
-    { id: 'car', label: 'CAR', icon: Car },
-    { id: 'suv', label: 'SUV', icon: CarFront },
-    { id: 'motorcycle', label: 'MOTORCYCLE', icon: Bike },
-    { id: 'truck', label: 'TRUCK', icon: Truck },
-  ];
+  const getIconForType = (code: string) => {
+    switch (code?.toLowerCase()) {
+      case 'suv': return CarFront;
+      case 'motorcycle': return Bike;
+      case 'truck': return Truck;
+      default: return Car;
+    }
+  };
 
 
   // ==========================================
@@ -278,10 +434,26 @@ const StaffPage = () => {
               <Eye className="w-5 h-5 mr-3 text-gray-400" />
               Live View
             </Link>
+            <Link to="/staff/manage-slots" className="flex items-center px-6 py-3 text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition-colors w-full text-left">
+              <LayoutGrid className="w-5 h-5 mr-3 text-gray-400" />
+              Manage Slots
+            </Link>
             <Link to="/staff/exceptions" className="flex items-center px-6 py-3 text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition-colors w-full text-left">
               <AlertTriangle className="w-5 h-5 mr-3 text-gray-400" />
               Exceptions
             </Link>
+            {profile?.role !== 'parking_manager' && (
+              <Link to="/staff/profile" className="flex items-center px-6 py-3 text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition-colors w-full text-left">
+                <User className="w-5 h-5 mr-3 text-gray-400" />
+                My Profile
+              </Link>
+            )}
+            {profile?.role === 'parking_manager' && (
+              <Link to="/admin/staff-assignment" className="flex items-center px-6 py-3 text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition-colors w-full text-left">
+                <Users className="w-5 h-5 mr-3 text-gray-400" />
+                Staff Assignment
+              </Link>
+            )}
           </nav>
         </div>
 
@@ -381,7 +553,8 @@ const StaffPage = () => {
                     {isScanningStandard ? (
                       <div className="flex flex-col items-center text-gray-400">
                         <RefreshCw className="w-10 h-10 mb-4 animate-spin text-gray-300" />
-                        <span className="text-xl font-bold tracking-widest uppercase animate-pulse">Scanning...</span>
+                        <span className="text-xl font-bold tracking-widest uppercase animate-pulse">AI Analyzing...</span>
+                        <span className="text-xs text-gray-400 mt-2">Processing camera frame with OCR engine</span>
                       </div>
                     ) : (
                       <input
@@ -394,17 +567,33 @@ const StaffPage = () => {
                       />
                     )}
                   </div>
-                  <div className="flex justify-between items-center mt-3 h-6">
-                    <span className="text-sm text-gray-500">
-                      {isScanningStandard ? 'Processing image feed...' : confidence ? `Confidence: ${confidence}%` : 'Waiting for vehicle...'}
+                  <div className="flex justify-between items-center mt-3 min-h-[24px]">
+                    <span className="text-sm text-gray-500 flex items-center gap-2">
+                      {isScanningStandard ? (
+                        'AI processing image feed...'
+                      ) : confidence ? (
+                        <>
+                          Confidence: <span className={`font-bold ${confidence >= 80 ? 'text-green-600' : confidence >= 50 ? 'text-yellow-600' : 'text-red-500'}`}>{confidence}%</span>
+                          {lprEngine && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 font-bold uppercase">
+                              {lprEngine === 'plate_recognizer' ? 'PR API' : 'Tesseract'}
+                            </span>
+                          )}
+                          {lprProcessingTime && (
+                            <span className="text-[10px] text-gray-400">{lprProcessingTime}ms</span>
+                          )}
+                        </>
+                      ) : (
+                        'Waiting for vehicle...'
+                      )}
                     </span>
                     <button
                       onClick={handleRescanStandard}
                       disabled={isScanningStandard}
                       className="flex items-center text-sm font-bold text-gray-700 hover:text-gray-900 transition-colors disabled:opacity-50"
                     >
-                      <RefreshCw className={`w-4 h-4 mr-2 ${isScanningStandard ? 'animate-spin' : ''}`} />
-                      RE-SCAN
+                      <Camera className={`w-4 h-4 mr-2 ${isScanningStandard ? 'animate-pulse' : ''}`} />
+                      {isScanningStandard ? 'SCANNING...' : 'AI SCAN'}
                     </button>
                   </div>
                 </section>
@@ -413,13 +602,13 @@ const StaffPage = () => {
                 <section>
                   <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Vehicle Classification</h3>
                   <div className="grid grid-cols-4 gap-4">
-                    {vehicleTypes.map((type) => {
-                      const Icon = type.icon;
-                      const isSelected = selectedVehicle === type.id;
+                    {vehicleTypesList.map((type) => {
+                      const Icon = getIconForType(type.code);
+                      const isSelected = selectedVehicle === type._id;
                       return (
                         <button
-                          key={type.id}
-                          onClick={() => setSelectedVehicle(type.id)}
+                          key={type._id}
+                          onClick={() => setSelectedVehicle(type._id)}
                           className={`flex flex-col items-center justify-center p-6 border rounded-xl transition-all ${isSelected
                               ? 'border-gray-900 shadow-md bg-white'
                               : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50 text-gray-400'
@@ -427,7 +616,7 @@ const StaffPage = () => {
                         >
                           <Icon className={`w-8 h-8 mb-3 ${isSelected ? 'text-gray-900' : 'text-gray-400'}`} />
                           <span className={`text-xs font-bold tracking-wider ${isSelected ? 'text-gray-900' : 'text-gray-500'}`}>
-                            {type.label}
+                            {type.name.toUpperCase()}
                           </span>
                         </button>
                       )
@@ -469,44 +658,69 @@ const StaffPage = () => {
 
                 {/* Camera View Placeholder */}
                 <section>
-                  <div className="relative bg-gray-200 aspect-video rounded-xl overflow-hidden border border-gray-200 shadow-sm">
-                    <img
-                      src="https://images.unsplash.com/photo-1621570273836-5b4d70908865?auto=format&fit=crop&q=80&w=600"
-                      alt="Camera Feed"
-                      className="w-full h-full object-cover grayscale opacity-80 mix-blend-multiply"
-                    />
+                  <div className="flex justify-between items-center mb-3">
+                    <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Live Feed</h3>
+                    <button
+                      onClick={() => setIsStandardCamActive(!isStandardCamActive)}
+                      className={`text-[10px] px-2 py-1 rounded font-bold uppercase tracking-wider transition-colors ${
+                        isStandardCamActive ? 'bg-red-100 text-red-700 hover:bg-red-200' : 'bg-green-100 text-green-700 hover:bg-green-200'
+                      }`}
+                    >
+                      {isStandardCamActive ? 'Turn Off Cam' : 'Turn On Cam'}
+                    </button>
+                  </div>
+                  <div className="relative bg-black aspect-video rounded-xl overflow-hidden border border-gray-200 shadow-sm flex items-center justify-center">
+                    {isStandardCamActive ? (
+                      <video
+                        ref={videoRefStandard}
+                        autoPlay
+                        playsInline
+                        muted
+                        className="w-full h-full object-cover opacity-90 mix-blend-screen"
+                      />
+                    ) : (
+                      <div className="flex flex-col items-center text-gray-500">
+                        <VideoOff className="w-10 h-10 mb-2 opacity-50" />
+                        <span className="text-xs font-bold tracking-widest uppercase">Camera Disabled</span>
+                      </div>
+                    )}
                     <div className="absolute top-3 left-3 bg-black/80 text-white text-[10px] font-bold px-2 py-1 rounded flex items-center tracking-wider">
-                      <span className="w-1.5 h-1.5 rounded-full bg-red-500 mr-2 animate-pulse"></span>
-                      LPR-CAM-01
+                      <span className={`w-1.5 h-1.5 rounded-full mr-2 ${isStandardCamActive ? 'bg-red-500 animate-pulse' : 'bg-gray-500'}`}></span>
+                      LPR-CAM-01 {lprEngine && <span className="ml-1.5 text-green-400">• AI Ready</span>}
                     </div>
                   </div>
+                  {/* Hidden canvas for capturing camera frame */}
+                  <canvas ref={canvasRef} className="hidden" />
                 </section>
 
                 {/* Parking Status Allocation */}
                 <section>
                   <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Parking Status</h3>
                   <div className="flex flex-col space-y-3">
-                    <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm flex items-center justify-between">
-                      <div>
-                        <h4 className="text-sm font-bold text-gray-900">ZONE A: GROUND FLOOR</h4>
-                        <p className="text-xs text-gray-500 mt-0.5">Suitable for SUV/Trucks</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-xl font-bold text-gray-900">42%</p>
-                        <p className="text-[10px] text-gray-400 uppercase tracking-wider">Occupied</p>
-                      </div>
-                    </div>
-
-                    <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm flex items-center justify-between opacity-60">
-                      <div>
-                        <h4 className="text-sm font-bold text-gray-900">ZONE B: LEVEL 2</h4>
-                        <p className="text-xs text-gray-500 mt-0.5">Standard/Sedan Only</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-xl font-bold text-gray-900">88%</p>
-                        <p className="text-[10px] text-gray-400 uppercase tracking-wider">Occupied</p>
-                      </div>
-                    </div>
+                    {floors.length === 0 ? (
+                      <div className="text-center text-sm text-gray-400 py-4">No floors available</div>
+                    ) : (
+                      floors.slice(0, 3).map((floor, idx) => {
+                        const stat = floorStats[floor._id];
+                        const total = stat ? stat.total : (floor.totalSlots || 0);
+                        const occupied = stat ? stat.occupied : (total - (floor.availableSlots || 0));
+                        const percentage = total > 0 ? Math.round((occupied / total) * 100) : 0;
+                        const floorLabel = floor.name || `Floor ${floor.floorNumber < 0 ? 'B' + Math.abs(floor.floorNumber) : floor.floorNumber}`;
+                        
+                        return (
+                          <div key={floor._id} className={`bg-white border border-gray-200 rounded-xl p-4 shadow-sm flex items-center justify-between ${idx > 0 ? 'opacity-60' : ''}`}>
+                            <div>
+                              <h4 className="text-sm font-bold text-gray-900 uppercase">{floorLabel}</h4>
+                              <p className="text-xs text-gray-500 mt-0.5 capitalize">{floor.vehicleType === 'both' ? 'All Vehicles' : floor.vehicleType}</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-xl font-bold text-gray-900">{percentage}%</p>
+                              <p className="text-[10px] text-gray-400 uppercase tracking-wider">Occupied</p>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
                   </div>
                 </section>
 
@@ -591,7 +805,9 @@ const StaffPage = () => {
                       <Scanner
                         onScan={handleScanQR}
                         onError={handleErrorQR}
-
+                        formats={['qr_code']}
+                        allowMultiple={true}
+                        scanDelay={2000}
                         styles={{ container: { width: '100%', height: '100%' }, video: { objectFit: 'cover' } }}
                         paused={isProcessingQR}
                       />

@@ -62,13 +62,23 @@ const parkingSessionService = {
     },
 
     /** GET /parking-sessions/:id — Chi tiết session kèm populate đầy đủ */
-    getById: (id: string): Promise<ParkingSession> => {
+    getById: (id: string): Promise<any> => {
         return axiosClient.get(`/parking-sessions/${id}`);
     },
 
     /** GET /parking-sessions/find-active — Tìm session đang active theo biển số hoặc mã session */
-    findActive: (params: { licensePlate?: string; sessionCode?: string; parkingLotId?: string }): Promise<ParkingSession> => {
+    findActive: (params: { licensePlate?: string; sessionCode?: string; parkingLotId?: string }): Promise<any> => {
         return axiosClient.get('/parking-sessions/find-active', { params });
+    },
+
+    /** POST /parking-sessions/check-in — Check-in a vehicle */
+    checkIn: (data: { bookingId?: string; licensePlate?: string; vehicleTypeId?: string; parkingLotId: string; slotId?: string; }): Promise<any> => {
+        return axiosClient.post('/parking-sessions/check-in', data);
+    },
+
+    /** PATCH /parking-sessions/:id/check-out — Check-out a vehicle */
+    checkOut: (id: string): Promise<any> => {
+        return axiosClient.patch(`/parking-sessions/${String(id).trim()}/check-out`);
     },
 };
 

@@ -15,10 +15,12 @@ import CheckoutSuccessPage from './pages/Customer/CheckoutSuccessPage';
 import MyTicketsPage from './pages/Customer/MyTicketsPage';
 import MyVehiclesPage from './pages/Customer/MyVehiclesPage';
 import AdminPortal from './pages/Admin/AdminPortal';
+import StaffAssignmentPage from './pages/Staff/StaffAssignmentPage';
 import StaffPage from './pages/Staff/StaffPage';
 import StaffExitPage from './pages/Staff/StaffExitPage';
 import StaffExceptionsPage from './pages/Staff/StaffExceptionsPage';
 import StaffLiveViewPage from './pages/Staff/StaffLiveViewPage';
+import StaffManageSlotPage from './pages/Staff/StaffManageSlotPage';
 import { GuestRoute, CustomerRoute, RequireAuthRoute, AdminRoute } from './router/ProtectedRoute';
 
 function App() {
@@ -55,10 +57,13 @@ function App() {
                 {/* 3. Admin-only Management Routes */}
                 <Route element={<AdminRoute />}>
                     <Route path="/admin" element={<AdminPortal />} />
+                    <Route path="/admin/staff-assignment" element={<StaffAssignmentPage />} />
                     <Route path="/staff" element={<StaffPage />} />
                     <Route path="/staff/exit" element={<StaffExitPage />} />
                     <Route path="/staff/live-view" element={<StaffLiveViewPage />} />
                     <Route path="/staff/exceptions" element={<StaffExceptionsPage />} />
+                    <Route path="/staff/manage-slots" element={<StaffManageSlotPage />} />
+                    <Route path="/staff/profile" element={<ProfilePage />} />
                 </Route>
             </Routes>
         </Router>

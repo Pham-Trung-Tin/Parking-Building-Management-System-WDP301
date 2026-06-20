@@ -28,9 +28,10 @@ import {
   CalendarCheck,
   Ticket,
   ShieldAlert,
+  Building2,
 } from "lucide-react";
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import useUsers from "../../hooks/useUsers";
 import { userService } from "../../services/api";
 
@@ -591,7 +592,14 @@ function Toggle({ checked, onChange }) {
 /* ─────────────────── Main Component ─────────────────── */
 export default function AdminPortal() {
   const navigate = useNavigate();
-  const [activeNav, setActiveNav] = useState("users");
+  const location = useLocation();
+  const [activeNav, setActiveNav] = useState(location.state?.activeNav || "users");
+
+  useEffect(() => {
+    if (location.state?.activeNav) {
+      setActiveNav(location.state.activeNav);
+    }
+  }, [location.state]);
   const [searchQuery, setSearchQuery] = useState("");
   const [showAddModal, setShowAddModal] = useState(false);
   const [toast, setToast] = useState(null);
@@ -740,6 +748,14 @@ export default function AdminPortal() {
                 <Icon className="w-[18px] h-[18px]" />
               </button>
             ))}
+            {/* Staff Assignment Link */}
+            <button
+              onClick={() => navigate('/admin/staff-assignment')}
+              title="Staff Assignment"
+              className="w-11 h-11 rounded-xl flex items-center justify-center text-gray-400 hover:text-gray-800 hover:bg-gray-100 transition-all duration-150"
+            >
+              <Building2 className="w-[18px] h-[18px]" />
+            </button>
           </nav>
 
           {/* Bottom */}
