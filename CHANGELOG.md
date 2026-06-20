@@ -15,8 +15,11 @@ Tài liệu này lưu trữ lại tất cả những thay đổi đã được t
   - Thay đổi bảng màu tổng thể tinh tế hơn: Nền toàn trang màu xám/xanh siêu nhạt (`#f8fafc`), các nút hành động chính (Selected) màu xanh Indigo (`#3b82f6`).
   - Các trạng thái đỗ xe (Available, Occupied, Reserved, Maintenance) sử dụng các tông màu pastel dịu nhẹ (ví dụ: nền trắng viền xanh lá cho trống, đỏ cho đã đặt, nền tím nhạt cho reserved) giúp phân cấp thông tin rõ ràng.
   - Cấu trúc lại bản đồ chỗ đỗ xe: **40 slots được chia thành 4 hàng (mỗi hàng 10 slot)** để cân đối giao diện.
-  - Làm gọn giao diện **"Booking Summary"**: Làm cho các thẻ gọn gàng hơn, lược bỏ các icon các loại xe dư thừa ở mục Vehicle, thiết kế lại khối thông tin **"Estimated Total"** màu xanh dương nổi bật với dòng ghi chú "Taxes included".
   - Các nút đỗ xe (`SlotBtn`) được thiết kế lại: vuốt các góc bo tròn mềm mại (`border-radius: 10px`), thiết kế dáng cao hơn (`56x82px`), hiệu ứng đổ bóng mượt mà.
+- **Tinh Chỉnh Bố Cục Booking Page (Mới nhất)**:
+  - **Floating Toast Đếm Ngược**: Gỡ bỏ khối hiển thị "Slot Selected" cục mịch. Thay bằng một thanh thông báo Toast nổi lơ lửng ở cạnh dưới màn hình (Bottom-Center) với hiệu ứng trượt mượt mà, tự động đếm ngược và biến mất khi hết thời gian khóa.
+  - **Tối giản hóa giao diện**: Xóa bỏ hoàn toàn cột "Booking Summary" bên phải trang để giảm thiểu thông tin dư thừa, người dùng sẽ kiểm tra lại toàn bộ thông tin tại bước "Review & Confirm" cuối cùng.
+  - **Căn giữa toàn bộ quy trình**: Thu hẹp không gian modal (từ `900px` xuống `760px`). Sử dụng Flexbox để căn giữa tự động các thẻ chọn Loại xe (Vehicle Type), Khu vực (Zone), và lưới bản đồ đỗ xe (Slot Map Grid), tạo ra một trải nghiệm luồng đặt chỗ cân đối và thanh lịch hơn.
 
 ## 2. Hệ Thống Backend & Database (Seeder)
 - **Hỗ trợ Slot Locking**:
