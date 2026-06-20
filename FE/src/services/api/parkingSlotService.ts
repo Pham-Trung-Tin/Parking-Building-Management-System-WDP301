@@ -32,6 +32,8 @@ export interface ParkingSlot {
     features?: ParkingSlotFeatures;
     currentSession?: any;
     currentBooking?: any;
+    lockedBy?: string | null;
+    lockedUntil?: string | null;
     notes?: string;
     isDeleted?: boolean;
     createdAt?: string;
@@ -68,6 +70,15 @@ const parkingSlotService = {
     /** GET /parking-slots/:id */
     getById: (id: string): Promise<ParkingSlot> => {
         return axiosClient.get(`/parking-slots/${id}`);
+    },
+    /** POST /parking-slots/:id/lock */
+    lockSlot: (slotId: string): Promise<any> => {
+        return axiosClient.post(`/parking-slots/${slotId}/lock`);
+    },
+
+    /** DELETE /parking-slots/:id/lock */
+    unlockSlot: (slotId: string): Promise<any> => {
+        return axiosClient.delete(`/parking-slots/${slotId}/lock`);
     },
 };
 

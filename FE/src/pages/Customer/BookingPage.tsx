@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import Header from '../../components/Header/Header';
 import floorService, { Floor } from '../../services/api/floorService';
@@ -10,6 +10,7 @@ import type { Vehicle } from '../../services/api/vehicleService';
 import bookingService from '../../services/api/bookingService';
 import paymentService from '../../services/api/paymentService';
 import parkingLotService from '../../services/api/parkingLotService';
+import { useSocket } from '../../contexts/SocketContext';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const getZoneId = (z: ParkingSlot['zone']): string =>
@@ -266,10 +267,35 @@ const IsoBuilding = ({ floors, selectedFloor, onSelect, isFloorAllowed }: {
     );
 };
 
-// ─── SlotMapGrid (reused) ─────────────────────────────────────────────────────
-const SlotMapGrid = ({ slots, selectedSlot, onSelect, vehicleType }: {
+// ─── LockCountdown: tiny countdown badge inside a slot button ─────────────────
+const LockCountdown = ({ lockedUntil }: { lockedUntil: string }) => {
+    const [secsLeft, setSecsLeft] = React.useState(() =>
+        Math.max(0, Math.ceil((new Date(lockedUntil).getTime() - Date.now()) / 1000))
+    );
+    useEffect(() => {
+        if (secsLeft <= 0) return;
+        const id = setInterval(() => {
+            const left = Math.max(0, Math.ceil((new Date(lockedUntil).getTime() - Date.now()) / 1000));
+            setSecsLeft(left);
+            if (left === 0) clearInterval(id);
+        }, 1000);
+        return () => clearInterval(id);
+    }, [lockedUntil]);
+    if (secsLeft <= 0) return null;
+    const mm = String(Math.floor(secsLeft / 60)).padStart(2, '0');
+    const ss = String(secsLeft % 60).padStart(2, '0');
+    return (
+        <span style={{ fontSize: 8, fontWeight: 900, color: '#d97706', letterSpacing: 0 }}>
+            {mm}:{ss}
+        </span>
+    );
+};
+
+// ─── SlotMapGrid ─────────────────────────────────────────────────────────────
+const SlotMapGrid = ({ slots, selectedSlot, onSelect, vehicleType, currentUserId }: {
     slots: ParkingSlot[]; selectedSlot: ParkingSlot | null;
     onSelect: (s: ParkingSlot) => void; vehicleType: VehicleType | null;
+    currentUserId?: string;
 }) => {
     const sorted = [...slots].sort((a, b) => {
         const rA = a.position?.row ?? '';
@@ -286,16 +312,58 @@ const SlotMapGrid = ({ slots, selectedSlot, onSelect, vehicleType }: {
     }, {});
     const rows = Object.entries(byRow).sort(([a], [b]) => Number(a) - Number(b));
 
+    const now = Date.now();
+
+    /** Returns style tokens based on slot state */
     const statusStyle = (s: ParkingSlot, isSelected: boolean) => {
-        if (isSelected) return { bg: '#2563eb', border: '#1d4ed8', text: '#fff', label: 'Selected' };
-        switch (s.status) {
-            case 'available': return { bg: '#f0fdf4', border: '#86efac', text: '#15803d', label: 'Available' };
-            case 'occupied': return { bg: '#fef2f2', border: '#fca5a5', text: '#b91c1c', label: 'Occupied' };
-            case 'reserved': return { bg: '#eff6ff', border: '#93c5fd', text: '#1d4ed8', label: 'Reserved' };
-            case 'maintenance': return { bg: '#fefce8', border: '#fde047', text: '#854d0e', label: 'Maintenance' };
-            case 'locked': return { bg: '#f8fafc', border: '#cbd5e1', text: '#94a3b8', label: 'Locked' };
-            default: return { bg: '#f8fafc', border: '#e2e8f0', text: '#94a3b8', label: s.status };
+        if (isSelected) return { bg: '#2563eb', border: '#1d4ed8', text: '#fff', label: 'Selected', glow: '0 0 0 3px rgba(37,99,235,0.3)' };
+
+        // Locked by someone else (and lock hasn't expired)
+        const isLockedByOther =
+            s.lockedBy && s.lockedUntil &&
+            new Date(s.lockedUntil).getTime() > now &&
+            (!currentUserId || s.lockedBy !== currentUserId);
+
+        if (isLockedByOther) {
+            return {
+                bg: 'linear-gradient(135deg, #fffbeb, #fef3c7)',
+                border: '#f59e0b',
+                text: '#d97706',
+                label: 'Being Selected',
+                glow: '0 0 0 2px rgba(245,158,11,0.25)',
+                animate: true,
+            };
         }
+
+        // Locked by current user
+        const isLockedByMe =
+            s.lockedBy && s.lockedUntil &&
+            new Date(s.lockedUntil).getTime() > now &&
+            currentUserId && s.lockedBy === currentUserId;
+
+        if (isLockedByMe) {
+            return { bg: '#eff6ff', border: '#2563eb', text: '#1d4ed8', label: 'Your Selection', glow: '0 0 0 2px rgba(37,99,235,0.2)' };
+        }
+
+        switch (s.status) {
+            case 'available': return { bg: '#f0fdf4', border: '#86efac', text: '#15803d', label: 'Available', glow: 'none' };
+            case 'occupied': return { bg: '#fef2f2', border: '#fca5a5', text: '#b91c1c', label: 'Occupied', glow: 'none' };
+            case 'reserved': return { bg: '#eff6ff', border: '#93c5fd', text: '#1d4ed8', label: 'Reserved', glow: 'none' };
+            case 'maintenance': return { bg: '#fefce8', border: '#fde047', text: '#854d0e', label: 'Maintenance', glow: 'none' };
+            case 'locked': return { bg: '#f8fafc', border: '#cbd5e1', text: '#94a3b8', label: 'Locked', glow: 'none' };
+            default: return { bg: '#f8fafc', border: '#e2e8f0', text: '#94a3b8', label: s.status, glow: 'none' };
+        }
+    };
+
+    const canSelectSlot = (s: ParkingSlot) => {
+        if (s.status !== 'available') return false;
+        // If locked by someone else and lock still active → cannot select
+        if (
+            s.lockedBy && s.lockedUntil &&
+            new Date(s.lockedUntil).getTime() > now &&
+            (!currentUserId || s.lockedBy !== currentUserId)
+        ) return false;
+        return true;
     };
 
     if (slots.length === 0) return (
@@ -304,6 +372,45 @@ const SlotMapGrid = ({ slots, selectedSlot, onSelect, vehicleType }: {
             <div style={{ fontWeight: 600 }}>No slots in this zone</div>
         </div>
     );
+
+    const SlotBtn = ({ slot }: { slot: ParkingSlot }) => {
+        const isSelected = selectedSlot?._id === slot._id;
+        const canSelect = canSelectSlot(slot);
+        const vtName = typeof slot.vehicleType === 'string' ? '' : (slot.vehicleType as any)?.name ?? '';
+        const style = statusStyle(slot, isSelected);
+        const isLockedByOther =
+            slot.lockedBy && slot.lockedUntil &&
+            new Date(slot.lockedUntil).getTime() > now &&
+            (!currentUserId || slot.lockedBy !== currentUserId);
+
+        return (
+            <button
+                onClick={() => canSelect && onSelect(slot)}
+                disabled={!canSelect}
+                title={`${slot.slotCode} — ${style.label}${vtName ? ' · ' + vtName : ''}`}
+                style={{
+                    width: 52, height: 84, borderRadius: 8,
+                    border: `2px solid ${style.border}`,
+                    background: style.bg as string,
+                    cursor: canSelect ? 'pointer' : 'not-allowed',
+                    display: 'flex', flexDirection: 'column', alignItems: 'center',
+                    justifyContent: 'center', gap: 2, padding: '4px 2px',
+                    transition: 'all 0.2s',
+                    transform: isSelected ? 'scale(1.06)' : 'scale(1)',
+                    boxShadow: style.glow || (isSelected ? '0 4px 16px rgba(37,99,235,0.4)' : '0 1px 4px rgba(0,0,0,0.06)'),
+                    animation: (style as any).animate ? 'slotPulse 1.5s ease-in-out infinite' : 'none',
+                    position: 'relative',
+                }}>
+                <span style={{ fontSize: 9, fontWeight: 800, color: style.text as string, letterSpacing: 0.3, textAlign: 'center', lineHeight: 1.2 }}>
+                    {slot.slotCode}
+                </span>
+                {slot.features?.hasEVCharger && <span style={{ fontSize: 10 }}>⚡</span>}
+                {isLockedByOther && slot.lockedUntil && <LockCountdown lockedUntil={slot.lockedUntil} />}
+                {isLockedByOther && <span style={{ fontSize: 11 }}>🔒</span>}
+                {isSelected && <span style={{ fontSize: 13 }}>✓</span>}
+            </button>
+        );
+    };
 
     return (
         <div>
@@ -314,8 +421,8 @@ const SlotMapGrid = ({ slots, selectedSlot, onSelect, vehicleType }: {
                     { label: 'Selected', bg: '#2563eb', border: '#1d4ed8', text: '#fff' },
                     { label: 'Occupied', bg: '#fef2f2', border: '#fca5a5', text: '#b91c1c' },
                     { label: 'Reserved', bg: '#eff6ff', border: '#93c5fd', text: '#1d4ed8' },
+                    { label: 'Being Selected 🔒', bg: 'linear-gradient(135deg,#fffbeb,#fef3c7)', border: '#f59e0b', text: '#d97706' },
                     { label: 'Maintenance', bg: '#fefce8', border: '#fde047', text: '#854d0e' },
-                    { label: 'Locked', bg: '#f8fafc', border: '#cbd5e1', text: '#94a3b8' },
                 ].map(l => (
                     <div key={l.label} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: '#475569' }}>
                         <div style={{ width: 14, height: 14, borderRadius: 3, background: l.bg, border: `1.5px solid ${l.border}` }} />
@@ -337,64 +444,14 @@ const SlotMapGrid = ({ slots, selectedSlot, onSelect, vehicleType }: {
                         <div style={{ overflowX: 'auto', paddingBottom: 4 }}>
                             {/* Top row */}
                             <div style={{ display: 'flex', gap: 6, marginBottom: 6, minWidth: 'max-content' }}>
-                                {top.map(slot => {
-                                    const isSelected = selectedSlot?._id === slot._id;
-                                    const canSelect = slot.status === 'available';
-                                    const vtName = typeof slot.vehicleType === 'string' ? '' : (slot.vehicleType as any)?.name ?? '';
-                                    const style = statusStyle(slot, isSelected);
-                                    return (
-                                        <button key={slot._id}
-                                            onClick={() => canSelect && onSelect(slot)}
-                                            disabled={!canSelect}
-                                            title={`${slot.slotCode} — ${style.label}${vtName ? ' · ' + vtName : ''}`}
-                                            style={{
-                                                width: 52, height: 80, borderRadius: 8, border: `2px solid ${style.border}`,
-                                                background: style.bg, cursor: canSelect ? 'pointer' : 'not-allowed',
-                                                display: 'flex', flexDirection: 'column', alignItems: 'center',
-                                                justifyContent: 'center', gap: 3, padding: '4px 2px',
-                                                transition: 'all 0.15s', transform: isSelected ? 'scale(1.05)' : 'scale(1)',
-                                                boxShadow: isSelected ? '0 4px 16px rgba(37,99,235,0.4)' : '0 1px 4px rgba(0,0,0,0.06)',
-                                            }}>
-                                            <span style={{ fontSize: 9, fontWeight: 800, color: style.text, letterSpacing: 0.3, textAlign: 'center', lineHeight: 1.2 }}>
-                                                {slot.slotCode}
-                                            </span>
-                                            {slot.features?.hasEVCharger && <span style={{ fontSize: 11 }}>⚡</span>}
-                                            {slot.status === 'locked' && <span style={{ fontSize: 10 }}>🔒</span>}
-                                            {isSelected && <span style={{ fontSize: 13 }}>✓</span>}
-                                        </button>
-                                    );
-                                })}
+                                {top.map(slot => <SlotBtn key={slot._id} slot={slot} />)}
                             </div>
                             {/* Road stripe */}
                             <div style={{ height: 18, background: 'repeating-linear-gradient(90deg,#f59e0b 0,#f59e0b 20px,transparent 20px,transparent 40px)', borderRadius: 4, opacity: 0.25, margin: '0 2px' }} />
                             {/* Bottom row */}
                             {bot.length > 0 && (
                                 <div style={{ display: 'flex', gap: 6, marginTop: 6, minWidth: 'max-content' }}>
-                                    {bot.map(slot => {
-                                        const isSelected = selectedSlot?._id === slot._id;
-                                        const canSelect = slot.status === 'available';
-                                        const style = statusStyle(slot, isSelected);
-                                        return (
-                                            <button key={slot._id}
-                                                onClick={() => canSelect && onSelect(slot)}
-                                                disabled={!canSelect}
-                                                title={`${slot.slotCode} — ${style.label}`}
-                                                style={{
-                                                    width: 52, height: 80, borderRadius: 8, border: `2px solid ${style.border}`,
-                                                    background: style.bg, cursor: canSelect ? 'pointer' : 'not-allowed',
-                                                    display: 'flex', flexDirection: 'column', alignItems: 'center',
-                                                    justifyContent: 'center', gap: 3, padding: '4px 2px',
-                                                    transition: 'all 0.15s', transform: isSelected ? 'scale(1.05)' : 'scale(1)',
-                                                    boxShadow: isSelected ? '0 4px 16px rgba(37,99,235,0.4)' : '0 1px 4px rgba(0,0,0,0.06)',
-                                                }}>
-                                                <span style={{ fontSize: 9, fontWeight: 800, color: style.text, letterSpacing: 0.3, textAlign: 'center', lineHeight: 1.2 }}>
-                                                    {slot.slotCode}
-                                                </span>
-                                                {slot.features?.hasEVCharger && <span style={{ fontSize: 11 }}>⚡</span>}
-                                                {isSelected && <span style={{ fontSize: 13 }}>✓</span>}
-                                            </button>
-                                        );
-                                    })}
+                                    {bot.map(slot => <SlotBtn key={slot._id} slot={slot} />)}
                                 </div>
                             )}
                         </div>
@@ -409,6 +466,7 @@ const SlotMapGrid = ({ slots, selectedSlot, onSelect, vehicleType }: {
 const BookingPage = () => {
     const navigate = useNavigate();
     const location = useLocation();
+    const { joinParkingLot, leaveParkingLot, onSlotUpdate } = useSocket();
     const [parkingSpot, setParkingSpot] = useState<any>(location.state?.spot || { title: 'Bitexco Financial Tower Parking', price: 50000 });
 
     useEffect(() => {
@@ -423,6 +481,34 @@ const BookingPage = () => {
                 .catch(console.error);
         }
     }, []);
+
+    // ── Real-time: join / leave parking lot socket room ──
+    useEffect(() => {
+        if (!parkingSpot._id) return;
+        joinParkingLot(parkingSpot._id);
+        return () => leaveParkingLot(parkingSpot._id);
+    }, [parkingSpot._id, joinParkingLot, leaveParkingLot]);
+
+    // ── Real-time: patch slot status AND lock fields when backend broadcasts ──
+    useEffect(() => {
+        const unsubscribe = onSlotUpdate((payload: any) => {
+            setFloorSlots(prev =>
+                prev.map(s =>
+                    s._id === payload.slotId
+                        ? {
+                            ...s,
+                            status: payload.status ?? s.status,
+                            lockedBy: payload.locked === false ? null : (payload.lockedBy ?? s.lockedBy ?? null),
+                            lockedUntil: payload.locked === false ? null : (payload.lockedUntil ?? s.lockedUntil ?? null),
+                        }
+                        : s
+                )
+            );
+        });
+        return unsubscribe;
+    }, [onSlotUpdate]);
+
+
 
     // ── Step state ──
     const [currentStep, setCurrentStep] = useState(1);
@@ -484,6 +570,55 @@ const BookingPage = () => {
     const [slotsLoading, setSlotsLoading] = useState(false);
     const [slotsError, setSlotsError] = useState<string | null>(null);
     const [selectedSlot, setSelectedSlot] = useState<ParkingSlot | null>(null);
+
+    // ── Current user ID (for lock ownership check) ──
+    const [currentUserId] = useState<string | undefined>(() => {
+        try {
+            const raw = localStorage.getItem('user');
+            if (raw) return JSON.parse(raw)?._id;
+        } catch (_) {}
+        return undefined;
+    });
+
+    // ── Slot lock timer (counts down 3 min) ──
+    const [slotLockUntil, setSlotLockUntil] = useState<Date | null>(null);
+    const lockTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    const handleSelectSlot = useCallback(async (slot: ParkingSlot) => {
+        // Unlock previously selected slot if different
+        if (selectedSlot && selectedSlot._id !== slot._id) {
+            try { await parkingSlotService.unlockSlot(selectedSlot._id); } catch (_) {}
+        }
+        setSelectedSlot(slot);
+
+        // Lock the newly selected slot
+        try {
+            const res = await parkingSlotService.lockSlot(slot._id);
+            const data = (res as any)?.data || res;
+            const until = new Date(data.lockedUntil);
+            setSlotLockUntil(until);
+            // Auto-unlock and clear selection after 3 min if user didn't proceed
+            if (lockTimerRef.current) clearTimeout(lockTimerRef.current);
+            lockTimerRef.current = setTimeout(async () => {
+                try { await parkingSlotService.unlockSlot(slot._id); } catch (_) {}
+                setSelectedSlot(null);
+                setSlotLockUntil(null);
+            }, until.getTime() - Date.now());
+        } catch (err: any) {
+            const msg = err?.response?.data?.message || 'This slot is being selected by another user.';
+            alert(`⚠️ ${msg}`);
+        }
+    }, [selectedSlot]);
+
+    // Cleanup lock on unmount
+    useEffect(() => {
+        return () => {
+            if (lockTimerRef.current) clearTimeout(lockTimerRef.current);
+            if (selectedSlot) {
+                parkingSlotService.unlockSlot(selectedSlot._id).catch(() => {});
+            }
+        };
+    }, [selectedSlot]);
 
     // ── Confirm Modal ──
     const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -2447,19 +2582,42 @@ const BookingPage = () => {
                                     <SlotMapGrid
                                         slots={zoneSlots}
                                         selectedSlot={selectedSlot}
-                                        onSelect={setSelectedSlot}
+                                        onSelect={handleSelectSlot}
                                         vehicleType={vehicleType}
+                                        currentUserId={currentUserId}
                                     />
                                 )}
 
                                 {selectedSlot && (
-                                    <div style={{ marginTop: 20, padding: '14px 18px', background: 'linear-gradient(135deg,#eff6ff,#dbeafe)', border: '1.5px solid #bfdbfe', borderRadius: 14, display: 'flex', alignItems: 'center', gap: 14 }}>
-                                        <span style={{ fontSize: 24 }}>✅</span>
-                                        <div>
-                                            <div style={{ fontSize: 13, fontWeight: 700, color: '#1d4ed8' }}>Slot Selected</div>
-                                            <div style={{ fontSize: 16, fontWeight: 900, color: '#1e40af', letterSpacing: 1 }}>{selectedSlot.slotCode}</div>
-                                            {selectedSlot.features?.hasEVCharger && <div style={{ fontSize: 11, color: '#10b981', fontWeight: 700, marginTop: 2 }}>⚡ EV Charging Available</div>}
+                                    <div style={{ marginTop: 20, padding: '14px 18px', background: 'linear-gradient(135deg,#eff6ff,#dbeafe)', border: '1.5px solid #bfdbfe', borderRadius: 14 }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                                            <span style={{ fontSize: 24 }}>✅</span>
+                                            <div style={{ flex: 1 }}>
+                                                <div style={{ fontSize: 13, fontWeight: 700, color: '#1d4ed8' }}>Slot Selected</div>
+                                                <div style={{ fontSize: 16, fontWeight: 900, color: '#1e40af', letterSpacing: 1 }}>{selectedSlot.slotCode}</div>
+                                                {selectedSlot.features?.hasEVCharger && <div style={{ fontSize: 11, color: '#10b981', fontWeight: 700, marginTop: 2 }}>⚡ EV Charging Available</div>}
+                                            </div>
                                         </div>
+                                        {/* Lock countdown banner */}
+                                        {slotLockUntil && slotLockUntil > new Date() && (
+                                            <div style={{ marginTop: 10, padding: '8px 12px', background: 'rgba(245,158,11,0.1)', border: '1px solid #f59e0b', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                <span style={{ fontSize: 16 }}>🔒</span>
+                                                <div style={{ flex: 1 }}>
+                                                    <span style={{ fontSize: 12, fontWeight: 700, color: '#d97706' }}>Slot reserved for you · </span>
+                                                    <span style={{ fontSize: 12, fontWeight: 600, color: '#92400e' }}>Expires in <LockCountdown lockedUntil={slotLockUntil.toISOString()} /></span>
+                                                </div>
+                                                <button
+                                                    onClick={async () => {
+                                                        try { await parkingSlotService.unlockSlot(selectedSlot._id); } catch (_) {}
+                                                        setSelectedSlot(null);
+                                                        setSlotLockUntil(null);
+                                                        if (lockTimerRef.current) clearTimeout(lockTimerRef.current);
+                                                    }}
+                                                    style={{ fontSize: 11, fontWeight: 700, color: '#b45309', background: 'transparent', border: 'none', cursor: 'pointer', padding: '2px 6px' }}>
+                                                    ✕ Release
+                                                </button>
+                                            </div>
+                                        )}
                                     </div>
                                 )}
 
