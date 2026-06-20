@@ -2305,7 +2305,7 @@ const BookingPage = () => {
                                     <div className="floor-layout">
                                         {/* List */}
                                         <div className="floor-list">
-                                            {[...floors].sort((a, b) => a.floorNumber - b.floorNumber).map(f => {
+                                            {[...floors].sort((a, b) => b.floorNumber - a.floorNumber).map(f => {
                                                 const allowed = isFloorAllowed(f);
                                                 return (
                                                     <div key={f._id}
