@@ -63,7 +63,10 @@ const StaffLiveViewPage = () => {
   }, []);
 
   const filteredSessions = sessions.filter(session => {
-    const matchesSearch = (session.vehicleInfo?.licensePlate || '').toLowerCase().includes(searchQuery.toLowerCase());
+    const rawPlate = session.vehicleInfo?.licensePlate || '';
+    const cleanPlate = rawPlate.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+    const cleanQuery = searchQuery.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+    const matchesSearch = cleanPlate.includes(cleanQuery);
     const sessionStatus = session.status === 'active' ? 'Parked' : (session.status === 'completed' ? 'Exited' : session.status);
     const matchesStatus = filterStatus === 'All' || sessionStatus.toLowerCase() === filterStatus.toLowerCase();
     return matchesSearch && matchesStatus;
