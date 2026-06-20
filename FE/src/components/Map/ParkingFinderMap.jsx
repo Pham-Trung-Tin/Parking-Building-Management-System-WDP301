@@ -5,6 +5,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import RoutingMachine from './RoutingMachine';
 import { useNavigate } from 'react-router-dom';
+import parkingLotService from '../../services/api/parkingLotService';
 
 // Fix lỗi mất icon mặc định của Leaflet khi build bằng React/Vite
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
@@ -38,6 +39,29 @@ const parkingIcon = new L.DivIcon({
   iconSize: [30, 30],
   iconAnchor: [15, 15],
   popupAnchor: [0, -15],
+});
+
+// Tạo Custom Icon hiển thị chữ "P" màu xanh dương cho bãi đỗ của hệ thống
+const systemParkingIcon = new L.DivIcon({
+  html: `<div style="
+    background-color: #2A85FF;
+    color: white;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-weight: bold;
+    font-size: 18px;
+    border: 2px solid white;
+    box-shadow: 0 2px 8px rgba(42,133,255,0.6);
+    z-index: 1000;
+  ">P</div>`,
+  className: 'custom-system-parking-icon',
+  iconSize: [32, 32],
+  iconAnchor: [16, 16],
+  popupAnchor: [0, -16],
 });
 
 // Tạo Custom Icon hiển thị vị trí người dùng (Chấm tròn màu xanh dương)
@@ -96,6 +120,34 @@ const ParkingFinderMap = ({ onDataLoad, selectedParkingId, onSelectParking }) =>
   // Lưu trữ các tham chiếu đến Marker để có thể điều khiển mở popup từ bên ngoài
   const markerRefs = React.useRef({});
 
+  // Lấy danh sách bãi đỗ từ hệ thống (Backend)
+  const fetchSystemParkings = async () => {
+    try {
+      const response = await parkingLotService.getParkingLots({ limit: 1000, status: 'active' });
+      // ApiResponse.paginated returns { success, data, meta } OR response directly is data array
+      let data = response.data || response;
+      if (Array.isArray(data)) {
+        return data.map(lot => ({
+          id: lot._id,
+          lat: lot.address?.coordinates?.lat,
+          lon: lot.address?.coordinates?.lng,
+          isSystem: true,
+          tags: {
+            name: lot.name,
+            access: 'System Parking',
+            fee: lot.settings?.pricePerHour ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(lot.settings.pricePerHour) + '/h' : 'Contact',
+            capacity: lot.totalSlots,
+          },
+          lotData: lot
+        })).filter(p => p.lat && p.lon);
+      }
+      return [];
+    } catch (error) {
+      console.error('Lỗi khi lấy bãi đỗ xe hệ thống:', error);
+      return [];
+    }
+  };
+
   // Hàm gọi Overpass API để lấy bãi xe xung quanh 1.5km
   const fetchParkings = async (lat, lng) => {
     setLoading(true);
@@ -137,8 +189,11 @@ const ParkingFinderMap = ({ onDataLoad, selectedParkingId, onSelectParking }) =>
         });
 
         const elements = response.data.elements || [];
-        setParkings(elements);
-        if (onDataLoad) onDataLoad(elements);
+        const sysParkings = await fetchSystemParkings();
+        const allParkings = [...sysParkings, ...elements];
+        
+        setParkings(allParkings);
+        if (onDataLoad) onDataLoad(allParkings);
 
         success = true;
         break; // Nếu gọi thành công thì thoát vòng lặp
@@ -150,8 +205,10 @@ const ParkingFinderMap = ({ onDataLoad, selectedParkingId, onSelectParking }) =>
 
     if (!success) {
       console.error("Tất cả các Overpass API endpoints đều không khả dụng tại thời điểm này.");
-      // Tuỳ chọn: thông báo cho người dùng
-      // alert("Không thể tải dữ liệu bãi đỗ xe lúc này do sự cố kết nối tới máy chủ bản đồ.");
+      // Fallback: Just load system parkings if OSM fails
+      const sysParkings = await fetchSystemParkings();
+      setParkings(sysParkings);
+      if (onDataLoad) onDataLoad(sysParkings);
     }
 
     setLoading(false);
@@ -333,7 +390,7 @@ const ParkingFinderMap = ({ onDataLoad, selectedParkingId, onSelectParking }) =>
             <Marker
               key={p.id}
               position={[lat, lon]}
-              icon={parkingIcon}
+              icon={p.isSystem ? systemParkingIcon : parkingIcon}
               ref={(m) => {
                 if (m) {
                   markerRefs.current[p.id] = m;
@@ -396,26 +453,40 @@ const ParkingFinderMap = ({ onDataLoad, selectedParkingId, onSelectParking }) =>
                     Get directions
                   </button>
 
-                  {/* Nút Đặt chỗ */}
-                  <button
-                    onClick={() => navigate('/booking')}
-                    style={{
-                      marginTop: '8px',
-                      padding: '8px 12px',
-                      backgroundColor: '#4CAF50',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '4px',
-                      cursor: 'pointer',
-                      width: '100%',
-                      fontWeight: 'bold',
-                      transition: 'background-color 0.2s'
-                    }}
-                    onMouseOver={(e) => e.target.style.backgroundColor = '#45a049'}
-                    onMouseOut={(e) => e.target.style.backgroundColor = '#4CAF50'}
-                  >
-                    Book a slot
-                  </button>
+                  {/* Nút Đặt chỗ (Chỉ hiển thị cho bãi xe hệ thống) */}
+                  {p.isSystem && (
+                    <button
+                      onClick={() => navigate('/booking', {
+                        state: {
+                          spot: {
+                            _id: p.lotData._id,
+                            title: p.lotData.name,
+                            price: p.lotData.settings?.pricePerHour || p.lotData.pricePerHour || 20000,
+                            address: p.lotData.address ? [p.lotData.address.street, p.lotData.address.ward, p.lotData.address.district, p.lotData.address.city].filter(Boolean).join(', ') : '',
+                            availableSlots: p.lotData.availableSlots,
+                            totalSlots: p.lotData.totalSlots,
+                            code: p.lotData.code,
+                          }
+                        }
+                      })}
+                      style={{
+                        marginTop: '8px',
+                        padding: '8px 12px',
+                        backgroundColor: '#4CAF50',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        width: '100%',
+                        fontWeight: 'bold',
+                        transition: 'background-color 0.2s'
+                      }}
+                      onMouseOver={(e) => e.target.style.backgroundColor = '#45a049'}
+                      onMouseOut={(e) => e.target.style.backgroundColor = '#4CAF50'}
+                    >
+                      Book a slot
+                    </button>
+                  )}
                 </div>
               </Popup>
             </Marker>

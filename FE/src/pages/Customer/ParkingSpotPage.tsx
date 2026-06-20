@@ -265,15 +265,41 @@ const ParkingSpotPage = () => {
                                     {tags.fee && <div className="text-sm text-slate-600"><strong>Fee:</strong> {tags.fee === 'yes' ? 'Yes' : tags.fee === 'no' ? 'Free' : tags.fee}</div>}
                                     {tags.capacity && <div className="text-sm text-slate-600"><strong>Capacity:</strong> {tags.capacity} spaces</div>}
                                     
-                                    <button 
-                                        className={`mt-2 w-full py-2 rounded-lg font-bold text-sm transition-colors ${isSelected ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            setSelectedParkingId(p.id);
-                                        }}
-                                    >
-                                        {isSelected ? '📍 Selected' : '🗺️ View on map'}
-                                    </button>
+                                    <div className="flex gap-2 mt-2">
+                                        <button 
+                                            className={`flex-1 py-2 rounded-lg font-bold text-sm transition-colors ${isSelected ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setSelectedParkingId(p.id);
+                                            }}
+                                        >
+                                            {isSelected ? '📍 Selected' : '🗺️ View on map'}
+                                        </button>
+
+                                        {p.isSystem && (
+                                            <button 
+                                                className="flex-1 py-2 rounded-lg font-bold text-sm bg-green-600 text-white hover:bg-green-700 transition-colors"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    navigate('/booking', {
+                                                        state: {
+                                                            spot: {
+                                                                _id: p.lotData._id,
+                                                                title: p.lotData.name,
+                                                                price: p.lotData.settings?.pricePerHour || p.lotData.pricePerHour || 20000,
+                                                                address: p.lotData.address ? [p.lotData.address.street, p.lotData.address.ward, p.lotData.address.district, p.lotData.address.city].filter(Boolean).join(', ') : '',
+                                                                availableSlots: p.lotData.availableSlots,
+                                                                totalSlots: p.lotData.totalSlots,
+                                                                code: p.lotData.code,
+                                                            }
+                                                        }
+                                                    });
+                                                }}
+                                            >
+                                                Book a slot
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
                             );
                         })}
