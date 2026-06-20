@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { 
   LogIn, 
@@ -10,13 +10,81 @@ import {
   Ticket,
   ChevronDown,
   Users,
-  LayoutGrid
+  LayoutGrid,
+  CheckCircle2,
+  X
 } from 'lucide-react';
 import useProfile from '../../hooks/useProfile';
+import incidentService, { IncidentCreateData } from '../../services/api/incidentService';
+
+const INCIDENT_TYPES = [
+  { value: 'lost_ticket', label: 'Lost Ticket' },
+  { value: 'wrong_license_plate', label: 'LPR Mismatch' },
+  { value: 'overdue', label: 'Overdue' },
+  { value: 'wrong_zone', label: 'Wrong Zone' },
+  { value: 'slot_occupied', label: 'Slot Occupied' },
+  { value: 'slot_damaged', label: 'Slot Damaged' },
+  { value: 'vehicle_damage', label: 'Vehicle Damage' },
+  { value: 'theft', label: 'Theft' },
+  { value: 'other', label: 'Other' }
+];
 
 const StaffExceptionsPage = () => {
   const { profile } = useProfile();
   const navigate = useNavigate();
+
+  const [incidents, setIncidents] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [filterStatus, setFilterStatus] = useState<string>('all');
+  
+  // Report Form State
+  const [reportData, setReportData] = useState<Partial<IncidentCreateData>>({
+    type: 'other',
+    title: '',
+    description: '',
+    severity: 'medium'
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Resolution Modal State
+  const [resolveModal, setResolveModal] = useState<{isOpen: boolean, incident: any}>({ isOpen: false, incident: null });
+  const [resolveDescription, setResolveDescription] = useState('');
+  const [resolveCharge, setResolveCharge] = useState<number | string>('');
+  const [isResolving, setIsResolving] = useState(false);
+
+  // Notification
+  const [notification, setNotification] = useState<{ show: boolean, message: string, type: 'success' | 'error' } | null>(null);
+
+  const buildingName = (profile?.assignedParkingLot as any)?.name || 'Main Street Garage';
+  const lotId = (profile?.assignedParkingLot as any)?._id || (profile?.assignedParkingLot as any);
+
+  const fetchIncidents = async () => {
+    setIsLoading(true);
+    try {
+      const params: any = { limit: 50 };
+      if (filterStatus !== 'all') {
+        params.status = filterStatus;
+      }
+      // If lot is restricted by backend, it will handle it based on role.
+      const res = await incidentService.getAll(params);
+      setIncidents(res.data?.docs || res.data || []);
+    } catch (error) {
+      console.error('Failed to fetch incidents', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchIncidents();
+    const interval = setInterval(fetchIncidents, 30000);
+    return () => clearInterval(interval);
+  }, [filterStatus]);
+
+  const showNotification = (message: string, type: 'success' | 'error') => {
+    setNotification({ show: true, message, type });
+    setTimeout(() => setNotification(null), 3000);
+  };
 
   const handleLogout = () => {
     localStorage.removeItem('accessToken');
@@ -24,10 +92,114 @@ const StaffExceptionsPage = () => {
     navigate('/login');
   };
 
-  const buildingName = (profile?.assignedParkingLot as any)?.name || 'Main Street Garage';
+  const handleSubmitReport = async () => {
+    if (!lotId) {
+      showNotification('No parking lot assigned to your profile.', 'error');
+      return;
+    }
+    if (!reportData.title || !reportData.description) {
+      showNotification('Please fill in title and description.', 'error');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await incidentService.create({
+        parkingLot: lotId,
+        type: reportData.type || 'other',
+        title: reportData.title,
+        description: reportData.description,
+        severity: reportData.severity as any
+      });
+      showNotification('Exception reported successfully.', 'success');
+      setReportData({ type: 'other', title: '', description: '', severity: 'medium' });
+      fetchIncidents();
+    } catch (error: any) {
+      showNotification(error?.response?.data?.message || 'Failed to report exception', 'error');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleResolve = async () => {
+    if (!resolveModal.incident) return;
+    if (!resolveDescription) {
+      showNotification('Please provide a resolution description.', 'error');
+      return;
+    }
+
+    setIsResolving(true);
+    try {
+      await incidentService.resolve(resolveModal.incident._id, {
+        description: resolveDescription,
+        extraCharge: Number(resolveCharge) || 0
+      });
+      showNotification('Exception resolved successfully.', 'success');
+      setResolveModal({ isOpen: false, incident: null });
+      setResolveDescription('');
+      setResolveCharge('');
+      fetchIncidents();
+    } catch (error: any) {
+      showNotification(error?.response?.data?.message || 'Failed to resolve exception', 'error');
+    } finally {
+      setIsResolving(false);
+    }
+  };
 
   return (
-    <div className="flex h-screen bg-gray-50 font-sans text-gray-800">
+    <div className="flex h-screen bg-gray-50 font-sans text-gray-800 relative">
+      {/* Toast Notification */}
+      {notification && (
+        <div className={`fixed top-6 right-6 px-6 py-4 rounded shadow-xl z-50 flex items-center animate-[fade-in-up_0.3s_ease-out] border ${
+          notification.type === 'success' ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'
+        }`}>
+          <p className="text-sm font-bold">{notification.message}</p>
+        </div>
+      )}
+
+      {/* Resolve Modal */}
+      {resolveModal.isOpen && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden">
+            <div className="flex justify-between items-center p-6 border-b border-gray-100">
+              <h3 className="text-lg font-bold text-gray-900">Resolve Exception</h3>
+              <button onClick={() => setResolveModal({ isOpen: false, incident: null })} className="text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-gray-500 mb-2">Resolution Note</label>
+                <textarea 
+                  value={resolveDescription}
+                  onChange={(e) => setResolveDescription(e.target.value)}
+                  className="w-full border border-gray-200 p-3 text-sm outline-none focus:border-gray-400"
+                  rows={3}
+                  placeholder="How was this resolved?"
+                ></textarea>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-500 mb-2">Extra Charge (VND) - Optional</label>
+                <input 
+                  type="number" 
+                  value={resolveCharge}
+                  onChange={(e) => setResolveCharge(e.target.value)}
+                  className="w-full border border-gray-200 p-3 text-sm outline-none focus:border-gray-400"
+                  placeholder="0"
+                />
+              </div>
+              <button 
+                onClick={handleResolve}
+                disabled={isResolving}
+                className="w-full bg-black text-white py-4 text-sm font-bold flex items-center justify-center hover:bg-gray-900 transition-colors disabled:opacity-50"
+              >
+                {isResolving ? 'Resolving...' : 'Confirm Resolution'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Sidebar */}
       <div className="w-64 bg-white border-r border-gray-200 flex flex-col justify-between shrink-0">
         <div>
@@ -122,8 +294,8 @@ const StaffExceptionsPage = () => {
                 <h1 className="text-2xl font-bold text-gray-900">Exceptions & Overrides</h1>
                 <p className="text-gray-500 text-sm mt-1">Manage manual lot overrides and active security alerts.</p>
               </div>
-              <button className="bg-black text-white px-6 py-3 text-xs font-bold uppercase tracking-wider hover:bg-gray-900 transition-colors shadow-md">
-                Sync Revenue Data
+              <button onClick={fetchIncidents} className="bg-black text-white px-6 py-3 text-xs font-bold uppercase tracking-wider hover:bg-gray-900 transition-colors shadow-md">
+                Sync Data
               </button>
             </div>
 
@@ -132,50 +304,91 @@ const StaffExceptionsPage = () => {
               <div className="w-[450px] shrink-0">
                 <section>
                   <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Report New Exception</h3>
-                  <div className="bg-white border border-gray-200 p-6 shadow-sm flex flex-col space-y-6">
+                  <div className="bg-white border border-gray-200 p-6 shadow-sm flex flex-col space-y-4">
                     
-                    <div className="flex gap-4">
-                      <button className="flex-1 flex flex-col items-center justify-center py-6 border border-gray-200 hover:border-gray-400 hover:bg-gray-50 transition-colors">
-                        <Ticket className="w-8 h-8 text-gray-400 mb-2" />
-                        <span className="text-sm font-medium text-gray-700">Lost Ticket</span>
+                    <div className="flex gap-4 mb-2">
+                      <button 
+                        onClick={() => setReportData({...reportData, type: 'lost_ticket', title: 'Lost Ticket'})}
+                        className={`flex-1 flex flex-col items-center justify-center py-4 border ${reportData.type === 'lost_ticket' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 hover:bg-gray-50'} transition-colors`}
+                      >
+                        <Ticket className={`w-6 h-6 mb-2 ${reportData.type === 'lost_ticket' ? 'text-blue-500' : 'text-gray-400'}`} />
+                        <span className="text-sm font-medium">Lost Ticket</span>
                       </button>
-                      <button className="flex-1 flex flex-col items-center justify-center py-6 border border-gray-200 hover:border-gray-400 hover:bg-gray-50 transition-colors">
-                        <AlertTriangle className="w-8 h-8 text-gray-400 mb-2" />
-                        <span className="text-sm font-medium text-gray-700">Mismatch</span>
+                      <button 
+                        onClick={() => setReportData({...reportData, type: 'wrong_license_plate', title: 'LPR Mismatch'})}
+                        className={`flex-1 flex flex-col items-center justify-center py-4 border ${reportData.type === 'wrong_license_plate' ? 'border-orange-500 bg-orange-50 text-orange-700' : 'border-gray-200 hover:bg-gray-50'} transition-colors`}
+                      >
+                        <AlertTriangle className={`w-6 h-6 mb-2 ${reportData.type === 'wrong_license_plate' ? 'text-orange-500' : 'text-gray-400'}`} />
+                        <span className="text-sm font-medium">Mismatch</span>
                       </button>
                     </div>
 
                     <div>
-                      <label className="block text-xs font-bold text-gray-500 mb-2">License Plate (LPR Manual Entry)</label>
-                      <input 
-                        type="text" 
-                        defaultValue="ABC-1234"
-                        className="w-full border border-gray-200 p-3 text-gray-900 text-sm outline-none focus:border-gray-400 transition-colors"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-bold text-gray-500 mb-2">Override Reason</label>
+                      <label className="block text-xs font-bold text-gray-500 mb-2">Exception Type</label>
                       <div className="relative">
-                        <select className="w-full appearance-none border border-gray-200 p-3 text-gray-900 text-sm outline-none focus:border-gray-400 transition-colors bg-white pr-10">
-                          <option>Standard Maintenance</option>
-                          <option>VIP Guest</option>
-                          <option>Emergency Services</option>
-                          <option>System Error</option>
+                        <select 
+                          value={reportData.type}
+                          onChange={(e) => setReportData({...reportData, type: e.target.value})}
+                          className="w-full appearance-none border border-gray-200 p-3 text-gray-900 text-sm outline-none focus:border-gray-400 transition-colors bg-white pr-10"
+                        >
+                          {INCIDENT_TYPES.map(type => (
+                            <option key={type.value} value={type.value}>{type.label}</option>
+                          ))}
                         </select>
                         <ChevronDown className="w-4 h-4 text-gray-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                       </div>
                     </div>
 
-                    <button className="w-full border border-gray-200 py-4 text-sm font-bold text-gray-700 hover:bg-gray-50 transition-colors shadow-sm uppercase tracking-wider mt-2">
-                      Submit Manual Override
+                    <div>
+                      <label className="block text-xs font-bold text-gray-500 mb-2">Title</label>
+                      <input 
+                        type="text" 
+                        value={reportData.title}
+                        onChange={(e) => setReportData({...reportData, title: e.target.value})}
+                        className="w-full border border-gray-200 p-3 text-gray-900 text-sm outline-none focus:border-gray-400 transition-colors"
+                        placeholder="e.g. Plate unmatched at exit"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-gray-500 mb-2">Details / Plate Info</label>
+                      <textarea 
+                        value={reportData.description}
+                        onChange={(e) => setReportData({...reportData, description: e.target.value})}
+                        className="w-full border border-gray-200 p-3 text-gray-900 text-sm outline-none focus:border-gray-400 transition-colors"
+                        rows={3}
+                        placeholder="Provide details..."
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-gray-500 mb-2">Severity</label>
+                      <div className="flex gap-2">
+                        {(['low', 'medium', 'high', 'critical'] as const).map(sev => (
+                          <button 
+                            key={sev}
+                            onClick={() => setReportData({...reportData, severity: sev})}
+                            className={`flex-1 py-2 text-xs font-bold uppercase tracking-wider rounded ${reportData.severity === sev ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
+                          >
+                            {sev}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <button 
+                      onClick={handleSubmitReport}
+                      disabled={isSubmitting}
+                      className="w-full bg-blue-600 text-white py-4 text-sm font-bold hover:bg-blue-700 transition-colors shadow-sm uppercase tracking-wider mt-2 disabled:opacity-50"
+                    >
+                      {isSubmitting ? 'Submitting...' : 'Submit Manual Override'}
                     </button>
 
                   </div>
                 </section>
               </div>
 
-              {/* Right Column (Lot Topology) */}
+              {/* Right Column (Lot Topology - kept visual from mockup) */}
               <div className="flex-1">
                 <section>
                   <div className="flex items-center justify-between mb-3">
@@ -186,7 +399,7 @@ const StaffExceptionsPage = () => {
                         Occupied
                       </div>
                       <div className="flex items-center">
-                        <span className="w-2 h-2 rounded-full bg-black mr-2"></span>
+                        <span className="w-2 h-2 rounded-full bg-red-500 mr-2"></span>
                         Exception
                       </div>
                     </div>
@@ -195,17 +408,14 @@ const StaffExceptionsPage = () => {
                   <div className="bg-white border border-gray-200 p-8 shadow-sm h-[400px] flex flex-col justify-center">
                     {/* Top Row */}
                     <div className="flex justify-between items-end border-b border-gray-200 pb-8 mb-8 relative">
-                      {/* Slots */}
                       <div className="w-12 h-16 border border-gray-200 flex items-start justify-center pt-2 text-[10px] text-gray-400">A1</div>
                       <div className="w-12 h-16 border border-gray-200 bg-gray-200 flex items-start justify-center pt-2 text-[10px] text-gray-400">A2</div>
                       <div className="w-12 h-16 border border-gray-200 flex items-start justify-center pt-2 text-[10px] text-gray-400">A3</div>
-                      <div className="w-14 h-20 border-2 border-gray-800 bg-black flex items-start justify-center pt-2 text-[10px] text-white">M</div>
+                      <div className="w-14 h-20 border-2 border-red-500 bg-red-50 flex items-start justify-center pt-2 text-[10px] text-red-600 font-bold">EX</div>
                       <div className="w-12 h-16 border border-gray-200 bg-gray-200 flex items-start justify-center pt-2 text-[10px] text-gray-400">A5</div>
                       <div className="w-12 h-16 border border-gray-200 flex items-start justify-center pt-2 text-[10px] text-gray-400">A6</div>
                       <div className="w-12 h-16 border border-gray-200 flex items-start justify-center pt-2 text-[10px] text-gray-400">A7</div>
                       <div className="w-12 h-16 border border-gray-200 flex items-start justify-center pt-2 text-[10px] text-gray-400">A8</div>
-                      
-                      {/* Lane Divider line */}
                       <div className="absolute left-0 right-0 -bottom-4 border-b-2 border-dashed border-gray-300"></div>
                     </div>
                     
@@ -229,8 +439,18 @@ const StaffExceptionsPage = () => {
             <section>
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Active Exception Log</h3>
-                <div className="text-xs text-gray-500">
-                  Filter by: <span className="font-bold text-gray-700">All Statuses</span>
+                <div className="text-xs text-gray-500 flex items-center">
+                  Filter by Status: 
+                  <select 
+                    value={filterStatus}
+                    onChange={(e) => setFilterStatus(e.target.value)}
+                    className="ml-2 font-bold text-gray-700 bg-transparent outline-none"
+                  >
+                    <option value="all">All Statuses</option>
+                    <option value="open">Open</option>
+                    <option value="in_progress">In Progress</option>
+                    <option value="resolved">Resolved</option>
+                  </select>
                 </div>
               </div>
               <div className="bg-white border border-gray-200 shadow-sm overflow-hidden">
@@ -240,48 +460,54 @@ const StaffExceptionsPage = () => {
                       <th className="px-6 py-4 font-bold">Timestamp</th>
                       <th className="px-6 py-4 font-bold">Reference ID</th>
                       <th className="px-6 py-4 font-bold">Exception Type</th>
-                      <th className="px-6 py-4 font-bold">Details</th>
+                      <th className="px-6 py-4 font-bold">Title / Details</th>
                       <th className="px-6 py-4 font-bold">Status</th>
                       <th className="px-6 py-4 font-bold text-right">Action</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 text-gray-700">
-                    <tr className="hover:bg-gray-50 transition-colors">
-                      <td className="px-6 py-4">14:02:11</td>
-                      <td className="px-6 py-4 font-medium text-gray-900">#EX-09412</td>
-                      <td className="px-6 py-4">LPR Mismatch</td>
-                      <td className="px-6 py-4">Entry Plate: JKL-9011 | Expected: UNK</td>
-                      <td className="px-6 py-4">
-                        <span className="bg-gray-900 text-white text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider">Issue</span>
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <button className="text-xs font-bold text-gray-900 uppercase tracking-wider hover:text-gray-600 transition-colors">Resolve</button>
-                      </td>
-                    </tr>
-                    <tr className="hover:bg-gray-50 transition-colors">
-                      <td className="px-6 py-4">13:55:04</td>
-                      <td className="px-6 py-4 font-medium text-gray-900">#EX-09411</td>
-                      <td className="px-6 py-4">Lost Ticket</td>
-                      <td className="px-6 py-4">Stated Entry: 09:15 AM - Zone B</td>
-                      <td className="px-6 py-4">
-                        <span className="bg-blue-100 text-blue-700 text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider">Pending</span>
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <button className="text-xs font-bold text-gray-900 uppercase tracking-wider hover:text-gray-600 transition-colors">Process</button>
-                      </td>
-                    </tr>
-                    <tr className="hover:bg-gray-50 transition-colors">
-                      <td className="px-6 py-4">13:42:58</td>
-                      <td className="px-6 py-4 font-medium text-gray-900">#EX-09409</td>
-                      <td className="px-6 py-4">Manual Release</td>
-                      <td className="px-6 py-4">Staff Override - Service Unit #44</td>
-                      <td className="px-6 py-4">
-                        <span className="bg-gray-100 text-gray-500 text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider">Resolved</span>
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <button className="text-xs font-bold text-gray-900 uppercase tracking-wider hover:text-gray-600 transition-colors">View</button>
-                      </td>
-                    </tr>
+                    {isLoading ? (
+                      <tr>
+                        <td colSpan={6} className="px-6 py-8 text-center text-gray-500">Loading exceptions...</td>
+                      </tr>
+                    ) : incidents.length > 0 ? (
+                      incidents.map((inc) => (
+                        <tr key={inc._id} className="hover:bg-gray-50 transition-colors">
+                          <td className="px-6 py-4 whitespace-nowrap">{new Date(inc.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'})}</td>
+                          <td className="px-6 py-4 font-medium text-gray-900">{inc.incidentCode}</td>
+                          <td className="px-6 py-4 capitalize">{inc.type.replace(/_/g, ' ')}</td>
+                          <td className="px-6 py-4">
+                            <div className="font-bold text-gray-900">{inc.title}</div>
+                            <div className="text-xs text-gray-500 line-clamp-1">{inc.description}</div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className={`text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider ${
+                              inc.status === 'open' ? 'bg-orange-100 text-orange-700' :
+                              inc.status === 'in_progress' ? 'bg-blue-100 text-blue-700' :
+                              'bg-green-100 text-green-700'
+                            }`}>
+                              {inc.status.replace('_', ' ')}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-right">
+                            {inc.status !== 'resolved' && inc.status !== 'closed' ? (
+                              <button 
+                                onClick={() => setResolveModal({ isOpen: true, incident: inc })}
+                                className="text-xs font-bold text-blue-600 uppercase tracking-wider hover:text-blue-800 transition-colors"
+                              >
+                                Resolve
+                              </button>
+                            ) : (
+                              <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Resolved</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={6} className="px-6 py-8 text-center text-gray-500">No exceptions found.</td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>
