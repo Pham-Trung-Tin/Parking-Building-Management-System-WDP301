@@ -327,7 +327,7 @@ const SlotMapGrid = ({ slots, selectedSlot, onSelect, vehicleType, currentUserId
 
     /** Returns style tokens based on slot state */
     const statusStyle = (s: ParkingSlot, isSelected: boolean) => {
-        if (isSelected) return { bg: '#2563eb', border: '#1d4ed8', text: '#fff', label: 'Selected', glow: '0 0 0 3px rgba(37,99,235,0.3)' };
+        if (isSelected) return { bg: '#3b82f6', border: '#2563eb', text: '#ffffff', label: 'Selected', glow: '0 4px 12px rgba(59,130,246,0.35)' };
 
         // Locked by someone else (and lock hasn't expired)
         const isLockedByOther =
@@ -353,14 +353,14 @@ const SlotMapGrid = ({ slots, selectedSlot, onSelect, vehicleType, currentUserId
             currentUserId && s.lockedBy === currentUserId;
 
         if (isLockedByMe) {
-            return { bg: '#eff6ff', border: '#2563eb', text: '#1d4ed8', label: 'Your Selection', glow: '0 0 0 2px rgba(37,99,235,0.2)' };
+            return { bg: '#eff6ff', border: '#3b82f6', text: '#1d4ed8', label: 'Your Selection', glow: '0 0 0 2px rgba(59,130,246,0.2)' };
         }
 
         switch (s.status) {
-            case 'available': return { bg: '#f0fdf4', border: '#86efac', text: '#15803d', label: 'Available', glow: 'none' };
-            case 'occupied': return { bg: '#fef2f2', border: '#fca5a5', text: '#b91c1c', label: 'Occupied', glow: 'none' };
-            case 'reserved': return { bg: '#eff6ff', border: '#93c5fd', text: '#1d4ed8', label: 'Reserved', glow: 'none' };
-            case 'maintenance': return { bg: '#fefce8', border: '#fde047', text: '#854d0e', label: 'Maintenance', glow: 'none' };
+            case 'available': return { bg: '#ffffff', border: '#22c55e', text: '#16a34a', label: 'Available', glow: 'none' };
+            case 'occupied': return { bg: '#ffffff', border: '#ef4444', text: '#ef4444', label: 'Occupied', glow: 'none' };
+            case 'reserved': return { bg: '#ede9fe', border: '#8b5cf6', text: '#7c3aed', label: 'Reserved', glow: 'none' };
+            case 'maintenance': return { bg: '#f8fafc', border: '#94a3b8', text: '#64748b', label: 'Maintenance', glow: 'none' };
             case 'locked': return { bg: '#f8fafc', border: '#cbd5e1', text: '#94a3b8', label: 'Locked', glow: 'none' };
             default: return { bg: '#f8fafc', border: '#e2e8f0', text: '#94a3b8', label: s.status, glow: 'none' };
         }
@@ -400,19 +400,19 @@ const SlotMapGrid = ({ slots, selectedSlot, onSelect, vehicleType, currentUserId
                 disabled={!canSelect}
                 title={`${slot.slotCode} — ${style.label}${vtName ? ' · ' + vtName : ''}`}
                 style={{
-                    width: 52, height: 84, borderRadius: 8,
-                    border: `2px solid ${style.border}`,
+                    width: 56, height: 82, borderRadius: 10,
+                    border: `1.5px solid ${style.border}`,
                     background: style.bg as string,
                     cursor: canSelect ? 'pointer' : 'not-allowed',
                     display: 'flex', flexDirection: 'column', alignItems: 'center',
                     justifyContent: 'center', gap: 2, padding: '4px 2px',
-                    transition: 'all 0.2s',
-                    transform: isSelected ? 'scale(1.06)' : 'scale(1)',
-                    boxShadow: style.glow || (isSelected ? '0 4px 16px rgba(37,99,235,0.4)' : '0 1px 4px rgba(0,0,0,0.06)'),
+                    transition: 'all 0.2s ease',
+                    transform: isSelected ? 'scale(1.04)' : 'scale(1)',
+                    boxShadow: style.glow || (isSelected ? '0 4px 16px rgba(59,130,246,0.3)' : '0 2px 6px rgba(0,0,0,0.04)'),
                     animation: (style as any).animate ? 'slotPulse 1.5s ease-in-out infinite' : 'none',
                     position: 'relative',
                 }}>
-                <span style={{ fontSize: 9, fontWeight: 800, color: style.text as string, letterSpacing: 0.3, textAlign: 'center', lineHeight: 1.2 }}>
+                <span style={{ fontSize: 10, fontWeight: 700, color: style.text as string, letterSpacing: 0.2, textAlign: 'center', lineHeight: 1.2 }}>
                     {slot.slotCode}
                 </span>
                 {slot.features?.hasEVCharger && <span style={{ fontSize: 10 }}>⚡</span>}
@@ -424,17 +424,17 @@ const SlotMapGrid = ({ slots, selectedSlot, onSelect, vehicleType, currentUserId
     return (
         <div>
             {/* Legend */}
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 20, padding: '12px 0', borderBottom: '1px solid #f1f5f9' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, marginBottom: 24, padding: '16px 0', borderBottom: '1px solid #e2e8f0' }}>
                 {[
-                    { label: 'Available', bg: '#f0fdf4', border: '#86efac', text: '#15803d' },
-                    { label: 'Selected', bg: '#2563eb', border: '#1d4ed8', text: '#fff' },
-                    { label: 'Occupied', bg: '#fef2f2', border: '#fca5a5', text: '#b91c1c' },
-                    { label: 'Reserved', bg: '#eff6ff', border: '#93c5fd', text: '#1d4ed8' },
-                    { label: 'Being Selected 🔒', bg: 'linear-gradient(135deg,#fffbeb,#fef3c7)', border: '#f59e0b', text: '#d97706' },
-                    { label: 'Maintenance', bg: '#fefce8', border: '#fde047', text: '#854d0e' },
+                    { label: 'Available', bg: '#ffffff', border: '#22c55e', text: '#16a34a' },
+                    { label: 'Selected', bg: '#3b82f6', border: '#2563eb', text: '#ffffff' },
+                    { label: 'Occupied', bg: '#ffffff', border: '#ef4444', text: '#ef4444' },
+                    { label: 'Reserved', bg: '#ede9fe', border: '#8b5cf6', text: '#7c3aed' },
+                    { label: 'Being Selected ', bg: 'linear-gradient(135deg,#fffbeb,#fef3c7)', border: '#f59e0b', text: '#d97706' },
+                    { label: 'Maintenance ☒', bg: '#f8fafc', border: '#94a3b8', text: '#64748b' },
                 ].map(l => (
-                    <div key={l.label} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: '#475569' }}>
-                        <div style={{ width: 14, height: 14, borderRadius: 3, background: l.bg, border: `1.5px solid ${l.border}` }} />
+                    <div key={l.label} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 600, color: '#475569' }}>
+                        <div style={{ width: 16, height: 16, borderRadius: 4, background: l.bg, border: `1.5px solid ${l.border}` }} />
                         {l.label}
                     </div>
                 ))}
@@ -585,7 +585,7 @@ const BookingPage = () => {
         try {
             const raw = localStorage.getItem('user');
             if (raw) return JSON.parse(raw)?._id;
-        } catch (_) {}
+        } catch (_) { }
         return undefined;
     });
 
@@ -596,7 +596,7 @@ const BookingPage = () => {
     const handleSelectSlot = useCallback(async (slot: ParkingSlot) => {
         // Unlock previously selected slot if different
         if (selectedSlot && selectedSlot._id !== slot._id) {
-            try { await parkingSlotService.unlockSlot(selectedSlot._id); } catch (_) {}
+            try { await parkingSlotService.unlockSlot(selectedSlot._id); } catch (_) { }
         }
         setSelectedSlot(slot);
 
@@ -609,7 +609,7 @@ const BookingPage = () => {
             // Auto-unlock and clear selection after 3 min if user didn't proceed
             if (lockTimerRef.current) clearTimeout(lockTimerRef.current);
             lockTimerRef.current = setTimeout(async () => {
-                try { await parkingSlotService.unlockSlot(slot._id); } catch (_) {}
+                try { await parkingSlotService.unlockSlot(slot._id); } catch (_) { }
                 setSelectedSlot(null);
                 setSlotLockUntil(null);
             }, until.getTime() - Date.now());
@@ -624,7 +624,7 @@ const BookingPage = () => {
         return () => {
             if (lockTimerRef.current) clearTimeout(lockTimerRef.current);
             if (selectedSlot) {
-                parkingSlotService.unlockSlot(selectedSlot._id).catch(() => {});
+                parkingSlotService.unlockSlot(selectedSlot._id).catch(() => { });
             }
         };
     }, [selectedSlot]);
@@ -1186,7 +1186,7 @@ const BookingPage = () => {
 
                 .bk-root {
                     min-height: 100vh;
-                    background: linear-gradient(160deg, #f0f4ff 0%, #f8fafc 50%, #f0fdf4 100%);
+                    background: #f8fafc;
                     font-family: 'Inter', 'Segoe UI', sans-serif;
                     color: #0f172a;
                 }
@@ -1553,32 +1553,34 @@ const BookingPage = () => {
                     top: 160px;
                 }
                 .summary-card {
-                    background: white; border-radius: 20px;
-                    border: 1px solid #e8edf4; padding: 24px;
-                    box-shadow: 0 4px 24px rgba(0,0,0,0.06);
+                    background: white; border-radius: 16px;
+                    border: 1px solid #e2e8f0; padding: 24px;
+                    box-shadow: 0 4px 20px rgba(0,0,0,0.03);
                 }
                 .summary-title {
-                    font-size: 14px; font-weight: 800; color: #0f172a;
+                    font-size: 16px; font-weight: 800; color: #0f172a;
                     margin-bottom: 20px; display: flex; align-items: center; gap: 8px;
-                    padding-bottom: 14px; border-bottom: 1px solid #f1f5f9;
+                    padding-bottom: 16px; border-bottom: 1px solid #e2e8f0;
                 }
                 .sum-row {
                     display: flex; justify-content: space-between;
-                    align-items: flex-start; padding: 10px 0;
+                    align-items: flex-start; padding: 12px 0;
                     border-bottom: 1px dashed #f1f5f9; font-size: 13px;
                 }
                 .sum-row:last-child { border-bottom: none; }
                 .sum-label { color: #64748b; font-weight: 500; }
-                .sum-value { color: #0f172a; font-weight: 700; text-align: right; max-width: 55%; font-size: 12px; }
+                .sum-value { color: #0f172a; font-weight: 700; text-align: right; max-width: 60%; font-size: 13px; }
                 .sum-empty { color: #cbd5e1; font-style: italic; }
                 .sum-total {
-                    margin-top: 16px; padding: 16px;
-                    background: linear-gradient(135deg, #eff6ff, #dbeafe);
-                    border: 1.5px solid #bfdbfe; border-radius: 14px;
-                    display: flex; justify-content: space-between; align-items: center;
+                    margin-top: 24px; padding: 20px;
+                    background: #f0f9ff;
+                    border-radius: 12px;
+                    display: flex; justify-content: space-between; align-items: flex-start;
                 }
-                .sum-total-label { font-size: 13px; font-weight: 700; color: #1d4ed8; }
-                .sum-total-value { font-size: 20px; font-weight: 900; color: #1e40af; letter-spacing: -0.5px; }
+                .sum-total-label { font-size: 14px; font-weight: 600; color: #1e293b; margin-top: 4px; }
+                .sum-total-right { display: flex; flexDirection: column; align-items: flex-end; }
+                .sum-total-value { font-size: 24px; font-weight: 900; color: #2563eb; letter-spacing: -0.5px; }
+                .sum-total-sub { font-size: 11px; color: #3b82f6; font-weight: 500; margin-top: 2px; }
 
                 /* ── Loading spinner ── */
                 .bk-loading { display: flex; align-items: center; gap: 10px; padding: 40px 0; color: #64748b; font-weight: 600; font-size: 14px; justify-content: center; flex-direction: column; }
@@ -2577,7 +2579,7 @@ const BookingPage = () => {
                         {currentStep === 6 && (
                             <div className="bk-card">
                                 <div className="bk-step-header">
-                                    <div className="bk-step-icon">🅿️</div>
+                                    {/* <div className="bk-step-icon">🅿️</div> */}
                                     <div>
                                         <div className="bk-step-title">Select Parking Slot</div>
                                         <div className="bk-step-sub">Step 6 of 6 — Pick your exact spot</div>
@@ -2618,7 +2620,7 @@ const BookingPage = () => {
                                                 </div>
                                                 <button
                                                     onClick={async () => {
-                                                        try { await parkingSlotService.unlockSlot(selectedSlot._id); } catch (_) {}
+                                                        try { await parkingSlotService.unlockSlot(selectedSlot._id); } catch (_) { }
                                                         setSelectedSlot(null);
                                                         setSlotLockUntil(null);
                                                         if (lockTimerRef.current) clearTimeout(lockTimerRef.current);
@@ -2650,7 +2652,7 @@ const BookingPage = () => {
                     <div className="bk-summary">
                         <div className="summary-card">
                             <div className="summary-title">
-                                📋 Booking Summary
+                                Booking Summary
                             </div>
 
                             <div className="sum-row">
@@ -2666,7 +2668,7 @@ const BookingPage = () => {
                             <div className="sum-row">
                                 <span className="sum-label">Vehicle</span>
                                 <span className="sum-value">
-                                    {vehicleType ? `${vehicleIcon(vehicleType.code)} ${vehicleType.name}` : <span className="sum-empty">Not selected</span>}
+                                    {vehicleType ? vehicleType.name : <span className="sum-empty">Not selected</span>}
                                 </span>
                             </div>
                             <div className="sum-row">
@@ -2698,8 +2700,11 @@ const BookingPage = () => {
 
                             {vehicleType && (
                                 <div className="sum-total">
-                                    <span className="sum-total-label">Est. Total</span>
-                                    <span className="sum-total-value">{fmtVND(estimatedPrice)}</span>
+                                    <span className="sum-total-label">Estimated Total</span>
+                                    <div className="sum-total-right">
+                                        <span className="sum-total-value">{fmtVND(estimatedPrice)}</span>
+                                        <span className="sum-total-sub">Taxes included</span>
+                                    </div>
                                 </div>
                             )}
                         </div>
