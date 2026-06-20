@@ -39,6 +39,15 @@ function useLiveElapsed(entryTime: string | undefined) {
     return elapsed;
 }
 
+const getVehicleEmoji = (code: string) => {
+    const c = (code || '').toUpperCase();
+    if (c.includes('TRUCK') || c.includes('TAI')) return '🚛';
+    if (c.includes('BIKE') || c.includes('BICYCLE')) return '🚲';
+    if (c.includes('ELECTRIC')) return '⚡';
+    if (c.includes('MOTOR') || c.includes('MOTO') || c.includes('SCOOTER') || c.includes('MAY')) return '🏍️';
+    return '🚗';
+};
+
 // ── A single session card with its own live clock ───────────────────────────
 const LiveSessionCard = ({ session, onClick }: { session: ParkingSession; onClick: () => void }) => {
     const elapsed = useLiveElapsed(session.entryTime);
@@ -68,42 +77,32 @@ const LiveSessionCard = ({ session, onClick }: { session: ParkingSession; onClic
         typeof session.parkingLot === 'object' ? (session.parkingLot as any)?.name ?? '' : '';
 
     return (
-        <div className="ls-card" onClick={onClick}>
-            {/* Live pulse badge */}
-            <div className="ls-live-badge">
-                <span className="ls-pulse-dot" />
-                LIVE · Đang đỗ
-            </div>
-
-            <div className="ls-card-body">
-                {/* Left: info */}
-                <div className="ls-info">
-                    <div className="ls-lot-name">{parkingLotName || 'Bãi Đỗ Xe'}</div>
-                    <div className="ls-plate">{plate}</div>
-                    <div className="ls-meta">
-                        <span className="ls-meta-chip">{floorName}{zoneName ? ` · ${zoneName}` : ''}</span>
-                        <span className="ls-meta-chip ls-slot-chip">🅿️ {slotCode}</span>
-                    </div>
-                    {vtName && <div className="ls-vt">{vtName}</div>}
+        <div className="t-list-item" onClick={onClick}>
+            <div className="t-list-item-left">
+                <div className="t-list-item-icon">
+                    {getVehicleEmoji(vtName)}
                 </div>
-
-                {/* Right: timer + fee */}
-                <div className="ls-stats">
-                    <div className="ls-stat-box ls-stat-time">
-                        <div className="ls-stat-label">⏱ Thời gian</div>
-                        <div className="ls-stat-value">{hms}</div>
-                    </div>
-                    <div className="ls-stat-box ls-stat-fee">
-                        <div className="ls-stat-label">💰 Phí hiện tại</div>
-                        <div className="ls-stat-value ls-fee-value">
-                            {new Intl.NumberFormat('vi-VN').format(Math.round(currentFee))} ₫
-                        </div>
+                <div className="t-list-item-info">
+                    <h3 className="t-list-item-title">{parkingLotName || 'Bãi Đỗ Xe'}</h3>
+                    <div className="t-list-item-subtitle">
+                        <span>Plate: <strong style={{ color: '#334155' }}>{plate}</strong></span>
+                        <span className="t-list-item-meta">{floorName} — {slotCode}</span>
+                        <span style={{ color: '#cbd5e1' }}>|</span>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700 }}>
+                            <span className="ls-pulse-dot" style={{ width: 6, height: 6 }} />
+                            <span style={{ color: '#2563eb' }}>{hms}</span>
+                        </span>
                     </div>
                 </div>
             </div>
-
-            <div className="ls-cta">
-                <span>Xem chi tiết &amp; Thanh toán →</span>
+            <div className="t-list-item-right" style={{ flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span className="t-badge" style={{ background: '#dcfce7', color: '#15803d' }}>
+                        LIVE
+                    </span>
+                    <strong style={{ fontSize: 14, color: '#10b981' }}>{new Intl.NumberFormat('vi-VN').format(Math.round(currentFee))} ₫</strong>
+                </div>
+                <button className="t-list-item-btn" onClick={(e) => { e.stopPropagation(); onClick(); }}>Xem chi tiết</button>
             </div>
         </div>
     );
@@ -340,14 +339,7 @@ const MyTicketsPage = () => {
         return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
     };
 
-    const getVehicleEmoji = (code: string) => {
-        const c = code.toUpperCase();
-        if (c.includes('TRUCK') || c.includes('TAI')) return '🚛';
-        if (c.includes('BIKE') || c.includes('BICYCLE')) return '🚲';
-        if (c.includes('ELECTRIC')) return '⚡';
-        if (c.includes('MOTOR') || c.includes('MOTO') || c.includes('SCOOTER') || c.includes('MAY')) return '🏍️';
-        return '🚗';
-    };
+
 
     const getPayMethodLabel = (method: string) => {
         switch (method) {

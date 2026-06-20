@@ -256,50 +256,20 @@ const SessionPage = () => {
 
                 /* ── Banner ── */
                 .session-banner {
-                    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-                    padding: 18px 24px;
+                    padding: 16px 24px 0;
                     display: flex;
                     align-items: center;
-                    justify-content: space-between;
-                    box-shadow: 0 4px 20px rgba(37,99,235,0.4);
                 }
-                .banner-left { display: flex; align-items: center; gap: 14px; }
                 .banner-back {
-                    background: rgba(255,255,255,0.15);
-                    border: 1px solid rgba(255,255,255,0.25);
-                    border-radius: 8px; padding: 6px 12px;
-                    color: white; font-size: 13px; font-weight: 600;
-                    cursor: pointer; display: flex; align-items: center; gap: 6px;
-                    transition: background 0.2s;
+                    background: white;
+                    border: 1px solid #e2e8f0;
+                    border-radius: 8px; padding: 8px 14px;
+                    color: #475569; font-size: 13px; font-weight: 700;
+                    cursor: pointer; display: flex; align-items: center; gap: 8px;
+                    transition: all 0.2s;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
                 }
-                .banner-back:hover { background: rgba(255,255,255,0.25); }
-                .banner-title { font-size: 18px; font-weight: 800; color: white; letter-spacing: -0.2px; }
-                .banner-subtitle { font-size: 12px; color: rgba(255,255,255,0.7); font-weight: 500; margin-top: 1px; }
-                .active-badge {
-                    display: flex; align-items: center; gap: 7px;
-                    background: #10b981; color: white;
-                    font-size: 13px; font-weight: 700;
-                    padding: 7px 14px; border-radius: 20px;
-                    box-shadow: 0 4px 12px rgba(16,185,129,0.5);
-                }
-                .active-dot {
-                    width: 8px; height: 8px; background: white; border-radius: 50%;
-                    animation: pulse 1.4s ease-in-out infinite;
-                }
-                @keyframes pulse {
-                    0%, 100% { opacity: 1; transform: scale(1); }
-                    50% { opacity: 0.5; transform: scale(0.7); }
-                }
-
-                /* ── Session code chip ── */
-                .session-code-chip {
-                    background: rgba(255,255,255,0.15);
-                    border: 1px solid rgba(255,255,255,0.3);
-                    border-radius: 8px; padding: 5px 12px;
-                    color: white; font-size: 11px; font-weight: 700;
-                    letter-spacing: 1px; font-family: monospace;
-                    margin-top: 5px;
-                }
+                .banner-back:hover { background: #f8fafc; color: #0f172a; border-color: #cbd5e1; }
 
                 /* ── Content ── */
                 .session-content { max-width: 600px; margin: 0 auto; padding: 28px 20px 80px; }
@@ -340,43 +310,35 @@ const SessionPage = () => {
 
                 /* ── Stat grid ── */
                 .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
-                .stat-card { border-radius: 16px; padding: 18px 16px; }
-                .stat-card.blue { background: linear-gradient(135deg, #eff6ff, #dbeafe); border: 1px solid #bfdbfe; }
-                .stat-card.green { background: linear-gradient(135deg, #f0fdf4, #dcfce7); border: 1px solid #bbf7d0; }
-                .stat-label { display: flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 700; margin-bottom: 10px; }
-                .stat-label.blue { color: #1d4ed8; }
-                .stat-label.green { color: #059669; }
-                .stat-value { font-size: 28px; font-weight: 900; letter-spacing: -0.5px; font-variant-numeric: tabular-nums; line-height: 1; }
-                .stat-value.blue { color: #1e40af; }
-                .stat-value.green { color: #15803d; }
-                .stat-sub { font-size: 11px; font-weight: 600; margin-top: 5px; }
-                .stat-sub.blue { color: #93c5fd; }
-                .stat-sub.green { color: #6ee7b7; }
+                .stat-card { background: white; border: 1px solid #e2e8f0; box-shadow: 0 2px 16px rgba(0,0,0,0.05); border-radius: 18px; padding: 18px 16px; }
+                .stat-label { display: flex; align-items: center; gap: 7px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 10px; }
+                .stat-label.blue { color: #3b82f6; }
+                .stat-label.green { color: #10b981; }
+                .stat-value { font-size: 28px; font-weight: 900; letter-spacing: -0.5px; font-variant-numeric: tabular-nums; line-height: 1; color: #0f172a; }
+                .stat-sub { font-size: 11px; font-weight: 600; margin-top: 5px; color: #64748b; }
 
                 /* ── Location card ── */
                 .location-card {
-                    border: 2px solid #fbbf24;
-                    background: linear-gradient(135deg, #fffbeb, #fef3c7);
-                    border-radius: 16px; padding: 18px 20px; margin-bottom: 16px;
+                    background: white; border: 1px solid #e2e8f0; box-shadow: 0 2px 16px rgba(0,0,0,0.05);
+                    border-radius: 18px; padding: 18px 20px; margin-bottom: 16px;
                 }
                 .location-top { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
                 .location-icon {
-                    width: 42px; height: 42px; background: #f59e0b;
+                    width: 42px; height: 42px; background: #fffbeb;
                     border-radius: 12px; display: flex; align-items: center;
-                    justify-content: center; flex-shrink: 0;
-                    box-shadow: 0 4px 12px rgba(245,158,11,0.4);
+                    justify-content: center; flex-shrink: 0; color: #d97706;
                 }
-                .location-label { font-size: 12px; color: #92400e; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 2px; }
-                .location-value { font-size: 22px; font-weight: 900; color: #78350f; letter-spacing: 0.04em; }
-                .location-sub { font-size: 12px; color: #a16207; font-weight: 600; margin-top: 2px; }
+                .location-label { font-size: 11px; color: #d97706; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 2px; }
+                .location-value { font-size: 22px; font-weight: 900; color: #0f172a; letter-spacing: 0.04em; }
+                .location-sub { font-size: 12px; color: #64748b; font-weight: 600; margin-top: 2px; }
                 .find-car-btn {
                     width: 100%; padding: 12px;
-                    background: white; border: 1.5px solid #fde68a;
-                    border-radius: 10px; font-size: 13px; font-weight: 700; color: #92400e;
+                    background: #f8fafc; border: 1.5px solid #e2e8f0;
+                    border-radius: 10px; font-size: 13px; font-weight: 700; color: #475569;
                     cursor: pointer; display: flex; align-items: center;
                     justify-content: center; gap: 8px; transition: all 0.2s;
                 }
-                .find-car-btn:hover { background: #fef3c7; border-color: #f59e0b; }
+                .find-car-btn:hover { background: #f1f5f9; border-color: #cbd5e1; color: #0f172a; }
 
                 /* ── Details grid ── */
                 .details-title { font-size: 15px; font-weight: 800; color: #0f172a; margin-bottom: 16px; }
@@ -395,12 +357,12 @@ const SessionPage = () => {
 
                 /* ── Notice ── */
                 .notice-card {
-                    border: 1px solid #fde68a; background: #fffbeb;
-                    border-radius: 14px; padding: 14px 16px; margin-bottom: 16px;
-                    display: flex; align-items: flex-start; gap: 12px;
+                    background: white; border: 1px solid #e2e8f0; box-shadow: 0 2px 16px rgba(0,0,0,0.05);
+                    border-radius: 18px; padding: 16px 20px; margin-bottom: 16px;
+                    display: flex; align-items: flex-start; gap: 14px;
                 }
-                .notice-title { font-size: 13px; font-weight: 700; color: #92400e; margin-bottom: 3px; }
-                .notice-text { font-size: 12px; color: #b45309; font-weight: 500; line-height: 1.5; }
+                .notice-title { font-size: 13px; font-weight: 800; color: #0f172a; margin-bottom: 4px; }
+                .notice-text { font-size: 12px; color: #475569; font-weight: 500; line-height: 1.5; }
 
                 /* ── Action buttons ── */
                 .pay-btn {
@@ -459,24 +421,11 @@ const SessionPage = () => {
             <div className="session-page">
                 <Header />
 
-                {/* Blue banner */}
+                {/* Back button */}
                 <div className="session-banner">
-                    <div className="banner-left">
-                        <button className="banner-back" onClick={() => navigate(-1)}>
-                            <ArrowLeftIcon /> Quay lại
-                        </button>
-                        <div>
-                            <div className="banner-title">Phiên Đỗ Xe Hiện Tại</div>
-                            <div className="banner-subtitle">{spot.title}</div>
-                            {sessionCode && (
-                                <div className="session-code-chip">{sessionCode}</div>
-                            )}
-                        </div>
-                    </div>
-                    <div className="active-badge">
-                        <span className="active-dot" />
-                        Đang đỗ
-                    </div>
+                    <button className="banner-back" onClick={() => navigate(-1)}>
+                        <ArrowLeftIcon /> Quay lại
+                    </button>
                 </div>
 
                 <div className="session-content">
@@ -635,7 +584,7 @@ const SessionPage = () => {
                                 onClick={handlePayCheckout}
                             >
                                 <PayIcon />
-                                Thanh Toán Phụ Trội ({fmtVND(amountDue)})
+                                {advancePayment > 0 ? `Thanh Toán Phụ Trội (${fmtVND(amountDue)})` : `Thanh Toán (${fmtVND(amountDue)})`}
                             </button>
                         ) : (
                             <div className="pay-btn" style={{ background: '#10b981', cursor: 'default' }}>
