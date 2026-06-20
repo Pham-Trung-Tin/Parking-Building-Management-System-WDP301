@@ -748,14 +748,6 @@ export default function AdminPortal() {
                 <Icon className="w-[18px] h-[18px]" />
               </button>
             ))}
-            {/* Staff Assignment Link */}
-            <button
-              onClick={() => navigate('/admin/staff-assignment')}
-              title="Staff Assignment"
-              className="w-11 h-11 rounded-xl flex items-center justify-center text-gray-400 hover:text-gray-800 hover:bg-gray-100 transition-all duration-150"
-            >
-              <Building2 className="w-[18px] h-[18px]" />
-            </button>
           </nav>
 
           {/* Bottom */}

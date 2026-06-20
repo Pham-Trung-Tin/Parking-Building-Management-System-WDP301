@@ -1,5 +1,5 @@
 import React from 'react';
-import { Navigate, Outlet } from 'react-router-dom';
+import { Navigate, Outlet, useLocation } from 'react-router-dom';
 
 /**
  * GuestRoute: Allows only unauthenticated users.
@@ -16,6 +16,9 @@ export const GuestRoute: React.FC = () => {
         return <Navigate to="/admin" replace />;
       }
       if (['parking_manager', 'parking_staff'].includes(user.role)) {
+        if (user.role === 'parking_staff' && !user.assignedParkingLot) {
+          return <Navigate to="/staff/profile" replace />;
+        }
         return <Navigate to="/staff" replace />;
       }
       return <Navigate to="/" replace />;
@@ -41,6 +44,9 @@ export const CustomerRoute: React.FC = () => {
         return <Navigate to="/admin" replace />;
       }
       if (['parking_manager', 'parking_staff'].includes(user.role)) {
+        if (user.role === 'parking_staff' && !user.assignedParkingLot) {
+          return <Navigate to="/staff/profile" replace />;
+        }
         return <Navigate to="/staff" replace />;
       }
     } catch {
@@ -73,6 +79,7 @@ export const RequireAuthRoute: React.FC = () => {
 export const AdminRoute: React.FC = () => {
   const token = localStorage.getItem('accessToken');
   const userJson = localStorage.getItem('user');
+  const location = useLocation();
 
   if (!token) {
     return <Navigate to="/login" replace />;
@@ -85,8 +92,18 @@ export const AdminRoute: React.FC = () => {
         return <Navigate to="/" replace />;
       }
       // If staff tries to access exactly /admin, kick them to /staff
-      if (user.role === 'parking_staff' && window.location.pathname === '/admin') {
+      if (user.role === 'parking_staff' && location.pathname === '/admin') {
         return <Navigate to="/staff" replace />;
+      }
+      
+      // If staff is unassigned, restrict access to profile page only
+      if (user.role === 'parking_staff' && !user.assignedParkingLot && location.pathname !== '/staff/profile') {
+        return <Navigate to="/staff/profile" replace />;
+      }
+
+      // If admin tries to access staff assignment, kick them to /admin
+      if (user.role === 'system_admin' && location.pathname === '/admin/staff-assignment') {
+        return <Navigate to="/admin" replace />;
       }
     } catch {
       return <Navigate to="/login" replace />;

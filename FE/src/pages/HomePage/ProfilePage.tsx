@@ -1,13 +1,14 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import Header from '../../components/Header/Header';
 import Footer from '../../components/Footer/Footer';
 import useProfile from '../../hooks/useProfile';
 import { authService } from '../../services/api';
-import { LogIn, LogOut, Eye, AlertTriangle, User, Users } from 'lucide-react';
+import { LogIn, LogOut, Eye, AlertTriangle, User, Users, LayoutGrid } from 'lucide-react';
 
 const ProfilePage = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const {
     profile: user,
     loading,
@@ -535,7 +536,7 @@ const ProfilePage = () => {
     );
 
   if (isStaffOrManager) {
-    const isActive = (path: string) => window.location.pathname === path;
+    const isActive = (path: string) => location.pathname === path;
     const linkClass = (path: string) => 
       `flex items-center px-6 py-3 transition-colors w-full text-left ${isActive(path) ? 'bg-gray-50 border-r-4 border-gray-900 text-gray-900 font-medium' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'}`;
     const iconClass = (path: string) => 
@@ -552,22 +553,30 @@ const ProfilePage = () => {
             </div>
 
             <nav className="mt-6 flex flex-col space-y-1">
-              <Link to="/staff" className={linkClass('/staff')}>
-                <LogIn className={iconClass('/staff')} />
-                Entry
-              </Link>
-              <Link to="/staff/exit" className={linkClass('/staff/exit')}>
-                <LogOut className={iconClass('/staff/exit')} />
-                Exit
-              </Link>
-              <Link to="/staff/live-view" className={linkClass('/staff/live-view')}>
-                <Eye className={iconClass('/staff/live-view')} />
-                Live View
-              </Link>
-              <Link to="/staff/exceptions" className={linkClass('/staff/exceptions')}>
-                <AlertTriangle className={iconClass('/staff/exceptions')} />
-                Exceptions
-              </Link>
+              {(user?.role === 'parking_manager' || (user?.role === 'parking_staff' && user?.assignedParkingLot)) && (
+                <>
+                  <Link to="/staff" className={linkClass('/staff')}>
+                    <LogIn className={iconClass('/staff')} />
+                    Entry
+                  </Link>
+                  <Link to="/staff/exit" className={linkClass('/staff/exit')}>
+                    <LogOut className={iconClass('/staff/exit')} />
+                    Exit
+                  </Link>
+                  <Link to="/staff/live-view" className={linkClass('/staff/live-view')}>
+                    <Eye className={iconClass('/staff/live-view')} />
+                    Live View
+                  </Link>
+                  <Link to="/staff/manage-slots" className={linkClass('/staff/manage-slots')}>
+                    <LayoutGrid className={iconClass('/staff/manage-slots')} />
+                    Manage Slots
+                  </Link>
+                  <Link to="/staff/exceptions" className={linkClass('/staff/exceptions')}>
+                    <AlertTriangle className={iconClass('/staff/exceptions')} />
+                    Exceptions
+                  </Link>
+                </>
+              )}
               {user?.role !== 'parking_manager' && (
                 <Link to="/staff/profile" className={linkClass('/staff/profile')}>
                   <User className={iconClass('/staff/profile')} />

@@ -376,9 +376,6 @@ export default function StaffAssignmentPage() {
     try {
       const user = getCurrentUser();
       const params: any = { limit: 100, status: 'active' };
-      if (user.role === 'parking_manager' && user._id) {
-        params.manager = user._id;
-      }
       const res = await parkingLotService.getParkingLots(params);
       const lots = res.data || res || [];
       setParkingLots(lots);
@@ -476,7 +473,6 @@ export default function StaffAssignmentPage() {
       .substring(0, 2);
 
   const user = getCurrentUser();
-  const isAdmin = user.role === 'system_admin';
 
   return (
     <>
@@ -497,55 +493,7 @@ export default function StaffAssignmentPage() {
 
       <div className="min-h-screen bg-[#F8F8F6] flex">
         {/* ── Sidebar ── */}
-        {isAdmin ? (
-          <div className="w-[72px] bg-white border-r border-gray-100 flex flex-col items-center py-7 gap-0 sticky top-0 h-screen z-10 shrink-0">
-            <div className="mb-10">
-              <div className="w-10 h-10 bg-gray-900 rounded-xl flex items-center justify-center shadow-md">
-                <Shield className="w-5 h-5 text-white" />
-              </div>
-            </div>
-
-            <nav className="flex-1 flex flex-col items-center gap-2">
-              <button
-                onClick={() => navigate('/admin', { state: { activeNav: 'users' } })}
-                title="Users"
-                className="w-11 h-11 rounded-xl flex items-center justify-center text-gray-400 hover:text-gray-800 hover:bg-gray-100 transition-all duration-150"
-              >
-                <Users className="w-[18px] h-[18px]" />
-              </button>
-              <button
-                onClick={() => navigate('/admin', { state: { activeNav: 'permissions' } })}
-                title="Permissions"
-                className="w-11 h-11 rounded-xl flex items-center justify-center text-gray-400 hover:text-gray-800 hover:bg-gray-100 transition-all duration-150"
-              >
-                <Key className="w-[18px] h-[18px]" />
-              </button>
-              <button
-                onClick={() => navigate('/admin', { state: { activeNav: 'config' } })}
-                title="Configuration"
-                className="w-11 h-11 rounded-xl flex items-center justify-center text-gray-400 hover:text-gray-800 hover:bg-gray-100 transition-all duration-150"
-              >
-                <Settings className="w-[18px] h-[18px]" />
-              </button>
-              <button
-                title="Personnel Management"
-                className="w-11 h-11 rounded-xl flex items-center justify-center bg-gray-900 text-white shadow-sm transition-all duration-150"
-              >
-                <Building2 className="w-[18px] h-[18px]" />
-              </button>
-            </nav>
-
-            <div className="flex flex-col items-center gap-3">
-              <button
-                onClick={handleLogout}
-                className="w-9 h-9 rounded-xl flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
-                title="Logout"
-              >
-                <LogOut className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        ) : (
+        
           <div className="w-64 bg-white border-r border-gray-200 flex flex-col justify-between shrink-0 z-20 h-screen sticky top-0">
             <div>
               <div className="p-6">
@@ -554,26 +502,30 @@ export default function StaffAssignmentPage() {
               </div>
 
               <nav className="mt-6 flex flex-col space-y-1">
-                <Link to="/staff" className="flex items-center px-6 py-3 text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition-colors w-full text-left">
-                  <LogIn className="w-5 h-5 mr-3 text-gray-400" />
-                  Entry
-                </Link>
-                <Link to="/staff/exit" className="flex items-center px-6 py-3 text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition-colors w-full text-left">
-                  <LogOut className="w-5 h-5 mr-3 text-gray-400" />
-                  Exit
-                </Link>
-                <Link to="/staff/live-view" className="flex items-center px-6 py-3 text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition-colors w-full text-left">
-                  <Eye className="w-5 h-5 mr-3 text-gray-400" />
-                  Live View
-                </Link>
-                <Link to="/staff/manage-slots" className="flex items-center px-6 py-3 text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition-colors w-full text-left">
-                  <LayoutGrid className="w-5 h-5 mr-3 text-gray-400" />
-                  Manage Slots
-                </Link>
-                <Link to="/staff/exceptions" className="flex items-center px-6 py-3 text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition-colors w-full text-left">
-                  <AlertTriangle className="w-5 h-5 mr-3 text-gray-400" />
-                  Exceptions
-                </Link>
+                {(user?.role === 'parking_manager' || (user?.role === 'parking_staff' && user?.assignedParkingLot)) && (
+                  <>
+                    <Link to="/staff" className="flex items-center px-6 py-3 text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition-colors w-full text-left">
+                      <LogIn className="w-5 h-5 mr-3 text-gray-400" />
+                      Entry
+                    </Link>
+                    <Link to="/staff/exit" className="flex items-center px-6 py-3 text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition-colors w-full text-left">
+                      <LogOut className="w-5 h-5 mr-3 text-gray-400" />
+                      Exit
+                    </Link>
+                    <Link to="/staff/live-view" className="flex items-center px-6 py-3 text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition-colors w-full text-left">
+                      <Eye className="w-5 h-5 mr-3 text-gray-400" />
+                      Live View
+                    </Link>
+                    <Link to="/staff/manage-slots" className="flex items-center px-6 py-3 text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition-colors w-full text-left">
+                      <LayoutGrid className="w-5 h-5 mr-3 text-gray-400" />
+                      Manage Slots
+                    </Link>
+                    <Link to="/staff/exceptions" className="flex items-center px-6 py-3 text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition-colors w-full text-left">
+                      <AlertTriangle className="w-5 h-5 mr-3 text-gray-400" />
+                      Exceptions
+                    </Link>
+                  </>
+                )}
                 <div className="flex items-center px-6 py-3 bg-gray-50 border-r-4 border-gray-900 text-gray-900 font-medium w-full text-left mt-2 whitespace-nowrap">
                   <Users className="w-5 h-5 mr-3 text-gray-700 shrink-0" />
                   <span className="truncate">Staff Assignment</span>
@@ -610,8 +562,7 @@ export default function StaffAssignmentPage() {
               </button>
             </div>
           </div>
-        )}
-
+        
         {/* ── Main ── */}
         <div className="flex-1 overflow-auto">
           <div className="max-w-6xl mx-auto px-12 py-10">
@@ -620,10 +571,10 @@ export default function StaffAssignmentPage() {
             <div className="flex items-end justify-between mb-10">
               <div>
                 <p className="text-xs font-medium text-gray-400 uppercase tracking-widest mb-2">
-                  {isAdmin ? 'System Admin' : 'Parking Manager'}
+                  Parking Manager
                 </p>
                 <h1 className="text-3xl font-semibold text-gray-900 leading-tight flex items-center gap-3">
-                  {isAdmin ? 'Personnel Management' : 'Staff Assignment'}
+                  Staff Assignment
                 </h1>
                 <p className="text-sm text-gray-400 mt-1">
                   Manage personnel assignments across parking locations
@@ -691,100 +642,7 @@ export default function StaffAssignmentPage() {
               </div>
             </div>
 
-            {/* Manager Section (Only for Admin) */}
-            {isAdmin && selectedLot && (
-              <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden mb-8">
-                {/* Section Header */}
-                <div className="px-7 py-5 border-b border-gray-100 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-100 to-blue-100 flex items-center justify-center">
-                      <Shield className="w-5 h-5 text-indigo-700" />
-                    </div>
-                    <div>
-                      <h2 className="text-base font-semibold text-gray-900">Parking Manager</h2>
-                      <p className="text-xs text-gray-400">{selectedLot.manager ? '1' : '0'} manager assigned</p>
-                    </div>
-                  </div>
-                  {!selectedLot.manager ? (
-                    <button
-                      onClick={() => setShowManagerModal(true)}
-                      className="flex items-center gap-2 px-4 py-2.5 bg-gray-900 text-white text-sm font-medium rounded-xl hover:bg-gray-700 transition-colors shadow-sm"
-                    >
-                      Assign Manager
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => setShowManagerModal(true)}
-                      className="flex items-center gap-2 px-4 py-2.5 bg-gray-100 text-gray-700 text-sm font-medium rounded-xl hover:bg-gray-200 transition-colors shadow-sm"
-                    >
-                      Change Manager
-                    </button>
-                  )}
-                </div>
 
-                {/* Manager List */}
-                <div className="divide-y divide-gray-50">
-                  {!selectedLot.manager ? (
-                    <div className="py-16 text-center">
-                      <div className="w-16 h-16 rounded-2xl bg-gray-100 flex items-center justify-center mx-auto mb-4">
-                        <Shield className="w-8 h-8 text-gray-300" />
-                      </div>
-                      <p className="text-sm font-medium text-gray-500">No manager assigned yet</p>
-                      <p className="text-xs text-gray-400 mt-1 mb-5">Click "Assign Manager" to assign a manager to this parking lot</p>
-                      <button
-                        onClick={() => setShowManagerModal(true)}
-                        className="inline-flex items-center gap-2 px-5 py-2.5 bg-gray-900 text-white text-sm font-medium rounded-xl hover:bg-gray-700 transition-colors"
-                      >
-                        Assign Manager
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="px-7 py-4 flex items-center justify-between hover:bg-gray-50/50 transition-colors group">
-                      <div className="flex items-center gap-4 min-w-0">
-                        {selectedLot.manager.avatar?.url || selectedLot.manager.avatarUrl ? (
-                          <img
-                            src={selectedLot.manager.avatar?.url || selectedLot.manager.avatarUrl}
-                            alt={selectedLot.manager.fullName}
-                            className="w-11 h-11 rounded-full object-cover border-2 border-gray-100"
-                          />
-                        ) : (
-                          <div className="w-11 h-11 rounded-full bg-gradient-to-br from-sky-100 to-blue-200 flex items-center justify-center text-sm font-bold text-blue-700 border-2 border-blue-100">
-                            {getInitials(selectedLot.manager.fullName || 'M')}
-                          </div>
-                        )}
-                        <div className="min-w-0">
-                          <p className="text-sm font-semibold text-gray-900 truncate">{selectedLot.manager.fullName}</p>
-                          <div className="flex items-center gap-3 mt-0.5">
-                            <span className="text-xs text-gray-400 flex items-center gap-1 truncate">
-                              <Mail className="w-3 h-3 shrink-0" />
-                              {selectedLot.manager.email}
-                            </span>
-                            {selectedLot.manager.phone && (
-                              <span className="text-xs text-gray-400 flex items-center gap-1">
-                                <Phone className="w-3 h-3 shrink-0" />
-                                {selectedLot.manager.phone}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3 shrink-0">
-                        <span className="bg-indigo-50 text-indigo-700 text-[10px] font-bold px-2.5 py-1 rounded-lg border border-indigo-100 uppercase tracking-wider">
-                          Manager
-                        </span>
-                        <button
-                          onClick={handleRemoveManager}
-                          disabled={removingManager}
-                          className="opacity-0 group-hover:opacity-100 flex items-center gap-1.5 px-3 py-2 text-red-600 bg-red-50 hover:bg-red-100 text-xs font-medium rounded-lg transition-all disabled:opacity-50"
-                        >
-                          {removingManager ? 'Removing...' : 'Remove'}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
 
             {/* Staff Section */}
             {selectedLot && (
