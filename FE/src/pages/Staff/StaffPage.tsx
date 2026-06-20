@@ -113,6 +113,7 @@ const StaffPage = () => {
   const [isManualStandard, setIsManualStandard] = useState(false);
   const [gateStatus, setGateStatus] = useState('Closed');
   const [notification, setNotification] = useState<{ show: boolean, message: string, type: 'success' | 'info' | 'error' } | null>(null);
+  const [capturedImageBase64, setCapturedImageBase64] = useState<string | null>(null);
 
   const [floors, setFloors] = useState<any[]>([]);
   const [floorStats, setFloorStats] = useState<Record<string, { total: number, occupied: number }>>({});
@@ -213,6 +214,7 @@ const StaffPage = () => {
         setConfidence(data.confidence);
         setLprEngine(data.engine);
         setLprProcessingTime(data.processingTimeMs);
+        setCapturedImageBase64(imageBase64);
         setIsManualStandard(false);
         showNotification(
           `AI recognized: ${data.licensePlate} (${data.confidence}% confidence, ${data.processingTimeMs}ms)`,
@@ -249,17 +251,72 @@ const StaffPage = () => {
     }
 
     try {
-      await parkingSessionService.checkIn({
+      // If no LPR image was captured (manual plate entry), try to capture from camera now
+      let imageToUpload = capturedImageBase64;
+      if (!imageToUpload) {
+        const video = videoRefStandard.current;
+        const canvas = canvasRef.current;
+        if (video && canvas && isStandardCamActive && video.readyState >= 2 && video.videoWidth > 0) {
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            imageToUpload = canvas.toDataURL('image/jpeg', 0.85);
+            console.log('[DEBUG] Captured fallback image from camera at check-in time');
+          }
+        }
+      }
+
+      const res = await parkingSessionService.checkIn({
         licensePlate: plate,
         vehicleTypeId: selectedVehicle,
         parkingLotId: lotId
       });
+
+      console.log('[DEBUG] checkIn res:', JSON.stringify(res));
+      
+      // Upload evidence image
+      console.log('[DEBUG] imageToUpload exists?', !!imageToUpload);
+      if (imageToUpload) {
+        try {
+          // Convert base64 to Blob reliably
+          const base64Data = imageToUpload.split(',')[1];
+          const byteCharacters = atob(base64Data);
+          const byteNumbers = new Array(byteCharacters.length);
+          for (let i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i);
+          }
+          const byteArray = new Uint8Array(byteNumbers);
+          const blob = new Blob([byteArray], { type: 'image/jpeg' });
+
+          const formData = new FormData();
+          formData.append('images', blob, 'entry.jpg');
+          formData.append('type', 'entry');
+          const sessionId = res?.data?._id || res?._id;
+          console.log('[DEBUG] sessionId for evidence:', sessionId);
+          if (sessionId) {
+            const evidenceRes = await parkingSessionService.uploadEvidence(sessionId, formData);
+            console.log('[DEBUG] uploadEvidence res:', JSON.stringify(evidenceRes));
+          } else {
+            console.warn('[DEBUG] No sessionId found in checkIn response, skipping upload');
+          }
+        } catch (uploadErr: any) {
+          console.error('Failed to upload evidence:', uploadErr.response?.data || uploadErr);
+          const backendMsg = uploadErr.response?.data?.message || uploadErr.message;
+          showNotification(`Upload failed: ${backendMsg}`, 'error');
+        }
+      } else {
+        console.warn('[DEBUG] No image available - camera may be off or not ready');
+      }
+
       showNotification(`Session created for ${plate}. Opening gate...`, 'success');
       setGateStatus('Open');
 
       setTimeout(() => {
         setPlate('');
         setConfidence(null);
+        setCapturedImageBase64(null);
         setGateStatus('Closed');
         if (vehicleTypesList.length > 0) setSelectedVehicle(vehicleTypesList[0]._id);
         showNotification('Gate closed. Ready for next vehicle.', 'info');

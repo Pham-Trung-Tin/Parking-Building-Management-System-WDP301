@@ -37,6 +37,15 @@ const StaffExceptionsPage = () => {
   const { profile } = useProfile();
   const navigate = useNavigate();
 
+  const getImageUrl = (url?: string) => {
+    if (!url) return '';
+    if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) {
+      return url;
+    }
+    const base = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000').replace(/\/api\/v1\/?$/, '');
+    return `${base}${url.startsWith('/') ? '' : '/'}${url}`;
+  };
+
   const [incidents, setIncidents] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [filterStatus, setFilterStatus] = useState<string>('all');
@@ -334,10 +343,10 @@ const StaffExceptionsPage = () => {
                           <span className="text-gray-500 block mb-2">Entry Images:</span>
                           <div className="flex gap-2">
                             <div className="w-24 h-16 bg-gray-200 rounded flex items-center justify-center text-xs text-gray-400 overflow-hidden">
-                              {foundSession.evidenceImages?.[0] ? <img src={foundSession.evidenceImages[0].url} className="w-full h-full object-cover" alt="Overview" /> : 'Overview'}
+                              {foundSession.evidenceImages?.[0] ? <img src={getImageUrl(foundSession.evidenceImages[0].url)} className="w-full h-full object-cover" alt="Overview" /> : 'Overview'}
                             </div>
                             <div className="w-24 h-16 bg-gray-200 rounded flex items-center justify-center text-xs text-gray-400 overflow-hidden">
-                              {foundSession.evidenceImages?.[1] ? <img src={foundSession.evidenceImages[1].url} className="w-full h-full object-cover" alt="LPR" /> : 'LPR Close-up'}
+                              {foundSession.evidenceImages?.[1] ? <img src={getImageUrl(foundSession.evidenceImages[1].url)} className="w-full h-full object-cover" alt="LPR" /> : 'LPR Close-up'}
                             </div>
                           </div>
                         </div>
@@ -563,7 +572,7 @@ const StaffExceptionsPage = () => {
                     <div>
                       <p className="text-xs font-bold text-gray-500 mb-1">Entry Camera Image (Overview)</p>
                       <div className="w-full h-40 bg-gray-200 rounded border border-gray-300 flex items-center justify-center overflow-hidden">
-                        {foundSession?.evidenceImages?.[0] ? <img src={foundSession.evidenceImages[0].url} className="w-full h-full object-cover" alt="Entry Overview" /> : <span className="text-xs text-gray-400">No Image</span>}
+                        {foundSession?.evidenceImages?.[0] ? <img src={getImageUrl(foundSession.evidenceImages[0].url)} className="w-full h-full object-cover" alt="Entry Overview" /> : <span className="text-xs text-gray-400">No Image</span>}
                       </div>
                     </div>
                     <div>
@@ -713,7 +722,7 @@ const StaffExceptionsPage = () => {
                       <div className="pt-2 border-t border-green-200">
                         <p className="text-[10px] uppercase text-green-600 font-bold mb-2">Uploaded Document</p>
                         <div className="rounded overflow-hidden border border-green-200">
-                          <img src={inc.images[0].url} alt="Document" className="w-full h-auto" />
+                          <img src={getImageUrl(inc.images[0].url)} alt="Document" className="w-full h-auto" />
                         </div>
                       </div>
                     )}

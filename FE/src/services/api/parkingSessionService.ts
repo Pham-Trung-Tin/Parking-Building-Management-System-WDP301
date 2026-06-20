@@ -80,6 +80,11 @@ const parkingSessionService = {
     checkOut: (id: string): Promise<any> => {
         return axiosClient.patch(`/parking-sessions/${String(id).trim()}/check-out`);
     },
+
+    /** POST /parking-sessions/:id/evidence — Upload evidence images */
+    uploadEvidence: (id: string, formData: FormData): Promise<any> => {
+        return axiosClient.post(`/parking-sessions/${String(id).trim()}/evidence`, formData);
+    },
 };
 
 export default parkingSessionService;
