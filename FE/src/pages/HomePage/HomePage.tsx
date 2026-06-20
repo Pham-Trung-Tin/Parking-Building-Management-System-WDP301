@@ -130,11 +130,10 @@ const HomePage = () => {
                             <div className="relative" ref={dropdownRef}>
                                 <button
                                     onClick={() => setShowDropdown(!showDropdown)}
-                                    className={`flex items-center gap-3 border rounded-full py-1.5 pl-2 pr-4 transition-all duration-200 cursor-pointer ${
-                                        isScrolled 
-                                            ? 'bg-slate-50 hover:bg-slate-100 border-slate-100' 
+                                    className={`flex items-center gap-3 border rounded-full py-1.5 pl-2 pr-4 transition-all duration-200 cursor-pointer ${isScrolled
+                                            ? 'bg-slate-50 hover:bg-slate-100 border-slate-100'
                                             : 'bg-white/10 hover:bg-white/20 border-white/10'
-                                    }`}
+                                        }`}
                                 >
                                     {user.avatar ? (
                                         <img
@@ -157,11 +156,11 @@ const HomePage = () => {
 
                                 {showDropdown && (
                                     <div className="absolute right-0 mt-2.5 w-52 bg-white border border-slate-100 rounded-xl shadow-lg py-2 z-50 text-slate-800 text-left font-medium">
-                                        <div className="px-4 py-2 border-b border-slate-50">
+                                        {/* <div className="px-4 py-2 border-b border-slate-50">
                                             <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Signed in as</p>
                                             <p className="text-sm font-bold text-slate-800 truncate">{user.fullName}</p>
-                                        </div>
-                                        
+                                        </div> */}
+
                                         <Link
                                             to="/profile"
                                             onClick={() => setShowDropdown(false)}
@@ -193,8 +192,8 @@ const HomePage = () => {
                                             className="flex items-center gap-2 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors no-underline font-semibold"
                                         >
                                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-400">
-                                                <path d="M2 9a3 3 0 0 0 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 0 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/>
-                                                <path d="M13 5v14"/>
+                                                <path d="M2 9a3 3 0 0 0 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 0 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z" />
+                                                <path d="M13 5v14" />
                                             </svg>
                                             QR Ticket
                                         </Link>

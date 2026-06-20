@@ -2369,7 +2369,7 @@ const BookingPage = () => {
                         {currentStep === 5 && (
                             <div className="bk-card">
                                 <div className="bk-step-header">
-                                    <div className="bk-step-icon">📍</div>
+                                    {/* <div className="bk-step-icon">📍</div> */}
                                     <div>
                                         <div className="bk-step-title">Select Parking Zone</div>
                                         <div className="bk-step-sub">Step 5 of 6 — Choose your preferred area</div>
@@ -2552,23 +2552,23 @@ const BookingPage = () => {
                         <div className="modal-box">
                             {checkoutPhase === 'review' && (
                                 <>
-                                    <div className="modal-title">🎉 Confirm Your Booking</div>
+                                    <div className="modal-title"> Confirm Your Booking</div>
                                     <div className="modal-sub">Please review all details before confirming.</div>
 
                                     <div className="modal-section">
-                                        <div className="modal-section-title">🚘 Vehicle Information</div>
+                                        <div className="modal-section-title"> Vehicle Information</div>
                                         <div className="modal-row">
                                             <span className="modal-row-label">License Plate</span>
                                             <span className="modal-plate-badge">{licensePlate}</span>
                                         </div>
                                         <div className="modal-row">
                                             <span className="modal-row-label">Vehicle Type</span>
-                                            <span className="modal-row-value">{vehicleIcon(vehicleType?.code ?? '')} {vehicleType?.name}</span>
+                                            <span className="modal-row-value"> {vehicleType?.name}</span>
                                         </div>
                                     </div>
 
                                     <div className="modal-section">
-                                        <div className="modal-section-title">📍 Parking Location</div>
+                                        <div className="modal-section-title"> Parking Location</div>
                                         <div className="modal-row">
                                             <span className="modal-row-label">Facility</span>
                                             <span className="modal-row-value">{parkingSpot.title}</span>
@@ -2588,7 +2588,7 @@ const BookingPage = () => {
                                     </div>
 
                                     <div className="modal-section">
-                                        <div className="modal-section-title">⏰ Time Details</div>
+                                        <div className="modal-section-title"> Time Details</div>
                                         <div className="modal-row">
                                             <span className="modal-row-label">Entry</span>
                                             <span className="modal-row-value">{fmtDateTime(entryDate)}</span>
