@@ -19,6 +19,18 @@ const ChevronRight = () => (
         <path d="m9 18 6-6-6-6" />
     </svg>
 );
+const CarIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="1" y="10" width="22" height="8" rx="2" /><path d="M4 10l3-5h10l3 5" />
+        <circle cx="7" cy="18" r="2" /><circle cx="17" cy="18" r="2" />
+    </svg>
+);
+const MotoIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="5" cy="17" r="3" /><circle cx="19" cy="17" r="3" />
+        <path d="M8 17h8M12 8l2 5H8l1.5-3H14" /><path d="M14 8h3l2 4" /><circle cx="18" cy="7" r="1.5" />
+    </svg>
+);
 const CheckCircle = () => (
     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
         <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" />
@@ -81,18 +93,22 @@ const CheckoutPage = () => {
     // Session data passed from SessionPage
     const spot = data.spot || { title: 'Bitexco Financial Tower Parking', price: 20000 };
     const vehicleType = data.vehicleType || 'car';
-    const floor = data.floor || 3;
-    const slot = data.slot || 5;
+    const floorObj = data.floor;
+    const slotObj = data.slot;
+
+    const isMoto = typeof vehicleType === 'object' ? vehicleType.code === 'motorcycle' : vehicleType === 'motorcycle';
+    const vehicleTypeName = typeof vehicleType === 'object' ? vehicleType.name : (isMoto ? 'Motorcycle' : 'Car');
+    
+    const floorName = typeof floorObj === 'object' && floorObj !== null ? (floorObj.name || `Floor ${floorObj.floorNumber}`) : `Floor ${floorObj || 3}`;
+    const slotCode = typeof slotObj === 'object' && slotObj !== null ? slotObj.slotCode : `${String.fromCharCode(64 + Number(floorObj || 3))}-${floorObj || 3}0${String(slotObj || 5).padStart(1, '0')}`;
+    
     const entryDate = data.entryDate ? new Date(data.entryDate) : new Date(Date.now() - 7200000);
     const elapsed = data.elapsed || 7200; // seconds
-    const totalAmount = data.totalAmount !== undefined 
-        ? data.totalAmount 
-        : (vehicleType === 'motorcycle'
-            ? ((elapsed / 3600) < 4 ? 2000 : 4000)
-            : ((elapsed / 3600) < 4 ? 8000 : 16000));
+    const amountDue = data.totalAmount !== undefined ? data.totalAmount : 0;
+    const currentFee = data.currentFee ?? amountDue;
+    const advancePayment = data.advancePayment ?? 0;
 
-    const slotCode = `${String.fromCharCode(64 + floor)}-${floor}0${String(slot).padStart(1, '0')}`;
-    const licensePlate = vehicleType === 'motorcycle' ? '59T1-23456' : '51A-12345';
+    const licensePlate = data.licensePlate || (isMoto ? '59T1-23456' : '51A-12345');
     const exitTime = new Date();
 
     // Payment state
@@ -123,11 +139,11 @@ const CheckoutPage = () => {
                         clearInterval(interval);
                         navigate('/checkoutsuccess', {
                             state: {
-                                spot, vehicleType, floor, slot, slotCode,
+                                spot, vehicleType, floor: data.floor, zone: data.zone, slot: data.slot, slotCode, sessionId,
                                 licensePlate, entryDate: entryDate.toISOString(),
                                 exitTime: exitTime.toISOString(),
-                                elapsed, totalAmount,
-                                payMethod,
+                                elapsed, totalAmount: amountDue,
+                                hourlyRate: data.hourlyRate, payMethod,
                                 transactionId: status.invoiceCode
                             }
                         });
@@ -183,10 +199,10 @@ const CheckoutPage = () => {
             setProcessing(false);
             navigate('/checkoutsuccess', {
                 state: {
-                    spot, vehicleType, floor, slot, slotCode,
+                    spot, vehicleType, floor: floorObj, slot: slotObj, slotCode,
                     licensePlate, entryDate: entryDate.toISOString(),
                     exitTime: exitTime.toISOString(),
-                    elapsed, totalAmount,
+                    elapsed, totalAmount: amountDue,
                     payMethod,
                     cardLast4: payMethod === 'card' ? cardNumber.replace(/\s/g, '').slice(-4) : null,
                 }
@@ -200,8 +216,8 @@ const CheckoutPage = () => {
         return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
     };
 
-    const serviceFee = Math.round(totalAmount * 0.05);
-    const grandTotal = Math.round(totalAmount) + serviceFee;
+    const serviceFee = Math.round(amountDue * 0.05);
+    const grandTotal = Math.round(amountDue) + serviceFee;
 
     const payMethods = [
         { id: 'bank_transfer', label: 'Bank Transfer (QR)', icon: <BankIcon size={22} />, color: '#0ea5e9' },
@@ -810,7 +826,14 @@ const CheckoutPage = () => {
                             </div>
                             <div className="co-row">
                                 <span className="co-row-label">Floor / Slot</span>
-                                <span className="co-row-value">Floor {floor} — {slotCode}</span>
+                                <span className="co-row-value">{floorName} - {slotCode}</span>
+                            </div>
+                            <div className="co-row">
+                                <span className="co-row-label">Vehicle Type</span>
+                                <span className="co-row-value" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    {isMoto ? <MotoIcon /> : <CarIcon />}
+                                    {vehicleTypeName}
+                                </span>
                             </div>
                             <div className="co-row">
                                 <span className="co-row-label">Entry</span>
@@ -825,8 +848,18 @@ const CheckoutPage = () => {
                                 <span className="co-row-value">{Math.floor(elapsed / 3600)}h {Math.floor((elapsed % 3600) / 60)}m</span>
                             </div>
                             <div className="co-row">
-                                <span className="co-row-label">Parking Fee</span>
-                                <span className="co-row-value">{Math.round(totalAmount).toLocaleString('vi-VN')} ₫</span>
+                                <span className="co-row-label">Total Parking Fee</span>
+                                <span className="co-row-value">{Math.round(currentFee).toLocaleString('vi-VN')} ₫</span>
+                            </div>
+                            {advancePayment > 0 && (
+                                <div className="co-row" style={{ color: '#10b981' }}>
+                                    <span className="co-row-label">Prepaid (Booking)</span>
+                                    <span className="co-row-value">- {Math.round(advancePayment).toLocaleString('vi-VN')} ₫</span>
+                                </div>
+                            )}
+                            <div className="co-row">
+                                <span className="co-row-label">Amount Due</span>
+                                <span className="co-row-value">{Math.round(amountDue).toLocaleString('vi-VN')} ₫</span>
                             </div>
                             <div className="co-row">
                                 <span className="co-row-label">Service Fee (5%)</span>

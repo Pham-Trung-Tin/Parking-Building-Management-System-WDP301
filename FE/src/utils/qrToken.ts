@@ -45,14 +45,18 @@ async function importKey(secret: string): Promise<CryptoKey> {
 // ─── Payload type ──────────────────────────────────────────────────────────────
 
 export interface QRPayload {
-    /** MongoDB _id của Booking */
-    bookingId: string;
-    /** Receipt ID (dùng để hiện UI) */
-    receiptId: string;
+    /** Phân biệt giữa check-in (từ booking) và check-out (từ session) */
+    type?: 'checkin' | 'checkout';
+    /** MongoDB _id của Booking (dùng cho checkin) */
+    bookingId?: string;
+    /** MongoDB _id của ParkingSession (dùng cho checkout) */
+    sessionId?: string;
+    /** Receipt ID hoặc Session Code (dùng để hiện UI) */
+    receiptId?: string;
     /** Biển số xe */
-    licensePlate: string;
+    licensePlate?: string;
     /** Slot code — staff dẫn xe vào đúng chỗ */
-    slotCode: string;
+    slotCode?: string;
     /** Unix timestamp (ms) — token hết hạn */
     exp: number;
 }

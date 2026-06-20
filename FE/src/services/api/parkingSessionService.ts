@@ -32,6 +32,7 @@ export interface ParkingSession {
     overtimeFee?: number;
     discount?: number;
     totalFee?: number;
+    advancePayment?: number;
     isOvertime?: boolean;
     overtimeHours?: number;
     paymentStatus: 'unpaid' | 'paid' | 'waived' | 'refunded';
