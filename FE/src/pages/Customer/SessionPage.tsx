@@ -6,39 +6,8 @@ import { VehicleType } from '../../services/api/vehicleTypeService';
 import { Floor } from '../../services/api/floorService';
 import { Zone } from '../../services/api/zoneService';
 import { ParkingSlot } from '../../services/api/parkingSlotService';
-
-// ── QR Code SVG (deterministic, illustrative) ─────────────────────────────────
-const QRCodeSVG = ({ value }: { value: string }) => {
-    const seed = [...(value || 'PB001')].reduce((a, c) => a + c.charCodeAt(0), 0);
-    const size = 9, cell = 24, pad = 16;
-    const total = size * cell + pad * 2;
-    const pseudo = (i: number) => ((seed * 7 + i * 13 + i * i * 3) % 97) / 97 > 0.42;
-    const isFinderCell = (r: number, c: number) =>
-        (r < 3 && c < 3) || (r < 3 && c >= size - 3) || (r >= size - 3 && c < 3);
-    const isFinderCenter = (r: number, c: number) =>
-        (r === 1 && c === 1) || (r === 1 && c === size - 2) || (r === size - 2 && c === 1);
-    const isFinderBorder = (r: number, c: number) => {
-        const bTL = ((r === 0 || r === 2) && c <= 2) || (c === 0 && r <= 2) || (c === 2 && r <= 2);
-        const bTR = ((r === 0 || r === 2) && c >= size - 3) || (c === size - 1 && r <= 2) || (c === size - 3 && r <= 2);
-        const bBL = ((r === size - 3 || r === size - 1) && c <= 2) || (c === 0 && r >= size - 3) || (c === 2 && r >= size - 3);
-        return bTL || bTR || bBL;
-    };
-    return (
-        <svg width={total} height={total} viewBox={`0 0 ${total} ${total}`} xmlns="http://www.w3.org/2000/svg">
-            <rect width={total} height={total} rx="18" fill="#f0f4f8" />
-            {Array.from({ length: size }).map((_, r) =>
-                Array.from({ length: size }).map((_, c) => {
-                    let dark = pseudo(r * size + c);
-                    if (isFinderCell(r, c)) dark = isFinderCenter(r, c) ? true : isFinderBorder(r, c);
-                    return dark ? (
-                        <rect key={`${r}-${c}`} x={pad + c * cell + 2} y={pad + r * cell + 2}
-                            width={cell - 4} height={cell - 4} rx="5" fill="#1e293b" />
-                    ) : null;
-                })
-            )}
-        </svg>
-    );
-};
+import { createQRToken } from '../../utils/qrToken';
+import { QRCodeSVG } from 'qrcode.react';
 
 // ── Icons ─────────────────────────────────────────────────────────────────────
 const CarIcon = () => (
@@ -201,7 +170,21 @@ const SessionPage = () => {
     const entryTime: Date = session?.entryTime
         ? new Date(session.entryTime)
         : new Date(sessionStart.current);
-    const qrValue = sessionCode || `${spot.title}-${slotCode}-${sessionStart.current}`;
+
+    const [qrValue, setQrValue] = useState<string>('');
+    useEffect(() => {
+        if (session?._id) {
+            createQRToken({
+                type: 'checkout',
+                sessionId: session._id,
+                licensePlate,
+                slotCode,
+                receiptId: sessionCode
+            }).then(setQrValue).catch(err => console.error("Failed to generate QR token", err));
+        } else {
+            setQrValue(sessionCode || `${spot.title}-${slotCode}-${sessionStart.current}`);
+        }
+    }, [session?._id, sessionCode, licensePlate, slotCode, spot.title]);
 
     const handlePayCheckout = () => {
         navigate('/checkout', {
@@ -424,7 +407,21 @@ const SessionPage = () => {
                     {/* QR Code */}
                     <div className="s-card qr-section s-in">
                         <div className="qr-wrapper">
-                            <QRCodeSVG value={qrValue} />
+                            {qrValue ? (
+                                <QRCodeSVG 
+                                    value={qrValue} 
+                                    size={180} 
+                                    bgColor="#ffffff" 
+                                    fgColor="#0f172a" 
+                                    level="H"
+                                    includeMargin={true}
+                                    style={{ borderRadius: '12px' }}
+                                />
+                            ) : (
+                                <div style={{ width: 180, height: 180, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    Loading QR...
+                                </div>
+                            )}
                         </div>
                         <p className="qr-caption">Quét mã tại cổng ra để thanh toán</p>
                         {sessionCode && (

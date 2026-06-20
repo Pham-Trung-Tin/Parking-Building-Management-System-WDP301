@@ -199,10 +199,10 @@ const CheckoutPage = () => {
             setProcessing(false);
             navigate('/checkoutsuccess', {
                 state: {
-                    spot, vehicleType, floor, slot, slotCode,
+                    spot, vehicleType, floor: floorObj, slot: slotObj, slotCode,
                     licensePlate, entryDate: entryDate.toISOString(),
                     exitTime: exitTime.toISOString(),
-                    elapsed, totalAmount,
+                    elapsed, totalAmount: amountDue,
                     payMethod,
                     cardLast4: payMethod === 'card' ? cardNumber.replace(/\s/g, '').slice(-4) : null,
                 }
