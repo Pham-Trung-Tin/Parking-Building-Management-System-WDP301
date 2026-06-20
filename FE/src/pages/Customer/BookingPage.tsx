@@ -304,13 +304,24 @@ const SlotMapGrid = ({ slots, selectedSlot, onSelect, vehicleType, currentUserId
         if (rowCmp !== 0) return rowCmp;
         return (a.position?.column ?? 0) - (b.position?.column ?? 0);
     });
-    const byRow = sorted.reduce((acc: Record<number, ParkingSlot[]>, s) => {
-        const r = s.position?.row ?? 0;
+    const byRow = sorted.reduce((acc: Record<string, ParkingSlot[]>, s) => {
+        const r = String(s.position?.row ?? '0');
         if (!acc[r]) acc[r] = [];
         acc[r].push(s);
         return acc;
     }, {});
-    const rows = Object.entries(byRow).sort(([a], [b]) => Number(a) - Number(b));
+
+    const rows: [string, ParkingSlot[]][] = [];
+    const MAX_SLOTS_PER_LANE = 20;
+
+    Object.entries(byRow)
+        .sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true }))
+        .forEach(([r, rSlots]) => {
+            for (let i = 0; i < rSlots.length; i += MAX_SLOTS_PER_LANE) {
+                const chunk = rSlots.slice(i, i + MAX_SLOTS_PER_LANE);
+                rows.push([`${r}-${i}`, chunk]);
+            }
+        });
 
     const now = Date.now();
 
@@ -405,8 +416,6 @@ const SlotMapGrid = ({ slots, selectedSlot, onSelect, vehicleType, currentUserId
                     {slot.slotCode}
                 </span>
                 {slot.features?.hasEVCharger && <span style={{ fontSize: 10 }}>⚡</span>}
-                {isLockedByOther && slot.lockedUntil && <LockCountdown lockedUntil={slot.lockedUntil} />}
-                {isLockedByOther && <span style={{ fontSize: 11 }}>🔒</span>}
                 {isSelected && <span style={{ fontSize: 13 }}>✓</span>}
             </button>
         );
@@ -1286,6 +1295,7 @@ const BookingPage = () => {
                     padding: 32px;
                     box-shadow: 0 4px 24px rgba(0,0,0,0.06);
                     animation: stepIn 0.35s cubic-bezier(0.22,1,0.36,1) both;
+                    overflow: hidden;
                 }
                 @keyframes stepIn {
                     from { opacity: 0; transform: translateY(20px) scale(0.98); }
