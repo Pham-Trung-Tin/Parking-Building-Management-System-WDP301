@@ -22,14 +22,36 @@ export interface VehicleType {
 }
 
 const vehicleTypeService = {
-    /** GET /vehicle-types — Lấy danh sách tất cả loại phương tiện đang hoạt động */
+    /** GET /vehicle-types — List all active vehicle types */
     getAll: (): Promise<VehicleType[]> => {
         return axiosClient.get('/vehicle-types');
     },
 
-    /** GET /vehicle-types/:id — Chi tiết một loại phương tiện */
+    /** GET /vehicle-types/:id */
     getById: (id: string): Promise<VehicleType> => {
         return axiosClient.get(`/vehicle-types/${id}`);
+    },
+
+    /** POST /vehicle-types — system_admin only */
+    create: (data: {
+        name: string;
+        code: string;
+        size: string;
+        pricing: VehicleTypePricing;
+        description?: string;
+        icon?: string;
+    }): Promise<any> => {
+        return axiosClient.post('/vehicle-types', data);
+    },
+
+    /** PUT /vehicle-types/:id — system_admin only */
+    update: (id: string, data: Partial<VehicleType>): Promise<any> => {
+        return axiosClient.put(`/vehicle-types/${id}`, data);
+    },
+
+    /** DELETE /vehicle-types/:id — system_admin only */
+    delete: (id: string): Promise<any> => {
+        return axiosClient.delete(`/vehicle-types/${id}`);
     },
 };
 

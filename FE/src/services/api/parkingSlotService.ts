@@ -52,17 +52,17 @@ export interface GetSlotsParams {
 }
 
 const parkingSlotService = {
-    /** GET /parking-slots — danh sách slot có filter */
+    /** GET /parking-slots */
     getSlots: (params?: GetSlotsParams): Promise<any> => {
         return axiosClient.get('/parking-slots', { params });
     },
 
-    /** GET /parking-slots/floor-map/:floorId — bản đồ slot realtime theo tầng */
+    /** GET /parking-slots/floor-map/:floorId */
     getFloorMap: (floorId: string): Promise<ParkingSlot[]> => {
         return axiosClient.get(`/parking-slots/floor-map/${floorId}`);
     },
 
-    /** GET /parking-slots/available — tìm slot tối ưu (AI) */
+    /** GET /parking-slots/available */
     getAvailable: (params: { parkingLotId: string; vehicleTypeId: string; floorId?: string; zoneId?: string }): Promise<any> => {
         return axiosClient.get('/parking-slots/available', { params });
     },
@@ -71,6 +71,41 @@ const parkingSlotService = {
     getById: (id: string): Promise<ParkingSlot> => {
         return axiosClient.get(`/parking-slots/${id}`);
     },
+
+    /** POST /parking-slots */
+    createSlot: (data: {
+        slotCode: string;
+        parkingLot: string;
+        floor: string;
+        zone?: string;
+        vehicleType: string;
+        position?: ParkingSlotPosition;
+        features?: ParkingSlotFeatures;
+        notes?: string;
+    }): Promise<any> => {
+        return axiosClient.post('/parking-slots', data);
+    },
+
+    /** POST /parking-slots/bulk */
+    bulkCreate: (slots: any[], parkingLotId: string): Promise<any> => {
+        return axiosClient.post('/parking-slots/bulk', { slots, parkingLotId });
+    },
+
+    /** PUT /parking-slots/:id */
+    updateSlot: (id: string, data: Partial<ParkingSlot>): Promise<any> => {
+        return axiosClient.put(`/parking-slots/${id}`, data);
+    },
+
+    /** PUT /parking-slots/:id/status */
+    updateStatus: (id: string, status: string, notes?: string): Promise<any> => {
+        return axiosClient.put(`/parking-slots/${id}/status`, { status, notes });
+    },
+
+    /** DELETE /parking-slots/:id */
+    deleteSlot: (id: string): Promise<any> => {
+        return axiosClient.delete(`/parking-slots/${id}`);
+    },
+
     /** POST /parking-slots/:id/lock */
     lockSlot: (slotId: string): Promise<any> => {
         return axiosClient.post(`/parking-slots/${slotId}/lock`);
@@ -79,6 +114,11 @@ const parkingSlotService = {
     /** DELETE /parking-slots/:id/lock */
     unlockSlot: (slotId: string): Promise<any> => {
         return axiosClient.delete(`/parking-slots/${slotId}/lock`);
+    },
+
+    /** GET /parking-slots/occupancy/:parkingLotId */
+    getOccupancyByVehicleType: (parkingLotId: string): Promise<any> => {
+        return axiosClient.get(`/parking-slots/occupancy/${parkingLotId}`);
     },
 };
 

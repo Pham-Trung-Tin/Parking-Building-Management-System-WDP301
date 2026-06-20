@@ -66,6 +66,17 @@ const parkingLotService = {
         return axiosClient.get(`/parking-lots/${id}`);
     },
 
+    // ─── CRUD ───
+    createParkingLot: (data: Partial<ParkingLot> & { address?: ParkingLotAddress }): Promise<any> => {
+        return axiosClient.post('/parking-lots', data);
+    },
+    updateParkingLot: (id: string, data: Partial<ParkingLot>): Promise<any> => {
+        return axiosClient.put(`/parking-lots/${id}`, data);
+    },
+    deleteParkingLot: (id: string): Promise<any> => {
+        return axiosClient.delete(`/parking-lots/${id}`);
+    },
+
     // ─── Staff Assignment APIs ───
     getStaff: (parkingLotId: string): Promise<any> => {
         return axiosClient.get(`/parking-lots/${parkingLotId}/staff`);
