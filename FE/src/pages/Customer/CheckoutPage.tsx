@@ -104,11 +104,9 @@ const CheckoutPage = () => {
     
     const entryDate = data.entryDate ? new Date(data.entryDate) : new Date(Date.now() - 7200000);
     const elapsed = data.elapsed || 7200; // seconds
-    const totalAmount = data.totalAmount !== undefined 
-        ? data.totalAmount 
-        : (isMoto
-            ? ((elapsed / 3600) < 4 ? 2000 : 4000)
-            : ((elapsed / 3600) < 4 ? 8000 : 16000));
+    const amountDue = data.totalAmount !== undefined ? data.totalAmount : 0;
+    const currentFee = data.currentFee ?? amountDue;
+    const advancePayment = data.advancePayment ?? 0;
 
     const licensePlate = data.licensePlate || (isMoto ? '59T1-23456' : '51A-12345');
     const exitTime = new Date();
@@ -141,11 +139,11 @@ const CheckoutPage = () => {
                         clearInterval(interval);
                         navigate('/checkoutsuccess', {
                             state: {
-                                spot, vehicleType, floor, slot, slotCode,
+                                spot, vehicleType, floor: data.floor, zone: data.zone, slot: data.slot, slotCode, sessionId,
                                 licensePlate, entryDate: entryDate.toISOString(),
                                 exitTime: exitTime.toISOString(),
-                                elapsed, totalAmount,
-                                payMethod,
+                                elapsed, totalAmount: amountDue,
+                                hourlyRate: data.hourlyRate, payMethod,
                                 transactionId: status.invoiceCode
                             }
                         });
@@ -218,8 +216,8 @@ const CheckoutPage = () => {
         return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
     };
 
-    const serviceFee = Math.round(totalAmount * 0.05);
-    const grandTotal = Math.round(totalAmount) + serviceFee;
+    const serviceFee = Math.round(amountDue * 0.05);
+    const grandTotal = Math.round(amountDue) + serviceFee;
 
     const payMethods = [
         { id: 'bank_transfer', label: 'Bank Transfer (QR)', icon: <BankIcon size={22} />, color: '#0ea5e9' },
@@ -850,8 +848,18 @@ const CheckoutPage = () => {
                                 <span className="co-row-value">{Math.floor(elapsed / 3600)}h {Math.floor((elapsed % 3600) / 60)}m</span>
                             </div>
                             <div className="co-row">
-                                <span className="co-row-label">Parking Fee</span>
-                                <span className="co-row-value">{Math.round(totalAmount).toLocaleString('vi-VN')} ₫</span>
+                                <span className="co-row-label">Total Parking Fee</span>
+                                <span className="co-row-value">{Math.round(currentFee).toLocaleString('vi-VN')} ₫</span>
+                            </div>
+                            {advancePayment > 0 && (
+                                <div className="co-row" style={{ color: '#10b981' }}>
+                                    <span className="co-row-label">Prepaid (Booking)</span>
+                                    <span className="co-row-value">- {Math.round(advancePayment).toLocaleString('vi-VN')} ₫</span>
+                                </div>
+                            )}
+                            <div className="co-row">
+                                <span className="co-row-label">Amount Due</span>
+                                <span className="co-row-value">{Math.round(amountDue).toLocaleString('vi-VN')} ₫</span>
                             </div>
                             <div className="co-row">
                                 <span className="co-row-label">Service Fee (5%)</span>

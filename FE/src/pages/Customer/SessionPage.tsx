@@ -134,7 +134,8 @@ const SessionPage = () => {
     const hourlyRate = vehicleTypeData?.pricing?.hourlyRate ?? spot.price ?? 20000;
 
     // ── Session data từ API (nếu có sessionId) ────────────────────────────────
-    const [session, setSession] = useState<ParkingSession | null>(null);
+    const initialSession = state.session || null;
+    const [session, setSession] = useState<ParkingSession | null>(initialSession);
     const [sessionLoading, setSessionLoading] = useState(false);
 
     useEffect(() => {
@@ -167,7 +168,9 @@ const SessionPage = () => {
         }
     }, [session]);
 
-    const [elapsed, setElapsed] = useState(0);
+    const initialElapsed = Math.floor((Date.now() - sessionStart.current) / 1000);
+    const [elapsed, setElapsed] = useState(Math.max(0, initialElapsed));
+    
     useEffect(() => {
         const id = setInterval(() => {
             setElapsed(Math.floor((Date.now() - sessionStart.current) / 1000));
@@ -178,6 +181,8 @@ const SessionPage = () => {
     // ── Phí ước tính thực tế: (elapsed giờ) × hourlyRate ──────────────────────
     const elapsedHours = elapsed / 3600;
     const currentFee = elapsedHours * hourlyRate;
+    const advancePayment = session?.advancePayment ?? 0;
+    const amountDue = Math.max(0, currentFee - advancePayment);
 
     // ── Thông tin hiển thị ────────────────────────────────────────────────────
     // Ưu tiên data từ API session, fallback về state từ BookingPage
@@ -227,7 +232,9 @@ const SessionPage = () => {
                 sessionId,
                 entryDate: entryTime.toISOString(),
                 elapsed,
-                totalAmount: currentFee,
+                totalAmount: amountDue, // The remaining due amount to pay
+                currentFee,
+                advancePayment,
                 hourlyRate,
                 licensePlate,
             }
@@ -598,6 +605,14 @@ const SessionPage = () => {
                                 </span>
                             </div>
                         )}
+                        {advancePayment > 0 && (
+                            <div className="pricing-row" style={{ paddingTop: 8, marginTop: 0, borderTop: 'none' }}>
+                                <span className="pricing-label" style={{ color: '#10b981' }}>Đã thanh toán trước (Booking)</span>
+                                <span style={{ fontSize: 13, fontWeight: 700, color: '#10b981' }}>
+                                    - {fmtVND(advancePayment)}
+                                </span>
+                            </div>
+                        )}
                     </div>
 
                     {/* Important Notice */}
@@ -614,13 +629,22 @@ const SessionPage = () => {
 
                     {/* Actions */}
                     <div className="s-in-6">
-                        <button
-                            className="pay-btn"
-                            onClick={handlePayCheckout}
-                        >
-                            <PayIcon />
-                            Thanh Toán &amp; Ra Xe
-                        </button>
+                        {amountDue > 0 ? (
+                            <button
+                                className="pay-btn"
+                                onClick={handlePayCheckout}
+                            >
+                                <PayIcon />
+                                Thanh Toán Phụ Trội ({fmtVND(amountDue)})
+                            </button>
+                        ) : (
+                            <div className="pay-btn" style={{ background: '#10b981', cursor: 'default' }}>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 8 }}>
+                                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline>
+                                </svg>
+                                Đã thanh toán đủ. Vui lòng quẹt QR tại cổng ra.
+                            </div>
+                        )}
                         <button className="report-btn" onClick={() => alert('🚩 Báo cáo đã được gửi. Nhân viên sẽ hỗ trợ bạn sớm nhất!')}>
                             <FlagIcon />
                             Báo Cáo Sự Cố

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import Header from '../../components/Header/Header';
+import { useSocket } from '../../contexts/SocketContext';
 
 // ── Confetti particle system ───────────────────────────────────────────────────
 const Confetti = () => {
@@ -127,10 +128,26 @@ const CheckoutSuccessPage = () => {
     const receiptId = data.transactionId || `PB-${Date.now().toString(36).toUpperCase().slice(-8)}`;
 
     const [showConfetti, setShowConfetti] = useState(true);
+    const { socket } = useSocket();
+
     useEffect(() => {
         const t = setTimeout(() => setShowConfetti(false), 3500);
         return () => clearTimeout(t);
-    }, []);
+    }, [data, navigate]);
+
+    useEffect(() => {
+        if (!socket) return;
+        const handleNotification = (notif: any) => {
+            if (notif.type === 'checkin_success' && notif.data?.sessionId) {
+                console.log('[Live Tracker] Check-in confirmed! Navigating to SessionPage:', notif.data.sessionId);
+                navigate(`/session/${notif.data.sessionId}`);
+            }
+        };
+        socket.on('newNotification', handleNotification);
+        return () => {
+            socket.off('newNotification', handleNotification);
+        };
+    }, [socket, navigate]);
 
     const payMethodLabel = {
         bank_transfer: 'Bank Transfer (VietQR)',

@@ -5,6 +5,7 @@ import Header from '../../components/Header/Header';
 import { createQRToken } from '../../utils/qrToken';
 import parkingSessionService, { ParkingSession } from '../../services/api/parkingSessionService';
 import bookingService from '../../services/api/bookingService';
+import { useSocket } from '../../contexts/SocketContext';
 
 interface Ticket {
     receiptId: string;
@@ -114,7 +115,8 @@ const MyTicketsPage = () => {
     const [qrTokens, setQrTokens] = useState<Record<string, string>>({});
     const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
 
-    // ── Active sessions from backend ────────────────────────────────────────
+    // ── DATA FETCHING ─────────────────────────────────────────────────────────
+    const { socket } = useSocket();
     const [activeSessions, setActiveSessions] = useState<ParkingSession[]>([]);
     const [sessionsLoading, setSessionsLoading] = useState(true);
     const [sessionsError, setSessionsError] = useState<string | null>(null);
@@ -136,12 +138,82 @@ const MyTicketsPage = () => {
         }
     }, []);
 
+    const fetchUpcomingBookings = useCallback(async () => {
+        setBookingsLoading(true);
+        try {
+            // Fetch all recent bookings and filter valid ones manually to support multiple statuses
+            const res = await bookingService.getMyBookings({ limit: 50 });
+            let list = Array.isArray(res) ? res : (res?.data ?? res?.docs ?? []);
+
+            // Only show bookings that are pending (e.g. newly created) or approved
+            list = list.filter((b: any) => b.status === 'pending' || b.status === 'approved');
+
+            // Map backend booking objects to our local Ticket interface for rendering
+            const mappedTickets: Ticket[] = list.map((b: any) => {
+                const lotName = typeof b.parkingLot === 'object' ? b.parkingLot?.name : 'Parking Lot';
+                const floorName = typeof b.floor === 'object' ? (b.floor?.name ?? `Floor ${b.floor?.floorNumber}`) : '—';
+                const slotCode = typeof b.assignedSlot === 'object' ? b.assignedSlot?.slotCode : '—';
+                const vTypeName = typeof b.vehicleType === 'object' ? b.vehicleType?.name : 'Vehicle';
+
+                // Combine date and time strings into valid ISO strings
+                const parseDateTime = (dStr: string, tStr: string) => {
+                    if (!dStr || !tStr) return new Date().toISOString();
+                    const d = new Date(dStr);
+                    const [hh, mm] = tStr.split(':').map(Number);
+                    if (!isNaN(hh)) d.setHours(hh);
+                    if (!isNaN(mm)) d.setMinutes(mm);
+                    return d.toISOString();
+                };
+
+                return {
+                    receiptId: b.bookingCode || b._id,
+                    bookingId: b._id,
+                    spot: { title: lotName },
+                    vehicleType: vTypeName,
+                    floorName: floorName,
+                    slotCode: slotCode,
+                    licensePlate: b.vehicleInfo?.licensePlate || '—',
+                    entryDate: parseDateTime(b.scheduledDate, b.startTime),
+                    exitTime: parseDateTime(b.scheduledDate, b.endTime || b.startTime),
+                    elapsed: 0,
+                    totalAmount: b.estimatedFee || 0,
+                    payMethod: b.paymentMethod || 'card',
+                };
+            });
+
+            setTickets(mappedTickets);
+        } catch (err) {
+            console.error("Failed to load upcoming bookings:", err);
+        } finally {
+            setBookingsLoading(false);
+        }
+    }, []);
+
     useEffect(() => {
         fetchActiveSessions();
+        fetchUpcomingBookings();
         // Poll every 15 s so the list stays fresh
         pollRef.current = setInterval(fetchActiveSessions, 15000);
         return () => { if (pollRef.current) clearInterval(pollRef.current); };
-    }, [fetchActiveSessions]);
+    }, [fetchActiveSessions, fetchUpcomingBookings]);
+
+    // ── REALTIME INTEGRATION (LIVE SESSION TRACKER) ───────────────────────────
+    useEffect(() => {
+        if (!socket) return;
+
+        const handleNotification = (notif: any) => {
+            if (notif.type === 'checkin_success' || notif.type === 'checkout_success' || notif.type === 'payment_success') {
+                console.log('[Live Tracker] Received realtime update:', notif.type);
+                fetchActiveSessions();
+                fetchUpcomingBookings();
+            }
+        };
+
+        socket.on('newNotification', handleNotification);
+        return () => {
+            socket.off('newNotification', handleNotification);
+        };
+    }, [socket, fetchActiveSessions, fetchUpcomingBookings]);
 
     // ── Upcoming bookings from Backend ──────────────────────────────────────
     const [bookingsLoading, setBookingsLoading] = useState(true);
@@ -153,7 +225,7 @@ const MyTicketsPage = () => {
                 // Fetch all recent bookings and filter valid ones manually to support multiple statuses
                 const res = await bookingService.getMyBookings({ limit: 50 });
                 let list = Array.isArray(res) ? res : (res?.data ?? res?.docs ?? []);
-                
+
                 // Only show bookings that are pending (e.g. newly created) or approved
                 list = list.filter((b: any) => b.status === 'pending' || b.status === 'approved');
 
@@ -163,7 +235,7 @@ const MyTicketsPage = () => {
                     const floorName = typeof b.floor === 'object' ? (b.floor?.name ?? `Floor ${b.floor?.floorNumber}`) : '—';
                     const slotCode = typeof b.assignedSlot === 'object' ? b.assignedSlot?.slotCode : '—';
                     const vTypeName = typeof b.vehicleType === 'object' ? b.vehicleType?.name : 'Vehicle';
-                    
+
                     // Combine date and time strings into valid ISO strings
                     const parseDateTime = (dStr: string, tStr: string) => {
                         if (!dStr || !tStr) return new Date().toISOString();
@@ -189,7 +261,7 @@ const MyTicketsPage = () => {
                         payMethod: b.paymentMethod || 'card',
                     };
                 });
-                
+
                 setTickets(mappedTickets);
             } catch (err) {
                 console.error("Failed to load upcoming bookings:", err);
@@ -303,6 +375,7 @@ const MyTicketsPage = () => {
                 zone: zoneObj,
                 slot: slotObj,
                 licensePlate: session.vehicleInfo?.licensePlate,
+                session: session,
             },
         });
     };
@@ -771,7 +844,7 @@ const MyTicketsPage = () => {
 
                     {/* ── SECTION 1: Active Sessions ── */}
                     <div className="t-section-heading">
-                        <span className="t-section-title">🟢 Đang Đỗ</span>
+                        <span className="t-section-title"> Đang Đỗ</span>
                         {hasActiveSessions && (
                             <span className="t-section-count live">{activeSessions.length} active</span>
                         )}
@@ -814,7 +887,7 @@ const MyTicketsPage = () => {
 
                     {/* ── SECTION 2: Upcoming Bookings (localStorage tickets) ── */}
                     <div className="t-section-heading">
-                        <span className="t-section-title">🎫 Vé Đặt Trước</span>
+                        <span className="t-section-title"> Vé Đặt Trước</span>
                         {bookingsLoading && (
                             <div className="ls-loading" style={{ marginTop: 10 }}>
                                 <div className="ls-spinner" />
