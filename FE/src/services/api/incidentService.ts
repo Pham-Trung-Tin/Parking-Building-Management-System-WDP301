@@ -42,8 +42,10 @@ const incidentService = {
     return axiosClient.put(`/incidents/${id}`, data);
   },
 
-  resolve: (id: string, data: IncidentResolveData): Promise<any> => {
-    return axiosClient.patch(`/incidents/${id}/resolve`, data);
+  resolve: (id: string, data: IncidentResolveData | FormData): Promise<any> => {
+    return axiosClient.patch(`/incidents/${id}/resolve`, data, {
+      headers: data instanceof FormData ? { 'Content-Type': undefined } : {}
+    });
   },
 
   assign: (id: string, assigneeId: string): Promise<any> => {
