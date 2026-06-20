@@ -467,6 +467,7 @@ const SlotMapGrid = ({ slots, selectedSlot, onSelect, vehicleType, currentUserId
                     </div>
                 );
             })}
+
         </div>
     );
 };
@@ -1596,6 +1597,7 @@ const BookingPage = () => {
                     animation: fadeIn 0.2s ease;
                 }
                 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+                @keyframes slideUpToast { from { opacity: 0; transform: translate(-50%, 20px); } to { opacity: 1; transform: translate(-50%, 0); } }
                 .modal-box {
                     background: white; border-radius: 24px; padding: 32px; width: 100%;
                     max-width: 520px; max-height: 90vh; overflow-y: auto;
@@ -2600,38 +2602,7 @@ const BookingPage = () => {
                                     />
                                 )}
 
-                                {selectedSlot && (
-                                    <div style={{ marginTop: 20, padding: '14px 18px', background: 'linear-gradient(135deg,#eff6ff,#dbeafe)', border: '1.5px solid #bfdbfe', borderRadius: 14 }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                                            <span style={{ fontSize: 24 }}>✅</span>
-                                            <div style={{ flex: 1 }}>
-                                                <div style={{ fontSize: 13, fontWeight: 700, color: '#1d4ed8' }}>Slot Selected</div>
-                                                <div style={{ fontSize: 16, fontWeight: 900, color: '#1e40af', letterSpacing: 1 }}>{selectedSlot.slotCode}</div>
-                                                {selectedSlot.features?.hasEVCharger && <div style={{ fontSize: 11, color: '#10b981', fontWeight: 700, marginTop: 2 }}>⚡ EV Charging Available</div>}
-                                            </div>
-                                        </div>
-                                        {/* Lock countdown banner */}
-                                        {slotLockUntil && slotLockUntil > new Date() && (
-                                            <div style={{ marginTop: 10, padding: '8px 12px', background: 'rgba(245,158,11,0.1)', border: '1px solid #f59e0b', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
-                                                <span style={{ fontSize: 16 }}>🔒</span>
-                                                <div style={{ flex: 1 }}>
-                                                    <span style={{ fontSize: 12, fontWeight: 700, color: '#d97706' }}>Slot reserved for you · </span>
-                                                    <span style={{ fontSize: 12, fontWeight: 600, color: '#92400e' }}>Expires in <LockCountdown lockedUntil={slotLockUntil.toISOString()} /></span>
-                                                </div>
-                                                <button
-                                                    onClick={async () => {
-                                                        try { await parkingSlotService.unlockSlot(selectedSlot._id); } catch (_) { }
-                                                        setSelectedSlot(null);
-                                                        setSlotLockUntil(null);
-                                                        if (lockTimerRef.current) clearTimeout(lockTimerRef.current);
-                                                    }}
-                                                    style={{ fontSize: 11, fontWeight: 700, color: '#b45309', background: 'transparent', border: 'none', cursor: 'pointer', padding: '2px 6px' }}>
-                                                    ✕ Release
-                                                </button>
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
+
 
                                 <div className="bk-nav">
                                     <button className="bk-btn-back" onClick={handleBack}>← Back</button>
@@ -3157,6 +3128,48 @@ const BookingPage = () => {
                     </div>
                 );
             })()}
+
+            {/* ── Floating Lock Toast ── */}
+            {slotLockUntil && slotLockUntil > new Date() && (
+                <div style={{
+                    position: 'fixed',
+                    bottom: 40,
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    background: 'rgba(15, 23, 42, 0.95)',
+                    backdropFilter: 'blur(8px)',
+                    color: 'white',
+                    padding: '12px 24px',
+                    borderRadius: 30,
+                    boxShadow: '0 12px 40px rgba(0,0,0,0.2)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 12,
+                    zIndex: 1000,
+                    animation: 'slideUpToast 0.4s cubic-bezier(0.16, 1, 0.3, 1)'
+                }}>
+                    <span style={{ fontSize: 18 }}>🔒</span>
+                    <div style={{ flex: 1, fontSize: 13, fontWeight: 500 }}>
+                        <span style={{ color: '#cbd5e1' }}>Slot reserved for you · </span>
+                        <span style={{ color: '#fcd34d', fontWeight: 700 }}>Expires in <LockCountdown lockedUntil={slotLockUntil.toISOString()} /></span>
+                    </div>
+                    <button
+                        onClick={async () => {
+                            if (selectedSlot) {
+                                try { await parkingSlotService.unlockSlot(selectedSlot._id); } catch (_) { }
+                            }
+                            setSelectedSlot(null);
+                            setSlotLockUntil(null);
+                            if (lockTimerRef.current) clearTimeout(lockTimerRef.current);
+                        }}
+                        style={{ fontSize: 12, fontWeight: 700, color: '#f8fafc', background: 'rgba(255,255,255,0.15)', border: 'none', cursor: 'pointer', padding: '6px 12px', borderRadius: 20, marginLeft: 8, transition: 'background 0.2s' }}
+                        onMouseOver={e => e.currentTarget.style.background = 'rgba(255,255,255,0.25)'}
+                        onMouseOut={e => e.currentTarget.style.background = 'rgba(255,255,255,0.15)'}
+                    >
+                        Release
+                    </button>
+                </div>
+            )}
         </>
     );
 };
