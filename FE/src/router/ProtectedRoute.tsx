@@ -16,6 +16,7 @@ export const GuestRoute: React.FC = () => {
         return <Navigate to="/admin" replace />;
       }
       if (['parking_manager', 'parking_staff'].includes(user.role)) {
+        if (user.role === 'parking_manager') return <Navigate to="/manager" replace />;
         if (user.role === 'parking_staff' && !user.assignedParkingLot) {
           return <Navigate to="/staff/profile" replace />;
         }
@@ -44,6 +45,7 @@ export const CustomerRoute: React.FC = () => {
         return <Navigate to="/admin" replace />;
       }
       if (['parking_manager', 'parking_staff'].includes(user.role)) {
+        if (user.role === 'parking_manager') return <Navigate to="/manager" replace />;
         if (user.role === 'parking_staff' && !user.assignedParkingLot) {
           return <Navigate to="/staff/profile" replace />;
         }
@@ -104,6 +106,11 @@ export const AdminRoute: React.FC = () => {
       // If admin tries to access staff assignment, kick them to /admin
       if (user.role === 'system_admin' && location.pathname === '/admin/staff-assignment') {
         return <Navigate to="/admin" replace />;
+      }
+
+      // If manager tries to access staff or admin pages, kick them to /manager
+      if (user.role === 'parking_manager' && (location.pathname === '/admin' || location.pathname.startsWith('/staff'))) {
+        return <Navigate to="/manager" replace />;
       }
     } catch {
       return <Navigate to="/login" replace />;

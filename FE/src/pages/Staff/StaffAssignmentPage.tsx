@@ -334,7 +334,7 @@ function AssignManagerModal({
 }
 
 /* ─────────────────── Main Component ─────────────────── */
-export default function StaffAssignmentPage() {
+export default function StaffAssignmentPage({ isTab, globalLotId, setGlobalLotId }: { isTab?: boolean, globalLotId?: string, setGlobalLotId?: any }) {
   const navigate = useNavigate();
 
   const [parkingLots, setParkingLots] = useState<any[]>([]);
@@ -382,9 +382,13 @@ export default function StaffAssignmentPage() {
       if (lots.length > 0) {
         if (preserveSelected) {
           const found = lots.find((l: any) => l._id === preserveSelected);
+          if (found) { setSelectedLot(found); setGlobalLotId?.(found._id); }
+        } else if (globalLotId) {
+          const found = lots.find((l: any) => l._id === globalLotId);
           if (found) setSelectedLot(found);
+          else { setSelectedLot(lots[0]); setGlobalLotId?.(lots[0]._id); }
         } else {
-          setSelectedLot(lots[0]);
+          setSelectedLot(lots[0]); setGlobalLotId?.(lots[0]._id);
         }
       }
     } catch (err: any) {
@@ -397,6 +401,13 @@ export default function StaffAssignmentPage() {
   useEffect(() => {
     fetchLots();
   }, [fetchLots]);
+
+  useEffect(() => {
+    if (globalLotId && parkingLots.length > 0 && selectedLot?._id !== globalLotId) {
+      const found = parkingLots.find(l => l._id === globalLotId);
+      if (found) setSelectedLot(found);
+    }
+  }, [globalLotId, parkingLots, selectedLot]);
 
   // Fetch staff for selected lot
   const fetchStaff = useCallback(async () => {
@@ -491,9 +502,9 @@ export default function StaffAssignmentPage() {
         .animate-slide-up { animation: slide-up 0.25s ease-out; }
       `}</style>
 
-      <div className="min-h-screen bg-[#F8F8F6] flex">
+      <div className={`min-h-screen ${isTab ? '' : 'bg-[#F8F8F6]'} flex`}>
         {/* ── Sidebar ── */}
-        
+        {!isTab && (
           <div className="w-64 bg-white border-r border-gray-200 flex flex-col justify-between shrink-0 z-20 h-screen sticky top-0">
             <div>
               <div className="p-6">
@@ -562,10 +573,11 @@ export default function StaffAssignmentPage() {
               </button>
             </div>
           </div>
+        )}
         
         {/* ── Main ── */}
         <div className="flex-1 overflow-auto">
-          <div className="max-w-6xl mx-auto px-12 py-10">
+          <div className={`${isTab ? 'px-0 py-0' : 'max-w-6xl mx-auto px-12 py-10'}`}>
 
             {/* Header */}
             <div className="flex items-end justify-between mb-10">
@@ -620,6 +632,7 @@ export default function StaffAssignmentPage() {
                         key={lot._id}
                         onClick={() => {
                           setSelectedLot(lot);
+                          setGlobalLotId?.(lot._id);
                           setLotDropdownOpen(false);
                         }}
                         className={`w-full px-5 py-3 text-left hover:bg-gray-50 transition-colors flex items-center gap-3 ${selectedLot?._id === lot._id ? 'bg-gray-50' : ''
