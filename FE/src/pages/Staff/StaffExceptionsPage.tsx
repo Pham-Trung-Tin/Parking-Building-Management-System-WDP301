@@ -76,6 +76,11 @@ const StaffExceptionsPage = () => {
     documentFile: null
   });
 
+  const [mismatchData, setMismatchData] = useState<{ actualPlate: string; reason: string }>({
+    actualPlate: '',
+    reason: 'AI misread license plate'
+  });
+
   // Notification
   const [notification, setNotification] = useState<{ show: boolean, message: string, type: 'success' | 'error' } | null>(null);
 
@@ -226,6 +231,41 @@ const StaffExceptionsPage = () => {
       fetchIncidents();
     } catch (err: any) {
       showNotification(err?.response?.data?.message || 'Failed to process lost ticket.', 'error');
+    } finally {
+      setIsResolving(false);
+    }
+  };
+
+  const handleConfirmMismatch = async () => {
+    if (!resolveModal.incident) return;
+    if (!foundSession) {
+      showNotification('Please search and confirm the active session first.', 'error');
+      return;
+    }
+    if (!mismatchData.actualPlate) {
+      showNotification('Please enter the actual license plate.', 'error');
+      return;
+    }
+
+    setIsResolving(true);
+    try {
+      const desc = `LPR Mismatch Resolved.\nActual Plate: ${mismatchData.actualPlate.toUpperCase()}\nReason: ${mismatchData.reason}`;
+      const formData = new FormData();
+      formData.append('description', desc);
+      formData.append('extraCharge', String(Number(resolveCharge) || 0));
+
+      await incidentService.resolve(resolveModal.incident._id, formData);
+      await parkingSessionService.checkOut(foundSession._id);
+
+      showNotification('Vehicle information updated and released.', 'success');
+      setResolveModal({ isOpen: false, incident: null });
+      setFoundSession(null);
+      setSearchPlate('');
+      setMismatchData({ actualPlate: '', reason: 'AI misread license plate' });
+      setResolveCharge('');
+      fetchIncidents();
+    } catch (err: any) {
+      showNotification(err?.response?.data?.message || 'Failed to process mismatch.', 'error');
     } finally {
       setIsResolving(false);
     }
@@ -413,6 +453,148 @@ const StaffExceptionsPage = () => {
               >
                 <CheckCircle2 className="w-5 h-5 mr-2" />
                 {isResolving ? 'Processing...' : 'Confirm Payment & Release'}
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (resolveModal.incident?.type === 'wrong_license_plate') {
+      return (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center p-6 border-b border-gray-100 sticky top-0 bg-white z-10">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">Edit Vehicle Information</h3>
+                <p className="text-xs text-gray-500">Ref: {resolveModal.incident?.incidentCode}</p>
+              </div>
+              <button onClick={() => { setResolveModal({ isOpen: false, incident: null }); setFoundSession(null); }} className="text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 grid grid-cols-2 gap-8">
+              {/* Left Column */}
+              <div className="space-y-6">
+                <section>
+                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">1. Lookup Information</h4>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={searchPlate}
+                      onChange={e => setSearchPlate(e.target.value.toUpperCase())}
+                      placeholder="Enter Ticket ID or Plate"
+                      className="flex-1 border border-gray-200 p-3 text-sm outline-none focus:border-gray-400"
+                    />
+                    <button
+                      onClick={handleSearchSession}
+                      disabled={isSearchingSession}
+                      className="bg-black text-white px-6 py-3 text-sm font-bold flex items-center hover:bg-gray-900 disabled:opacity-50"
+                    >
+                      <Search className="w-4 h-4 mr-2" />
+                      Search
+                    </button>
+                  </div>
+                </section>
+
+                <section>
+                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">2. Current Info (Incorrect)</h4>
+                  <div className="bg-gray-50 border border-gray-200 p-4 rounded text-sm space-y-3">
+                    {foundSession ? (
+                      <>
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">Ticket ID:</span>
+                          <span className="font-bold">{foundSession.sessionCode}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">AI Recognized Plate:</span>
+                          <span className="font-bold text-red-600">{foundSession.vehicleInfo?.licensePlate}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">Entry Time:</span>
+                          <span className="font-bold">{new Date(foundSession.entryTime).toLocaleString()}</span>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="text-gray-400 text-center py-4">Search to load system record</div>
+                    )}
+                  </div>
+                </section>
+
+                <section>
+                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">3. Adjustment Info</h4>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-xs font-bold text-gray-500 mb-1">Actual Plate</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. 51F-123.45"
+                        value={mismatchData.actualPlate}
+                        onChange={e => setMismatchData({ ...mismatchData, actualPlate: e.target.value })}
+                        className="w-full border border-gray-200 p-3 text-sm outline-none focus:border-gray-400"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-500 mb-1">Reason for edit</label>
+                      <div className="relative">
+                        <select
+                          value={mismatchData.reason}
+                          onChange={e => setMismatchData({ ...mismatchData, reason: e.target.value })}
+                          className="w-full appearance-none border border-gray-200 p-3 text-gray-900 text-sm outline-none focus:border-gray-400 transition-colors bg-white pr-10"
+                        >
+                          <option value="AI misread license plate">AI misread license plate</option>
+                          <option value="Blurred or unreadable plate">Blurred or unreadable plate</option>
+                          <option value="Customer swapped vehicle">Customer swapped vehicle</option>
+                          <option value="Other">Other</option>
+                        </select>
+                        <ChevronDown className="w-4 h-4 text-gray-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      </div>
+                    </div>
+                  </div>
+                </section>
+              </div>
+
+              {/* Right Column */}
+              <div className="space-y-6">
+                <section>
+                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Visual Comparison</h4>
+                  <div className="space-y-4">
+                    <div>
+                      <p className="text-xs font-bold text-gray-500 mb-1">Entry Camera Image (Overview)</p>
+                      <div className="w-full h-40 bg-gray-200 rounded border border-gray-300 flex items-center justify-center overflow-hidden">
+                        {foundSession?.evidenceImages?.[0] ? <img src={foundSession.evidenceImages[0].url} className="w-full h-full object-cover" alt="Entry Overview" /> : <span className="text-xs text-gray-400">No Image</span>}
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-gray-500 mb-1">Current Exit Camera Image</p>
+                      <div className="w-full h-40 bg-gray-900 rounded border border-gray-800 flex items-center justify-center relative overflow-hidden">
+                        <div className="absolute top-2 right-2 flex items-center bg-red-600 px-2 py-1 rounded">
+                          <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse mr-1"></div>
+                          <span className="text-[9px] text-white font-bold tracking-wider">LIVE</span>
+                        </div>
+                        <span className="text-gray-500 text-xs">Live feed placeholder</span>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+              </div>
+            </div>
+
+            <div className="p-6 border-t border-gray-100 flex gap-4 bg-gray-50">
+              <button
+                onClick={() => { setResolveModal({ isOpen: false, incident: null }); setFoundSession(null); }}
+                className="flex-1 bg-white border border-gray-200 text-gray-700 py-4 text-sm font-bold hover:bg-gray-100 transition-colors uppercase tracking-wider"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmMismatch}
+                disabled={isResolving}
+                className="flex-1 bg-blue-600 text-white py-4 text-sm font-bold flex items-center justify-center hover:bg-blue-700 transition-colors uppercase tracking-wider disabled:opacity-50"
+              >
+                <CheckCircle2 className="w-5 h-5 mr-2" />
+                {isResolving ? 'Processing...' : 'Update & Calculate Fee'}
               </button>
             </div>
           </div>
@@ -862,7 +1044,7 @@ const StaffExceptionsPage = () => {
                                 onClick={() => setResolveModal({ isOpen: true, incident: inc })}
                                 className="text-xs font-bold text-blue-600 uppercase tracking-wider hover:text-blue-800 transition-colors"
                               >
-                                {inc.type === 'lost_ticket' ? 'Process Lost Ticket' : 'Resolve'}
+                                {inc.type === 'lost_ticket' ? 'Process Lost Ticket' : inc.type === 'wrong_license_plate' ? 'Process Mismatch' : 'Resolve'}
                               </button>
                             ) : (
                               <button
