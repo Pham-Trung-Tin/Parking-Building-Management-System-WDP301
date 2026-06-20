@@ -123,10 +123,10 @@ const SessionPage = () => {
     const state = location.state || {} as any;
 
     // ── Dữ liệu từ BookingPage navigate ──────────────────────────────────────
-    const spot    = state.spot    || { title: 'Bãi Đỗ Xe', price: 20000 };
+    const spot = state.spot || { title: 'Bãi Đỗ Xe', price: 20000 };
     const vehicleTypeData: VehicleType | null = state.vehicleType || null;
     const floorData: Floor | null = state.floor || null;
-    const zoneData: Zone | null   = state.zone  || null;
+    const zoneData: Zone | null = state.zone || null;
     const slotData: ParkingSlot | null = state.slot || null;
     const sessionId: string | null = state.sessionId || null; // nếu có session đã tạo từ trước
 
@@ -170,7 +170,7 @@ const SessionPage = () => {
 
     const initialElapsed = Math.floor((Date.now() - sessionStart.current) / 1000);
     const [elapsed, setElapsed] = useState(Math.max(0, initialElapsed));
-    
+
     useEffect(() => {
         const id = setInterval(() => {
             setElapsed(Math.floor((Date.now() - sessionStart.current) / 1000));
@@ -186,34 +186,17 @@ const SessionPage = () => {
 
     // ── Thông tin hiển thị ────────────────────────────────────────────────────
     // Ưu tiên data từ API session, fallback về state từ BookingPage
-    const getSessionField = <T,>(apiVal: T, stateVal: T): T => apiVal ?? stateVal;
-
-    const licensePlate: string = getSessionField(
-        session?.vehicleInfo?.licensePlate ?? '',
-        state.licensePlate ?? ''
-    );
-    const vehicleTypeName: string = getSessionField(
-        typeof session?.vehicleType === 'object' ? (session.vehicleType as any)?.name : '',
-        vehicleTypeData?.name ?? 'N/A'
-    );
-    const vtCode: string = getSessionField(
-        typeof session?.vehicleType === 'object' ? (session.vehicleType as any)?.code : '',
-        vehicleTypeData?.code ?? ''
-    );
+    const licensePlate: string = session?.vehicleInfo?.licensePlate || state.licensePlate || '';
+    
+    const vehicleTypeName: string = (typeof session?.vehicleType === 'object' ? (session.vehicleType as any)?.name : '') || vehicleTypeData?.name || 'N/A';
+    const vtCode: string = (typeof session?.vehicleType === 'object' ? (session.vehicleType as any)?.code : '') || vehicleTypeData?.code || '';
     const isMotorbike = ['MOTORBIKE', 'MOTORCYCLE', 'ELECTRIC_BIKE', 'BICYCLE'].some(c => vtCode.includes(c));
 
-    const floorName: string = getSessionField(
-        typeof session?.floor === 'object' ? (session.floor as any)?.name ?? `Tầng ${(session.floor as any)?.floorNumber}` : '',
-        floorData ? (floorData.name || `Tầng ${floorData.floorNumber}`) : 'N/A'
-    );
-    const zoneName: string = getSessionField(
-        typeof session?.zone === 'object' ? (session.zone as any)?.name : '',
-        zoneData?.name ?? 'N/A'
-    );
-    const slotCode: string = getSessionField(
-        typeof session?.slot === 'object' ? (session.slot as any)?.slotCode : '',
-        slotData?.slotCode ?? 'N/A'
-    );
+    const floorName: string = (typeof session?.floor === 'object' ? ((session.floor as any)?.name || `Tầng ${(session.floor as any)?.floorNumber}`) : '') 
+        || (floorData ? (floorData.name || `Tầng ${floorData.floorNumber}`) : 'N/A');
+        
+    const zoneName: string = (typeof session?.zone === 'object' ? (session.zone as any)?.name : '') || zoneData?.name || 'N/A';
+    const slotCode: string = (typeof session?.slot === 'object' ? (session.slot as any)?.slotCode : '') || slotData?.slotCode || 'N/A';
     const sessionCode: string = session?.sessionCode ?? '';
     const entryTime: Date = session?.entryTime
         ? new Date(session.entryTime)
