@@ -2546,8 +2546,21 @@ const BookingPage = () => {
                                 ) : (
                                     <div className="zone-grid">
                                         {zones.map(z => {
-                                            const pct = z.totalSlots > 0 ? Math.round((z.availableSlots / z.totalSlots) * 100) : 0;
-                                            const isFull = z.availableSlots === 0;
+                                            const nowTime = Date.now();
+                                            const zSlots = floorSlots.filter(s => getZoneId(s.zone) === z._id);
+                                            const liveAvailable = zSlots.length > 0 ? zSlots.filter(s => {
+                                                if (s.status !== 'available') return false;
+                                                if (
+                                                    s.lockedBy && s.lockedUntil &&
+                                                    new Date(s.lockedUntil).getTime() > nowTime &&
+                                                    (!currentUserId || s.lockedBy !== currentUserId)
+                                                ) return false;
+                                                return true;
+                                            }).length : z.availableSlots;
+                                            
+                                            const liveTotal = z.totalSlots;
+                                            const pct = liveTotal > 0 ? Math.round((liveAvailable / liveTotal) * 100) : 0;
+                                            const isFull = liveAvailable === 0;
                                             const barColor = isFull ? '#ef4444' : pct < 30 ? '#f59e0b' : '#10b981';
                                             const isSel = selectedZone?._id === z._id;
                                             return (
@@ -2564,8 +2577,8 @@ const BookingPage = () => {
                                                         <div className="zone-slot-bar-fill" style={{ width: `${pct}%`, background: barColor }} />
                                                     </div>
                                                     <div className="zone-slot-text">
-                                                        <span style={{ color: barColor, fontWeight: 800 }}>{z.availableSlots}</span>
-                                                        <span style={{ color: '#94a3b8' }}>/{z.totalSlots} available</span>
+                                                        <span style={{ color: barColor, fontWeight: 800 }}>{liveAvailable}</span>
+                                                        <span style={{ color: '#94a3b8' }}>/{liveTotal} available</span>
                                                     </div>
                                                 </div>
                                             );

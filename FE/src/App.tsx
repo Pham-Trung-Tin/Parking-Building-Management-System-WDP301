@@ -23,6 +23,11 @@ import StaffLiveViewPage from './pages/Staff/StaffLiveViewPage';
 import StaffManageSlotPage from './pages/Staff/StaffManageSlotPage';
 import { GuestRoute, CustomerRoute, RequireAuthRoute, AdminRoute } from './router/ProtectedRoute';
 
+// Dev-only floating toolbox — tree-shaken away in production builds
+const DevPanel = import.meta.env.DEV
+    ? React.lazy(() => import('./components/Dev/DevPanel'))
+    : null;
+
 function App() {
     return (
         <Router>
@@ -66,6 +71,12 @@ function App() {
                     <Route path="/staff/profile" element={<ProfilePage />} />
                 </Route>
             </Routes>
+            {/* Dev-only floating panel — not rendered in production */}
+            {DevPanel && (
+                <React.Suspense fallback={null}>
+                    <DevPanel />
+                </React.Suspense>
+            )}
         </Router>
     );
 }
