@@ -5,7 +5,7 @@ import { Toast, useToast } from './shared';
 
 
 
-const EMPTY = { name: '', code: '', size: 'medium', pricing: { hourlyRate: 0, dailyRate: 0, monthlyRate: 0, overtimeMultiplier: 1.5 }, description: '' };
+const EMPTY = { name: '', code: '', size: 'medium', pricing: { dayBlockRate: 0, nightBlockRate: '' as any, dailyRate: 0, monthlyRate: 0 }, description: '' };
 
 function VehicleTypeModal({ initial, onSave, onClose, loading }: any) {
   const [form, setForm] = useState(initial);
@@ -51,8 +51,20 @@ function VehicleTypeModal({ initial, onSave, onClose, loading }: any) {
             <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2"><DollarSign className="w-4 h-4 text-emerald-600" /> Pricing Rules</h3>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">Hourly Rate (VND) *</label>
-                <input type="number" min="0" value={form.pricing?.hourlyRate || 0} onChange={e => setPricing('hourlyRate', e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+                <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">Day Block Rate (VND) *</label>
+                <input type="number" min="0" value={form.pricing?.dayBlockRate || 0} onChange={e => setPricing('dayBlockRate', e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+                <p className="text-[10px] text-gray-400 mt-1">Giá mỗi block ban ngày (4h)</p>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">Night Block Rate (VND)</label>
+                <input
+                  type="number" min="0"
+                  value={form.pricing?.nightBlockRate ?? ''}
+                  onChange={e => setForm((f: any) => ({ ...f, pricing: { ...f.pricing, nightBlockRate: e.target.value === '' ? '' : Number(e.target.value) } }))}
+                  placeholder={form.pricing?.dayBlockRate ? `Mặc định: ${Math.round(form.pricing.dayBlockRate * 1.5).toLocaleString('vi-VN')}` : 'Auto = dayBlockRate × 1.5'}
+                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+                />
+                <p className="text-[10px] text-gray-400 mt-1">Để trống → hệ thống tự tính × 1.5</p>
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">Daily Rate (VND) *</label>
@@ -61,10 +73,6 @@ function VehicleTypeModal({ initial, onSave, onClose, loading }: any) {
               <div>
                 <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">Monthly Rate (VND)</label>
                 <input type="number" min="0" value={form.pricing?.monthlyRate || 0} onChange={e => setPricing('monthlyRate', e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">Overtime Multiplier</label>
-                <input type="number" min="1" step="0.1" value={form.pricing?.overtimeMultiplier || 1.5} onChange={e => setPricing('overtimeMultiplier', e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
               </div>
             </div>
           </div>
@@ -99,11 +107,13 @@ export default function VehicleTypesTab() {
   useEffect(() => { fetch(); }, [fetch]);
 
   const handleSave = async (form: any) => {
-    if (!form.name || !form.code || form.pricing?.hourlyRate === undefined || form.pricing?.dailyRate === undefined) return showToast('Please fill all required fields', false);
+    if (!form.name || !form.code || form.pricing?.dayBlockRate === undefined || form.pricing?.dailyRate === undefined) return showToast('Please fill all required fields', false);
+    // Nếu nightBlockRate để trống, gửi null để backend cập nhật (xóa giá trị cũ) thay vì undefined bị JSON.stringify bỏ qua
+    const payload = { ...form, pricing: { ...form.pricing, nightBlockRate: form.pricing.nightBlockRate === '' ? null : form.pricing.nightBlockRate } };
     setSaving(true);
     try {
-      if (form._id) await vehicleTypeService.update(form._id, form);
-      else await vehicleTypeService.create(form);
+      if (form._id) await vehicleTypeService.update(form._id, payload);
+      else await vehicleTypeService.create(payload);
       showToast(form._id ? 'Updated successfully' : 'Created successfully');
       setModal(null);
       fetch();
@@ -151,7 +161,8 @@ export default function VehicleTypesTab() {
             </div>
             <span className="text-xs text-gray-600 capitalize">{vt.size?.replace('_', ' ')}</span>
             <div className="text-xs text-gray-500 space-y-0.5">
-              <p><span className="font-medium text-gray-700">Hour:</span> {formatPrice(vt.pricing?.hourlyRate || 0)}</p>
+              <p><span className="font-medium text-gray-700">Day Block:</span> {formatPrice(vt.pricing?.dayBlockRate || 0)}</p>
+              <p><span className="font-medium text-gray-700">Night Block:</span> {vt.pricing?.nightBlockRate ? formatPrice(vt.pricing.nightBlockRate) : <span className="text-gray-400 italic">auto</span>}</p>
               <p><span className="font-medium text-gray-700">Day:</span> {formatPrice(vt.pricing?.dailyRate || 0)}</p>
             </div>
             <div className="flex items-center gap-2 justify-end">

@@ -140,7 +140,7 @@ const StaffExitPage = () => {
       setIsSearching(false);
     }
   }, [isExitCamActive, profile]);
-  // Estimated Fee Calculation
+  // Estimated Fee Calculation — Block-based pricing (4h blocks)
   const estimatedFees = useMemo(() => {
     if (!activeSession || !activeSession.entryTime || !activeSession.vehicleType?.pricing) {
       return { baseFee: activeSession?.baseFee || 0, overtimeFee: activeSession?.overtimeFee || 0, totalFee: activeSession?.totalFee || 0 };
@@ -149,43 +149,46 @@ const StaffExitPage = () => {
     const now = new Date();
     const entryTime = new Date(activeSession.entryTime);
     const pricing = activeSession.vehicleType.pricing;
+    const dayBlockRate = pricing.dayBlockRate || 0;
+    const nightBlockRate = pricing.nightBlockRate || dayBlockRate * 1.5;
+    const BLOCK_MS = 4 * 60 * 60 * 1000;
 
-    const durationMs = now.getTime() - entryTime.getTime();
-    const durationHours = durationMs / (1000 * 60 * 60);
-    const durationDays = Math.floor(durationHours / 24);
-    const remainingHours = durationHours % 24;
+    // Helper: count blocks between two dates using same logic as BE calculateParkingFee
+    const countBlockFee = (start: Date, end: Date): number => {
+      if (end <= start) return 0;
+      let fee = 0;
+      let cur = new Date(start);
+      while (cur < end) {
+        const h = cur.getHours();
+        // 06:00–17:59 daytime, 18:00–05:59 nighttime
+        const isDaytime = h >= 6 && h < 18;
+        fee += isDaytime ? dayBlockRate : nightBlockRate;
+        cur = new Date(cur.getTime() + BLOCK_MS);
+      }
+      return fee;
+    };
 
-    let fee = 0;
-    if (durationDays > 0) {
-      fee += durationDays * (pricing.dailyRate || 0);
-    }
-    if (remainingHours > 0) {
-      fee += Math.ceil(remainingHours) * (pricing.hourlyRate || 0);
-    }
-    if (fee === 0 && durationMs > 0) {
-      fee = pricing.hourlyRate || 0;
-    }
+    const baseFee = countBlockFee(entryTime, now);
 
+    // Overtime: if session was from a booking and now > scheduledEnd
     let overtimeFee = 0;
     if (activeSession.booking?.endTime && activeSession.booking?.scheduledDate) {
       const scheduledDateStr = activeSession.booking.scheduledDate.split('T')[0];
       const scheduledEnd = new Date(`${scheduledDateStr}T${activeSession.booking.endTime}:00`);
       if (now > scheduledEnd) {
-        const overtimeMs = now.getTime() - scheduledEnd.getTime();
-        const otHours = overtimeMs / (1000 * 60 * 60);
-        // Assuming default 15 mins grace period
-        if (otHours > (15 / 60)) {
-          const roundedOtHours = Math.ceil(otHours);
-          overtimeFee = roundedOtHours * (pricing.hourlyRate || 0) * 1.5;
+        const otHours = (now.getTime() - scheduledEnd.getTime()) / (1000 * 60 * 60);
+        if (otHours > 15 / 60) {
+          // Overtime: same block logic, no multiplier
+          overtimeFee = countBlockFee(scheduledEnd, now);
         }
       }
     }
 
-    const totalFee = fee + overtimeFee;
+    const totalFee = baseFee + overtimeFee;
     const advancePayment = activeSession.advancePayment || 0;
     const balanceDue = Math.max(0, totalFee - advancePayment);
 
-    return { baseFee: fee, overtimeFee, totalFee: balanceDue };
+    return { baseFee, overtimeFee, totalFee: balanceDue };
   }, [activeSession]);
 
   useEffect(() => {

@@ -10,10 +10,10 @@ export interface Vehicle {
         icon?: string;
         size: string;
         pricing: {
-            hourlyRate: number;
+            dayBlockRate: number;
+            nightBlockRate?: number;
             dailyRate: number;
             monthlyRate?: number;
-            overtimeMultiplier?: number;
         };
     } | string;
     licensePlate: string;

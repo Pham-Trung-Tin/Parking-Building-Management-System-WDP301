@@ -22,7 +22,7 @@ export interface ParkingSession {
     floor: { _id: string; name: string; floorNumber: number } | string;
     zone?: { _id: string; name: string; code: string } | string;
     slot: { _id: string; slotCode: string; position?: any; features?: any } | string;
-    vehicleType: { _id: string; name: string; code: string; pricing: { hourlyRate: number; dailyRate: number; overtimeMultiplier?: number } } | string;
+    vehicleType: { _id: string; name: string; code: string; pricing: { dayBlockRate: number; nightBlockRate?: number; dailyRate: number; } } | string;
     vehicleInfo: SessionVehicleInfo;
     entryTime: string;
     exitTime?: string;

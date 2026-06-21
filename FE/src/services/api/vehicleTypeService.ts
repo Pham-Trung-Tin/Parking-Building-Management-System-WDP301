@@ -1,10 +1,10 @@
 import axiosClient from './axiosClient';
 
 export interface VehicleTypePricing {
-    hourlyRate: number;
+    dayBlockRate: number;
+    nightBlockRate?: number; // nếu để trống, backend tự fallback = dayBlockRate * 1.5
     dailyRate: number;
     monthlyRate?: number;
-    overtimeMultiplier?: number;
 }
 
 export interface VehicleType {

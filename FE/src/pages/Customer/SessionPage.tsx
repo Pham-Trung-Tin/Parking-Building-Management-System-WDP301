@@ -130,8 +130,8 @@ const SessionPage = () => {
     const slotData: ParkingSlot | null = state.slot || null;
     const sessionId: string | null = state.sessionId || null; // nếu có session đã tạo từ trước
 
-    // Giá theo giờ từ VehicleType object
-    const hourlyRate = vehicleTypeData?.pricing?.hourlyRate ?? spot.price ?? 20000;
+    // Đơn giá block ban ngày từ VehicleType object
+    const dayBlockRate = vehicleTypeData?.pricing?.dayBlockRate ?? spot.price ?? 20000;
 
     // ── Session data từ API (nếu có sessionId) ────────────────────────────────
     const [session, setSession] = useState<ParkingSession | null>(null);
@@ -175,9 +175,10 @@ const SessionPage = () => {
         return () => clearInterval(id);
     }, []);
 
-    // ── Phí ước tính thực tế: (elapsed giờ) × hourlyRate ──────────────────────
+    // ── Phí ước tính thực tế: (elapsed / 4h block) × dayBlockRate ────────────
     const elapsedHours = elapsed / 3600;
-    const currentFee = elapsedHours * hourlyRate;
+    const BLOCK_HOURS = 4;
+    const currentFee = Math.ceil(elapsedHours / BLOCK_HOURS) * dayBlockRate;
 
     // ── Thông tin hiển thị ────────────────────────────────────────────────────
     // Ưu tiên data từ API session, fallback về state từ BookingPage
@@ -228,7 +229,7 @@ const SessionPage = () => {
                 entryDate: entryTime.toISOString(),
                 elapsed,
                 totalAmount: currentFee,
-                hourlyRate,
+                dayBlockRate,
                 licensePlate,
             }
         });
@@ -525,7 +526,7 @@ const SessionPage = () => {
                             <div className="stat-value green" style={{ fontSize: '20px' }}>
                                 {fmtVND(currentFee)}
                             </div>
-                            <div className="stat-sub green">{fmtVND(hourlyRate)}/giờ</div>
+                            <div className="stat-sub green">{fmtVND(dayBlockRate)}/block (4h)</div>
                         </div>
                     </div>
 
@@ -588,7 +589,7 @@ const SessionPage = () => {
                         {/* Pricing summary */}
                         <div className="pricing-row">
                             <span className="pricing-label">Đơn giá áp dụng</span>
-                            <span className="pricing-value">{fmtVND(hourlyRate)} / giờ</span>
+                            <span className="pricing-value">{fmtVND(dayBlockRate)} / block</span>
                         </div>
                         {vehicleTypeData?.pricing?.dailyRate && (
                             <div className="pricing-row" style={{ paddingTop: 8, marginTop: 0, borderTop: 'none' }}>
@@ -607,7 +608,7 @@ const SessionPage = () => {
                             <div className="notice-title">Lưu Ý Quan Trọng</div>
                             <div className="notice-text">
                                 Giữ mã QR để xuất trình tại cổng ra. Thời gian đỗ tối đa 24 giờ.
-                                Phí được tính theo giờ thực tế với đơn giá <strong>{fmtVND(hourlyRate)}/giờ</strong>.
+                                Phí tính theo block 4h với đơn giá <strong>{fmtVND(dayBlockRate)}/block</strong>.
                             </div>
                         </div>
                     </div>

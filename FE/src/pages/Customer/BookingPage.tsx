@@ -679,8 +679,8 @@ const BookingPage = () => {
 
     // ── Compatibility for TicketsPage & Header ──
     const saveToMyTickets = (backendData: any) => {
-        const hourlyRate = vehicleType?.pricing?.hourlyRate || (parkingSpot.settings?.pricePerHour ?? parkingSpot.price ?? 20000);
-        const estimatedPrice = hourlyRate * duration;
+        const dayBlockRate = vehicleType?.pricing?.dayBlockRate || (parkingSpot.settings?.pricePerHour ?? parkingSpot.price ?? 20000);
+        const estimatedPrice = dayBlockRate * duration;
         const grandTotal = Math.round(estimatedPrice);
         const rawExit = exitTime;
 
@@ -820,8 +820,8 @@ const BookingPage = () => {
                 setVehicleTypes(list.filter((v: VehicleType) => v.isActive && !v.isDeleted));
             })
             .catch(() => setVehicleTypes([
-                { _id: 'car', name: 'Car', code: 'CAR', size: 'medium', isActive: true, pricing: { hourlyRate: 10000, dailyRate: 80000 } },
-                { _id: 'motorcycle', name: 'Motorcycle', code: 'MOTORBIKE', size: 'small', isActive: true, pricing: { hourlyRate: 5000, dailyRate: 40000 } },
+                { _id: 'car', name: 'Car', code: 'CAR', size: 'medium', isActive: true, pricing: { dayBlockRate: 10000, dailyRate: 80000 } },
+                { _id: 'motorcycle', name: 'Motorcycle', code: 'MOTORBIKE', size: 'small', isActive: true, pricing: { dayBlockRate: 5000, dailyRate: 40000 } },
             ]))
             .finally(() => setVehicleTypesLoading(false));
 
@@ -889,8 +889,8 @@ const BookingPage = () => {
     }, [floorSlots, selectedZone]);
 
     const exitTime = new Date(new Date(entryDate).getTime() + duration * 3600000);
-    const hourlyRate = vehicleType?.pricing?.hourlyRate ?? 0;
-    const estimatedPrice = hourlyRate * duration;
+    const dayBlockRate = vehicleType?.pricing?.dayBlockRate ?? 0;
+    const estimatedPrice = dayBlockRate * duration;
 
     // ─── Navigation ─────────────────────────────────────────────────────────
     const canProceed = (step: number): boolean => {
@@ -1903,7 +1903,7 @@ const BookingPage = () => {
                                                     <VehicleSvgIcon code={vt.code} size={38} />
                                                 </div>
                                                 <div className="vt-name">{vt.name}</div>
-                                                <div className="vt-price">{fmtVND(vt.pricing?.hourlyRate ?? 0)}/hr</div>
+                                                <div className="vt-price">{fmtVND(vt.pricing?.dayBlockRate ?? 0)}/block</div>
                                                 {vehicleType?._id === vt._id && (
                                                     <div className="vt-check">✓</div>
                                                 )}
@@ -2415,7 +2415,7 @@ const BookingPage = () => {
                                             <div style={{ textAlign: 'right', flexShrink: 0 }}>
                                                 <div style={{ fontSize: 10, color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Est. Cost</div>
                                                 <div style={{ fontSize: 20, fontWeight: 900, color: '#fbbf24', letterSpacing: -0.5 }}>
-                                                    {new Intl.NumberFormat('vi-VN').format(Math.round((vehicleType.pricing?.hourlyRate ?? 0) * duration))}₫
+                                                    {new Intl.NumberFormat('vi-VN').format(Math.round((vehicleType.pricing?.dayBlockRate ?? 0) * duration))}₫
                                                 </div>
                                             </div>
                                         )}
@@ -2776,7 +2776,7 @@ const BookingPage = () => {
                                         </div>
                                         <div className="modal-row">
                                             <span className="modal-row-label">Rate</span>
-                                            <span className="modal-row-value">{fmtVND(hourlyRate)}/hr</span>
+                                            <span className="modal-row-value">{fmtVND(dayBlockRate)}/block</span>
                                         </div>
                                     </div>
 
