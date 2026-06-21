@@ -28,6 +28,9 @@ Tài liệu này lưu trữ lại tất cả những thay đổi đã được t
   - Xóa bỏ QR Code tĩnh (fake SVG component) trên trang Session. Thay thế bằng thư viện chuẩn `qrcode.react`.
   - Mở rộng Helper cấu trúc Token (`qrToken.ts`): Bổ sung `type: 'checkout'` và `sessionId` vào payload JWT để sinh mã Checkout chống giả mạo, giải quyết luồng trả xe không cần vé booking cho khách vãng lai.
   - Sửa triệt để các lỗi biên dịch TypeScript trong `CheckoutPage.tsx` (liên quan đến shorthand scopes và định nghĩa Interface).
+- **Sửa Lỗi Đồng Bộ QR & Nhận Diện Staff Exit**: 
+  - Giải quyết dứt điểm lỗi 400 Bad Request do mã QR sinh chuỗi rác khi `session._id` chưa kịp load trên `SessionPage.tsx`. Chuyển sang sử dụng `sessionCode` làm giá trị fallback.
+  - Cải thiện logic quét mã QR tại cổng ra (`StaffExitPage.tsx`): tự động nhận diện và phân loại chuỗi `sessionCode` (bắt đầu bằng `PS-`) để gọi đúng hàm `findActive({ sessionCode })` thay vì ép kiểu cứng nhắc thành JWT sessionId.
 
 ## 2. Hệ Thống Backend & Database (Seeder)
 - **Hỗ trợ Slot Locking**:
@@ -51,3 +54,4 @@ Tài liệu này lưu trữ lại tất cả những thay đổi đã được t
 - Tất cả các thay đổi về dữ liệu giả lập (mock data) và cấu trúc sơ đồ tầng đều được tích hợp trực tiếp vào tệp `src/seeders/index.js`.
 - Hỗ trợ làm mới toàn bộ môi trường kiểm thử: Bất cứ khi nào cần cập nhật lại cấu trúc hệ thống, chỉ cần chạy lệnh `node src/seeders/index.js --clear` để reset toàn bộ Database về trạng thái ổn định nhất.
 - Bàn giao chức năng cho bộ phận Staff App: Khởi tạo và bàn giao file **`Task_Staff_QR_Checkout.md`** mô tả cực kỳ chi tiết về kiến trúc payload, luồng xử lý quét JWT Token, cũng như hướng dẫn catch lỗi phục vụ cho team Staff triển khai máy quét Barcode/Camera tích hợp tại Cổng Ra (`StaffExitPage`).
+- Bổ sung tài liệu chuẩn hóa luồng nghiệp vụ: Tạo tệp tài liệu ghi chú tổng hợp `parking_workflow_documentation.md` ghi chép luồng dữ liệu của Hệ thống Booking, sinh mã QR, quá trình Check-in và Checkout dành riêng cho cổng nhân viên.

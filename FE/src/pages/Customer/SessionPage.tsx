@@ -156,14 +156,14 @@ const SessionPage = () => {
     // ── Thông tin hiển thị ────────────────────────────────────────────────────
     // Ưu tiên data từ API session, fallback về state từ BookingPage
     const licensePlate: string = session?.vehicleInfo?.licensePlate || state.licensePlate || '';
-    
+
     const vehicleTypeName: string = (typeof session?.vehicleType === 'object' ? (session.vehicleType as any)?.name : '') || vehicleTypeData?.name || 'N/A';
     const vtCode: string = (typeof session?.vehicleType === 'object' ? (session.vehicleType as any)?.code : '') || vehicleTypeData?.code || '';
     const isMotorbike = ['MOTORBIKE', 'MOTORCYCLE', 'ELECTRIC_BIKE', 'BICYCLE'].some(c => vtCode.includes(c));
 
-    const floorName: string = (typeof session?.floor === 'object' ? ((session.floor as any)?.name || `Tầng ${(session.floor as any)?.floorNumber}`) : '') 
+    const floorName: string = (typeof session?.floor === 'object' ? ((session.floor as any)?.name || `Tầng ${(session.floor as any)?.floorNumber}`) : '')
         || (floorData ? (floorData.name || `Tầng ${floorData.floorNumber}`) : 'N/A');
-        
+
     const zoneName: string = (typeof session?.zone === 'object' ? (session.zone as any)?.name : '') || zoneData?.name || 'N/A';
     const slotCode: string = (typeof session?.slot === 'object' ? (session.slot as any)?.slotCode : '') || slotData?.slotCode || 'N/A';
     const sessionCode: string = session?.sessionCode ?? '';
@@ -174,6 +174,7 @@ const SessionPage = () => {
     const [qrValue, setQrValue] = useState<string>('');
     useEffect(() => {
         if (session?._id) {
+            // Có session._id → tạo JWT token có chữ ký HMAC
             createQRToken({
                 type: 'checkout',
                 sessionId: session._id,
@@ -181,10 +182,12 @@ const SessionPage = () => {
                 slotCode,
                 receiptId: sessionCode
             }).then(setQrValue).catch(err => console.error("Failed to generate QR token", err));
-        } else {
-            setQrValue(sessionCode || `${spot.title}-${slotCode}-${sessionStart.current}`);
+        } else if (sessionCode) {
+            // Fallback: dùng sessionCode (PS-XXXXX) — staff có thể tìm theo mã này
+            setQrValue(sessionCode);
         }
-    }, [session?._id, sessionCode, licensePlate, slotCode, spot.title]);
+        // Nếu không có cả _id lẫn sessionCode → để qrValue rỗng, UI sẽ hiện "Loading QR..."
+    }, [session?._id, sessionCode, licensePlate, slotCode]);
 
     const handlePayCheckout = () => {
         navigate('/checkout', {
@@ -413,11 +416,11 @@ const SessionPage = () => {
                     <div className="s-card qr-section s-in">
                         <div className="qr-wrapper">
                             {qrValue ? (
-                                <QRCodeSVG 
-                                    value={qrValue} 
-                                    size={180} 
-                                    bgColor="#ffffff" 
-                                    fgColor="#0f172a" 
+                                <QRCodeSVG
+                                    value={qrValue}
+                                    size={180}
+                                    bgColor="#ffffff"
+                                    fgColor="#0f172a"
                                     level="H"
                                     includeMargin={true}
                                     style={{ borderRadius: '12px' }}
