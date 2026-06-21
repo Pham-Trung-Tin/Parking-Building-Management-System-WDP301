@@ -20,6 +20,14 @@ Tài liệu này lưu trữ lại tất cả những thay đổi đã được t
   - **Floating Toast Đếm Ngược**: Gỡ bỏ khối hiển thị "Slot Selected" cục mịch. Thay bằng một thanh thông báo Toast nổi lơ lửng ở cạnh dưới màn hình (Bottom-Center) với hiệu ứng trượt mượt mà, tự động đếm ngược và biến mất khi hết thời gian khóa.
   - **Tối giản hóa giao diện**: Xóa bỏ hoàn toàn cột "Booking Summary" bên phải trang để giảm thiểu thông tin dư thừa, người dùng sẽ kiểm tra lại toàn bộ thông tin tại bước "Review & Confirm" cuối cùng.
   - **Căn giữa toàn bộ quy trình**: Thu hẹp không gian modal (từ `900px` xuống `760px`). Sử dụng Flexbox để căn giữa tự động các thẻ chọn Loại xe (Vehicle Type), Khu vực (Zone), và lưới bản đồ đỗ xe (Slot Map Grid), tạo ra một trải nghiệm luồng đặt chỗ cân đối và thanh lịch hơn.
+- **Tinh Chỉnh Trang Phiên Đỗ Hiện Tại (Live Session Tracker - `/session`)**:
+  - Gỡ bỏ header cồng kềnh, chỉ giữ lại nút "Quay lại" giúp tiết kiệm không gian. Thay đổi màu nền các khối thông tin (cards) thành màu trắng, tạo sự liền mạch.
+  - **Cải thiện chống cuộn trang (Compact Layout)**: Gộp khối Mã QR (thu nhỏ về bên trái) và thông tin Biển số xe (bên phải) thành một thẻ ngang duy nhất. Toàn bộ thông tin quan trọng nhất nay đã nằm gọn trên 1 màn hình chuẩn mà không cần cuộn (scroll).
+  - Sửa lỗi sai toán tử fallback (`??` thành `||`) khiến biển số xe bị rỗng và không hiển thị được.
+- **Tích hợp Luồng QR Checkout**:
+  - Xóa bỏ QR Code tĩnh (fake SVG component) trên trang Session. Thay thế bằng thư viện chuẩn `qrcode.react`.
+  - Mở rộng Helper cấu trúc Token (`qrToken.ts`): Bổ sung `type: 'checkout'` và `sessionId` vào payload JWT để sinh mã Checkout chống giả mạo, giải quyết luồng trả xe không cần vé booking cho khách vãng lai.
+  - Sửa triệt để các lỗi biên dịch TypeScript trong `CheckoutPage.tsx` (liên quan đến shorthand scopes và định nghĩa Interface).
 
 ## 2. Hệ Thống Backend & Database (Seeder)
 - **Hỗ trợ Slot Locking**:
@@ -39,6 +47,7 @@ Tài liệu này lưu trữ lại tất cả những thay đổi đã được t
   - Khởi tạo các tài khoản kiểm thử cho quá trình phát triển (bao gồm `testuser@parking.com` và `trungtin605@gmail.com`).
   - Đảm bảo và giữ lại quy tắc bảo mật `minlength` mật khẩu là 8 ký tự (từng hạ xuống 6 ký tự để test, nhưng đã hoàn nguyên theo yêu cầu).
 
-## 3. Quá Trình Làm Việc
+## 3. Quá Trình Làm Việc & Quy trình chéo (Cross-team)
 - Tất cả các thay đổi về dữ liệu giả lập (mock data) và cấu trúc sơ đồ tầng đều được tích hợp trực tiếp vào tệp `src/seeders/index.js`.
 - Hỗ trợ làm mới toàn bộ môi trường kiểm thử: Bất cứ khi nào cần cập nhật lại cấu trúc hệ thống, chỉ cần chạy lệnh `node src/seeders/index.js --clear` để reset toàn bộ Database về trạng thái ổn định nhất.
+- Bàn giao chức năng cho bộ phận Staff App: Khởi tạo và bàn giao file **`Task_Staff_QR_Checkout.md`** mô tả cực kỳ chi tiết về kiến trúc payload, luồng xử lý quét JWT Token, cũng như hướng dẫn catch lỗi phục vụ cho team Staff triển khai máy quét Barcode/Camera tích hợp tại Cổng Ra (`StaffExitPage`).
