@@ -424,7 +424,7 @@ const SlotMapGrid = ({ slots, selectedSlot, onSelect, vehicleType, currentUserId
     return (
         <div>
             {/* Legend */}
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, marginBottom: 24, padding: '16px 0', borderBottom: '1px solid #e2e8f0' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 14, marginBottom: 24, padding: '16px 0', borderBottom: '1px solid #e2e8f0' }}>
                 {[
                     { label: 'Available', bg: '#ffffff', border: '#22c55e', text: '#16a34a' },
                     { label: 'Selected', bg: '#3b82f6', border: '#2563eb', text: '#ffffff' },
@@ -439,11 +439,13 @@ const SlotMapGrid = ({ slots, selectedSlot, onSelect, vehicleType, currentUserId
                     </div>
                 ))}
             </div>
-            {/* Road lanes */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, padding: '0 8px' }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: '#10b981', letterSpacing: 1, textTransform: 'uppercase' }}>← Entry</span>
-                <span style={{ fontSize: 11, fontWeight: 700, color: '#ef4444', letterSpacing: 1, textTransform: 'uppercase' }}>Exit →</span>
-            </div>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                {/* Road lanes */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', maxWidth: '640px', marginBottom: 6, padding: '0 8px' }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#10b981', letterSpacing: 1, textTransform: 'uppercase' }}>← Entry</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#ef4444', letterSpacing: 1, textTransform: 'uppercase' }}>Exit →</span>
+                </div>
             {rows.map(([rowKey, rowSlots]) => {
                 const mid = Math.ceil(rowSlots.length / 2);
                 const top = rowSlots.slice(0, mid);
@@ -467,6 +469,8 @@ const SlotMapGrid = ({ slots, selectedSlot, onSelect, vehicleType, currentUserId
                     </div>
                 );
             })}
+            </div>
+
         </div>
     );
 };
@@ -1274,17 +1278,13 @@ const BookingPage = () => {
 
                 /* ── Page layout ── */
                 .bk-body {
-                    max-width: 900px;
+                    max-width: 760px;
                     margin: 0 auto;
                     padding: 32px 20px 100px;
                     display: grid;
-                    grid-template-columns: 1fr 300px;
+                    grid-template-columns: 1fr;
                     gap: 24px;
                     align-items: start;
-                }
-                @media (max-width: 768px) {
-                    .bk-body { grid-template-columns: 1fr; }
-                    .bk-summary { display: none; }
                 }
 
                 /* ── Step content card ── */
@@ -1403,11 +1403,14 @@ const BookingPage = () => {
 
                 /* ── Step 2: Vehicle Types ── */
                 .vt-grid {
-                    display: grid;
-                    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-                    gap: 12px;
+                    display: flex;
+                    flex-wrap: wrap;
+                    justify-content: center;
+                    gap: 16px;
                 }
                 .vt-card {
+                    flex: 1 1 130px;
+                    max-width: 160px;
                     border: 2px solid #e2e8f0;
                     border-radius: 16px;
                     padding: 20px 12px;
@@ -1514,8 +1517,15 @@ const BookingPage = () => {
                 .floor-item-slots { font-size: 11px; color: #64748b; font-weight: 500; }
 
                 /* ── Step 5: Zone ── */
-                .zone-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 14px; }
+                .zone-grid { 
+                    display: flex; 
+                    flex-wrap: wrap; 
+                    justify-content: center; 
+                    gap: 16px; 
+                }
                 .zone-card {
+                    flex: 1 1 200px;
+                    max-width: 280px;
                     border: 2px solid #e2e8f0; border-radius: 16px;
                     padding: 18px; background: white; cursor: pointer;
                     transition: all 0.2s cubic-bezier(0.34,1.56,0.64,1);
@@ -1596,6 +1606,7 @@ const BookingPage = () => {
                     animation: fadeIn 0.2s ease;
                 }
                 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+                @keyframes slideUpToast { from { opacity: 0; transform: translate(-50%, 20px); } to { opacity: 1; transform: translate(-50%, 0); } }
                 .modal-box {
                     background: white; border-radius: 24px; padding: 32px; width: 100%;
                     max-width: 520px; max-height: 90vh; overflow-y: auto;
@@ -2535,8 +2546,21 @@ const BookingPage = () => {
                                 ) : (
                                     <div className="zone-grid">
                                         {zones.map(z => {
-                                            const pct = z.totalSlots > 0 ? Math.round((z.availableSlots / z.totalSlots) * 100) : 0;
-                                            const isFull = z.availableSlots === 0;
+                                            const nowTime = Date.now();
+                                            const zSlots = floorSlots.filter(s => getZoneId(s.zone) === z._id);
+                                            const liveAvailable = zSlots.length > 0 ? zSlots.filter(s => {
+                                                if (s.status !== 'available') return false;
+                                                if (
+                                                    s.lockedBy && s.lockedUntil &&
+                                                    new Date(s.lockedUntil).getTime() > nowTime &&
+                                                    (!currentUserId || s.lockedBy !== currentUserId)
+                                                ) return false;
+                                                return true;
+                                            }).length : z.availableSlots;
+                                            
+                                            const liveTotal = z.totalSlots;
+                                            const pct = liveTotal > 0 ? Math.round((liveAvailable / liveTotal) * 100) : 0;
+                                            const isFull = liveAvailable === 0;
                                             const barColor = isFull ? '#ef4444' : pct < 30 ? '#f59e0b' : '#10b981';
                                             const isSel = selectedZone?._id === z._id;
                                             return (
@@ -2553,8 +2577,8 @@ const BookingPage = () => {
                                                         <div className="zone-slot-bar-fill" style={{ width: `${pct}%`, background: barColor }} />
                                                     </div>
                                                     <div className="zone-slot-text">
-                                                        <span style={{ color: barColor, fontWeight: 800 }}>{z.availableSlots}</span>
-                                                        <span style={{ color: '#94a3b8' }}>/{z.totalSlots} available</span>
+                                                        <span style={{ color: barColor, fontWeight: 800 }}>{liveAvailable}</span>
+                                                        <span style={{ color: '#94a3b8' }}>/{liveTotal} available</span>
                                                     </div>
                                                 </div>
                                             );
@@ -2600,38 +2624,7 @@ const BookingPage = () => {
                                     />
                                 )}
 
-                                {selectedSlot && (
-                                    <div style={{ marginTop: 20, padding: '14px 18px', background: 'linear-gradient(135deg,#eff6ff,#dbeafe)', border: '1.5px solid #bfdbfe', borderRadius: 14 }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                                            <span style={{ fontSize: 24 }}>✅</span>
-                                            <div style={{ flex: 1 }}>
-                                                <div style={{ fontSize: 13, fontWeight: 700, color: '#1d4ed8' }}>Slot Selected</div>
-                                                <div style={{ fontSize: 16, fontWeight: 900, color: '#1e40af', letterSpacing: 1 }}>{selectedSlot.slotCode}</div>
-                                                {selectedSlot.features?.hasEVCharger && <div style={{ fontSize: 11, color: '#10b981', fontWeight: 700, marginTop: 2 }}>⚡ EV Charging Available</div>}
-                                            </div>
-                                        </div>
-                                        {/* Lock countdown banner */}
-                                        {slotLockUntil && slotLockUntil > new Date() && (
-                                            <div style={{ marginTop: 10, padding: '8px 12px', background: 'rgba(245,158,11,0.1)', border: '1px solid #f59e0b', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
-                                                <span style={{ fontSize: 16 }}>🔒</span>
-                                                <div style={{ flex: 1 }}>
-                                                    <span style={{ fontSize: 12, fontWeight: 700, color: '#d97706' }}>Slot reserved for you · </span>
-                                                    <span style={{ fontSize: 12, fontWeight: 600, color: '#92400e' }}>Expires in <LockCountdown lockedUntil={slotLockUntil.toISOString()} /></span>
-                                                </div>
-                                                <button
-                                                    onClick={async () => {
-                                                        try { await parkingSlotService.unlockSlot(selectedSlot._id); } catch (_) { }
-                                                        setSelectedSlot(null);
-                                                        setSlotLockUntil(null);
-                                                        if (lockTimerRef.current) clearTimeout(lockTimerRef.current);
-                                                    }}
-                                                    style={{ fontSize: 11, fontWeight: 700, color: '#b45309', background: 'transparent', border: 'none', cursor: 'pointer', padding: '2px 6px' }}>
-                                                    ✕ Release
-                                                </button>
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
+
 
                                 <div className="bk-nav">
                                     <button className="bk-btn-back" onClick={handleBack}>← Back</button>
@@ -2648,67 +2641,7 @@ const BookingPage = () => {
                         )}
                     </div>
 
-                    {/* ── RIGHT: Summary Sidebar ── */}
-                    <div className="bk-summary">
-                        <div className="summary-card">
-                            <div className="summary-title">
-                                Booking Summary
-                            </div>
 
-                            <div className="sum-row">
-                                <span className="sum-label">Facility</span>
-                                <span className="sum-value">{parkingSpot.title || 'Parking'}</span>
-                            </div>
-                            <div className="sum-row">
-                                <span className="sum-label">License Plate</span>
-                                <span className="sum-value">
-                                    {licensePlate || <span className="sum-empty">Not entered</span>}
-                                </span>
-                            </div>
-                            <div className="sum-row">
-                                <span className="sum-label">Vehicle</span>
-                                <span className="sum-value">
-                                    {vehicleType ? vehicleType.name : <span className="sum-empty">Not selected</span>}
-                                </span>
-                            </div>
-                            <div className="sum-row">
-                                <span className="sum-label">Entry</span>
-                                <span className="sum-value">{fmtDateTime(entryDate)}</span>
-                            </div>
-                            <div className="sum-row">
-                                <span className="sum-label">Duration</span>
-                                <span className="sum-value">{duration}h</span>
-                            </div>
-                            <div className="sum-row">
-                                <span className="sum-label">Floor</span>
-                                <span className="sum-value">
-                                    {selectedFloor ? (selectedFloor.name || `Floor ${selectedFloor.floorNumber}`) : <span className="sum-empty">Not selected</span>}
-                                </span>
-                            </div>
-                            <div className="sum-row">
-                                <span className="sum-label">Zone</span>
-                                <span className="sum-value">
-                                    {selectedZone ? selectedZone.name : <span className="sum-empty">Not selected</span>}
-                                </span>
-                            </div>
-                            <div className="sum-row">
-                                <span className="sum-label">Slot</span>
-                                <span className="sum-value">
-                                    {selectedSlot ? selectedSlot.slotCode : <span className="sum-empty">Not selected</span>}
-                                </span>
-                            </div>
-
-                            {vehicleType && (
-                                <div className="sum-total">
-                                    <span className="sum-total-label">Estimated Total</span>
-                                    <div className="sum-total-right">
-                                        <span className="sum-total-value">{fmtVND(estimatedPrice)}</span>
-                                        <span className="sum-total-sub">Taxes included</span>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    </div>
                 </div>
             </div>
 
@@ -3157,6 +3090,48 @@ const BookingPage = () => {
                     </div>
                 );
             })()}
+
+            {/* ── Floating Lock Toast ── */}
+            {slotLockUntil && slotLockUntil > new Date() && (
+                <div style={{
+                    position: 'fixed',
+                    bottom: 40,
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    background: 'rgba(15, 23, 42, 0.95)',
+                    backdropFilter: 'blur(8px)',
+                    color: 'white',
+                    padding: '12px 24px',
+                    borderRadius: 30,
+                    boxShadow: '0 12px 40px rgba(0,0,0,0.2)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 12,
+                    zIndex: 1000,
+                    animation: 'slideUpToast 0.4s cubic-bezier(0.16, 1, 0.3, 1)'
+                }}>
+                    {/* <span style={{ fontSize: 18 }}>🔒</span> */}
+                    <div style={{ flex: 1, fontSize: 13, fontWeight: 500 }}>
+                        <span style={{ color: '#cbd5e1' }}>Slot reserved for you · </span>
+                        <span style={{ color: '#fcd34d', fontWeight: 700 }}>Expires in <LockCountdown lockedUntil={slotLockUntil.toISOString()} /></span>
+                    </div>
+                    <button
+                        onClick={async () => {
+                            if (selectedSlot) {
+                                try { await parkingSlotService.unlockSlot(selectedSlot._id); } catch (_) { }
+                            }
+                            setSelectedSlot(null);
+                            setSlotLockUntil(null);
+                            if (lockTimerRef.current) clearTimeout(lockTimerRef.current);
+                        }}
+                        style={{ fontSize: 12, fontWeight: 700, color: '#f8fafc', background: 'rgba(255,255,255,0.15)', border: 'none', cursor: 'pointer', padding: '6px 12px', borderRadius: 20, marginLeft: 8, transition: 'background 0.2s' }}
+                        onMouseOver={e => e.currentTarget.style.background = 'rgba(255,255,255,0.25)'}
+                        onMouseOut={e => e.currentTarget.style.background = 'rgba(255,255,255,0.15)'}
+                    >
+                        Release
+                    </button>
+                </div>
+            )}
         </>
     );
 };

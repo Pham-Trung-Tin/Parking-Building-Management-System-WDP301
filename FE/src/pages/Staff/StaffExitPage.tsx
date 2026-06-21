@@ -19,6 +19,9 @@ import useProfile from '../../hooks/useProfile';
 import lprService from '../../services/api/lprService';
 import parkingSessionService from '../../services/api/parkingSessionService';
 import { useCallback } from 'react';
+import { verifyQRToken } from '../../utils/qrToken';
+import { Scanner } from '@yudiel/react-qr-scanner';
+import bookingService from '../../services/api/bookingService';
 
 const StaffExitPage = () => {
   const { profile } = useProfile();
@@ -34,6 +37,8 @@ const StaffExitPage = () => {
   const [notification, setNotification] = useState<{ show: boolean, message: string, type: 'success' | 'info' | 'error' } | null>(null);
 
   const [isExitCamActive, setIsExitCamActive] = useState(true);
+  const [camMode, setCamMode] = useState<'lpr' | 'qr'>('lpr');
+  const [isProcessingQR, setIsProcessingQR] = useState(false);
   const videoRefExit = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -41,7 +46,7 @@ const StaffExitPage = () => {
 
   useEffect(() => {
     let stream: MediaStream | null = null;
-    if (isExitCamActive) {
+    if (isExitCamActive && camMode === 'lpr') {
       navigator.mediaDevices.getUserMedia({ video: true })
         .then(s => {
           stream = s;
@@ -60,7 +65,7 @@ const StaffExitPage = () => {
     return () => {
       if (stream) stream.getTracks().forEach(t => t.stop());
     };
-  }, [isExitCamActive]);
+  }, [isExitCamActive, camMode]);
 
   const showNotification = (message: string, type: 'success' | 'info' | 'error' = 'info') => {
     setNotification({ show: true, message, type });
@@ -172,15 +177,37 @@ const StaffExitPage = () => {
 
     // Overtime: if session was from a booking and now > scheduledEnd
     let overtimeFee = 0;
+
+    // Has Booking
     if (activeSession.booking?.endTime && activeSession.booking?.scheduledDate) {
+      // Base fee for booking is the advance payment or estimated booking fee
+      fee = activeSession.advancePayment > 0 ? activeSession.advancePayment : (activeSession.booking.estimatedFee || 0);
+
       const scheduledDateStr = activeSession.booking.scheduledDate.split('T')[0];
       const scheduledEnd = new Date(`${scheduledDateStr}T${activeSession.booking.endTime}:00`);
+
       if (now > scheduledEnd) {
         const otHours = (now.getTime() - scheduledEnd.getTime()) / (1000 * 60 * 60);
         if (otHours > 15 / 60) {
           // Overtime: same block logic, no multiplier
           overtimeFee = countBlockFee(scheduledEnd, now);
         }
+      }
+    } else {
+      // Walk-in Guest
+      const durationMs = now.getTime() - entryTime.getTime();
+      const durationHours = durationMs / (1000 * 60 * 60);
+      const durationDays = Math.floor(durationHours / 24);
+      const remainingHours = durationHours % 24;
+
+      if (durationDays > 0) {
+        fee += durationDays * (pricing.dailyRate || 0);
+      }
+      if (remainingHours > 0) {
+        fee += Math.ceil(remainingHours) * (pricing.hourlyRate || 0);
+      }
+      if (fee === 0 && durationMs > 0) {
+        fee = pricing.hourlyRate || 0;
       }
     }
 
@@ -223,7 +250,7 @@ const StaffExitPage = () => {
   const handleManualSearch = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!searchQuery.trim()) {
-      showNotification('Please enter a license plate to search', 'error');
+      showNotification('Please enter a license plate or scan QR to search', 'error');
       return;
     }
 
@@ -232,29 +259,197 @@ const StaffExitPage = () => {
     setActiveSession(null);
 
     try {
+      const query = searchQuery.trim();
       const lotId = (profile?.assignedParkingLot as any)?._id || (profile?.assignedParkingLot as any);
 
-      const isSessionCode = searchQuery.trim().toUpperCase().startsWith('PS-');
-      const params: any = { parkingLotId: lotId };
-      if (isSessionCode) {
-        params.sessionCode = searchQuery.trim();
-      } else {
-        params.licensePlate = searchQuery.trim();
-      }
+      if (query.includes('.') || query.startsWith('{')) {
+        // QR Code flow (JWT token hoặc JSON)
+        try {
+          let payload: any;
+          try {
+            payload = await verifyQRToken(query);
+          } catch (tokenErr) {
+            try {
+              payload = JSON.parse(query);
+            } catch (jsonErr) {
+              if (typeof query === 'string' && query.trim().length > 0) {
+                if (query.includes('.')) throw new Error('Mã QR Checkout không hợp lệ hoặc đã hết hạn.');
+                payload = { id: query.trim() };
+              } else {
+                throw new Error('Định dạng QR không được hỗ trợ.');
+              }
+            }
+          }
 
-      const sessionRes = await parkingSessionService.findActive(params);
-      if (sessionRes.data) {
-        setActiveSession(sessionRes.data);
-        setSessionFound(true);
-        showNotification(`Session found for plate: ${searchQuery.toUpperCase()}`, 'success');
+          // Trường hợp QR chứa sessionCode
+          if (payload.sessionCode && !payload.sessionId) {
+            const sessionRes = await parkingSessionService.findActive({ sessionCode: payload.sessionCode, parkingLotId: lotId });
+            if (sessionRes.data) {
+              setActiveSession(sessionRes.data);
+              setSessionFound(true);
+              showNotification(`Session found from QR for plate: ${sessionRes.data.vehicleInfo?.licensePlate}`, 'success');
+            } else {
+              throw new Error("Không tìm thấy phiên đỗ xe theo mã QR.");
+            }
+            return;
+          }
+
+          let sessionId = payload.sessionId || payload.id;
+
+          // If the QR code is a Check-in code (contains bookingId instead of sessionId)
+          if (!payload.sessionId && (payload.bookingId || payload.id)) {
+            try {
+              const bookingRes = await bookingService.getById(payload.bookingId || payload.id);
+              const booking = bookingRes.data || bookingRes;
+              if (booking.parkingSession) {
+                sessionId = typeof booking.parkingSession === 'string' ? booking.parkingSession : booking.parkingSession._id;
+              } else {
+                throw new Error("Xe này chưa Check-in (không tìm thấy phiên đỗ xe).");
+              }
+            } catch (err: any) {
+              throw new Error(err.message || "Không tìm thấy thông tin Booking từ mã QR.");
+            }
+          }
+
+          if (sessionId) {
+            const sessionRes = await parkingSessionService.getById(sessionId);
+            if (sessionRes.data) {
+              setActiveSession(sessionRes.data);
+              setSessionFound(true);
+              showNotification(`Session found from QR for plate: ${sessionRes.data.vehicleInfo?.licensePlate}`, 'success');
+            } else {
+              throw new Error("Không tìm thấy phiên đỗ xe.");
+            }
+          } else {
+            throw new Error("Mã QR không chứa thông tin Checkout hợp lệ");
+          }
+        } catch (qrErr: any) {
+          throw new Error(qrErr?.message || "Mã QR không hợp lệ hoặc đã hết hạn");
+        }
+      } else {
+        // License plate or Session Code flow
+        const isSessionCode = query.toUpperCase().startsWith('PS-');
+        const params: any = { parkingLotId: lotId };
+        if (isSessionCode) {
+          params.sessionCode = query;
+        } else {
+          params.licensePlate = query;
+        }
+
+        const sessionRes = await parkingSessionService.findActive(params);
+        if (sessionRes.data) {
+          setActiveSession(sessionRes.data);
+          setSessionFound(true);
+          showNotification(`Session found for: ${query.toUpperCase()}`, 'success');
+        }
       }
     } catch (sessionErr: any) {
       setActiveSession(null);
       setSessionFound(false);
-      showNotification(sessionErr?.message || `No active session found for ${searchQuery.toUpperCase()}`, 'error');
+      showNotification(sessionErr?.message || `No active session found.`, 'error');
     } finally {
       setIsSearching(false);
     }
+  };
+
+  const handleScanQR = async (detectedCodes: any) => {
+    if (isProcessingQR) return;
+
+    let qrValue = "";
+    if (Array.isArray(detectedCodes) && detectedCodes.length > 0) {
+      qrValue = detectedCodes[0].rawValue;
+    } else if (detectedCodes && detectedCodes.text) {
+      qrValue = detectedCodes.text;
+    } else if (typeof detectedCodes === 'string') {
+      qrValue = detectedCodes;
+    }
+
+    if (!qrValue) return;
+
+    setIsProcessingQR(true);
+    setSearchQuery('SCANNING QR...');
+
+    try {
+      let payload: any;
+      try {
+        payload = await verifyQRToken(qrValue);
+      } catch (tokenErr: any) {
+        try {
+          payload = JSON.parse(qrValue);
+        } catch (jsonErr) {
+          if (typeof qrValue === 'string' && qrValue.trim().length > 0) {
+            const trimmed = qrValue.trim();
+            // Nếu là sessionCode dạng PS-XXXXX → tìm qua findActive
+            if (trimmed.toUpperCase().startsWith('PS-')) {
+              payload = { sessionCode: trimmed, type: 'checkout' };
+            } else if (trimmed.includes('.')) {
+              throw new Error('Mã QR Checkout không hợp lệ hoặc đã hết hạn.');
+            } else {
+              // Giả định là MongoDB _id
+              payload = { sessionId: trimmed, type: 'checkout' };
+            }
+          } else {
+            throw new Error('Định dạng QR không được hỗ trợ.');
+          }
+        }
+      }
+
+      // Trường hợp QR chứa sessionCode thay vì sessionId
+      if (payload.sessionCode && !payload.sessionId) {
+        const lotId = (profile?.assignedParkingLot as any)?._id || (profile?.assignedParkingLot as any);
+        const sessionRes = await parkingSessionService.findActive({ sessionCode: payload.sessionCode, parkingLotId: lotId });
+        if (sessionRes.data) {
+          setActiveSession(sessionRes.data);
+          setSessionFound(true);
+          setSearchQuery(sessionRes.data.vehicleInfo?.licensePlate || '');
+          showNotification(`Session found from QR for plate: ${sessionRes.data.vehicleInfo?.licensePlate}`, 'success');
+        } else {
+          throw new Error("Không tìm thấy phiên đỗ xe theo mã QR.");
+        }
+        setTimeout(() => setIsProcessingQR(false), 2000);
+        return;
+      }
+
+      let sessionId = payload.sessionId || payload.id;
+
+      // If the QR code is a Check-in code (contains bookingId instead of sessionId)
+      if (!payload.sessionId && (payload.bookingId || payload.id)) {
+        try {
+          const bookingRes = await bookingService.getById(payload.bookingId || payload.id);
+          const booking = bookingRes.data || bookingRes;
+          if (booking.parkingSession) {
+            sessionId = typeof booking.parkingSession === 'string' ? booking.parkingSession : booking.parkingSession._id;
+          } else {
+            throw new Error("Xe này chưa Check-in (không tìm thấy phiên đỗ xe).");
+          }
+        } catch (err: any) {
+          throw new Error(err.message || "Không tìm thấy thông tin Booking từ mã QR.");
+        }
+      }
+
+      if (sessionId) {
+        const sessionRes = await parkingSessionService.getById(sessionId);
+        if (sessionRes.data) {
+          setActiveSession(sessionRes.data);
+          setSessionFound(true);
+          setSearchQuery(sessionRes.data.vehicleInfo?.licensePlate || '');
+          showNotification(`Session found from QR for plate: ${sessionRes.data.vehicleInfo?.licensePlate}`, 'success');
+        } else {
+          throw new Error("Không tìm thấy phiên đỗ xe.");
+        }
+      } else {
+        throw new Error("Mã QR không chứa thông tin Checkout hợp lệ");
+      }
+    } catch (error: any) {
+      setActiveSession(null);
+      setSessionFound(false);
+      setSearchQuery('');
+      showNotification(error?.message || "Mã QR không hợp lệ hoặc đã hết hạn", 'error');
+      setTimeout(() => setIsProcessingQR(false), 3000);
+      return;
+    }
+
+    setTimeout(() => setIsProcessingQR(false), 2000);
   };
 
   const handleProcessAndRelease = async () => {
@@ -553,7 +748,20 @@ const StaffExitPage = () => {
                 {/* Camera View */}
                 <section>
                   <div className="flex justify-between items-center mb-3">
-                    <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Live Feed</h3>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setCamMode('lpr')}
+                        className={`text-[10px] px-3 py-1.5 rounded font-bold uppercase tracking-wider transition-colors ${camMode === 'lpr' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
+                      >
+                        LPR Camera
+                      </button>
+                      <button
+                        onClick={() => setCamMode('qr')}
+                        className={`text-[10px] px-3 py-1.5 rounded font-bold uppercase tracking-wider transition-colors ${camMode === 'qr' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
+                      >
+                        QR Scanner
+                      </button>
+                    </div>
                     <button
                       onClick={() => setIsExitCamActive(!isExitCamActive)}
                       className={`text-[10px] px-2 py-1 rounded font-bold uppercase tracking-wider transition-colors ${isExitCamActive ? 'bg-red-100 text-red-700 hover:bg-red-200' : 'bg-green-100 text-green-700 hover:bg-green-200'
@@ -564,13 +772,26 @@ const StaffExitPage = () => {
                   </div>
                   <div className="relative bg-black aspect-video rounded-xl overflow-hidden border border-gray-200 shadow-sm flex items-center justify-center">
                     {isExitCamActive ? (
-                      <video
-                        ref={videoRefExit}
-                        autoPlay
-                        playsInline
-                        muted
-                        className="w-full h-full object-cover opacity-90 mix-blend-screen"
-                      />
+                      camMode === 'lpr' ? (
+                        <video
+                          ref={videoRefExit}
+                          autoPlay
+                          playsInline
+                          muted
+                          className="w-full h-full object-cover opacity-90 mix-blend-screen"
+                        />
+                      ) : (
+                        <div className="w-full h-full relative">
+                          <Scanner
+                            onScan={handleScanQR}
+                            allowMultiple={true}
+                            scanDelay={300}
+                            constraints={{ facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }}
+                            styles={{ container: { width: '100%', height: '100%' }, video: { objectFit: 'cover' } }}
+                            paused={isProcessingQR}
+                          />
+                        </div>
+                      )
                     ) : (
                       <div className="flex flex-col items-center text-gray-500">
                         <VideoOff className="w-10 h-10 mb-2 opacity-50" />

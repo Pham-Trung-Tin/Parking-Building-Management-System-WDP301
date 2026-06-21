@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import Header from '../../components/Header/Header';
+import { useSocket } from '../../contexts/SocketContext';
 
 // ── Confetti particle system ───────────────────────────────────────────────────
 const Confetti = () => {
@@ -100,16 +101,22 @@ const CheckoutSuccessPage = () => {
 
     const spot = data.spot || { title: 'Bitexco Financial Tower Parking', price: 20000 };
     const vehicleType = data.vehicleType || 'car';
-    const floor = data.floor || 3;
-    const slot = data.slot || 5;
-    const slotCode = data.slotCode || `${String.fromCharCode(64 + floor)}-${floor}05`;
-    const licensePlate = data.licensePlate || '51A-12345';
+    const floorObj = data.floor;
+    const slotObj = data.slot;
+
+    const isMoto = typeof vehicleType === 'object' ? vehicleType.code === 'motorcycle' : vehicleType === 'motorcycle';
+    const vehicleTypeName = typeof vehicleType === 'object' ? vehicleType.name : (isMoto ? 'Motorcycle' : 'Car');
+    
+    const floorName = typeof floorObj === 'object' && floorObj !== null ? (floorObj.name || `Floor ${floorObj.floorNumber}`) : `Floor ${floorObj || 3}`;
+    const slotCode = data.slotCode || (typeof slotObj === 'object' && slotObj !== null ? slotObj.slotCode : `${String.fromCharCode(64 + Number(floorObj || 3))}-${floorObj || 3}05`);
+    
+    const licensePlate = data.licensePlate || (isMoto ? '59T1-23456' : '51A-12345');
     const entryDate = data.entryDate ? new Date(data.entryDate) : new Date(Date.now() - 7200000);
     const exitTime = data.exitTime ? new Date(data.exitTime) : new Date();
     const elapsed = data.elapsed || 7200;
     const totalAmount = data.totalAmount !== undefined 
         ? data.totalAmount 
-        : (vehicleType === 'motorcycle'
+        : (isMoto
             ? ((elapsed / 3600) < 4 ? 2000 : 4000)
             : ((elapsed / 3600) < 4 ? 8000 : 16000));
     const serviceFee = Math.round(totalAmount * 0.05);
@@ -121,10 +128,26 @@ const CheckoutSuccessPage = () => {
     const receiptId = data.transactionId || `PB-${Date.now().toString(36).toUpperCase().slice(-8)}`;
 
     const [showConfetti, setShowConfetti] = useState(true);
+    const { socket } = useSocket();
+
     useEffect(() => {
         const t = setTimeout(() => setShowConfetti(false), 3500);
         return () => clearTimeout(t);
-    }, []);
+    }, [data, navigate]);
+
+    useEffect(() => {
+        if (!socket) return;
+        const handleNotification = (notif: any) => {
+            if (notif.type === 'checkin_success' && notif.data?.sessionId) {
+                console.log('[Live Tracker] Check-in confirmed! Navigating to SessionPage:', notif.data.sessionId);
+                navigate(`/session/${notif.data.sessionId}`);
+            }
+        };
+        socket.on('newNotification', handleNotification);
+        return () => {
+            socket.off('newNotification', handleNotification);
+        };
+    }, [socket, navigate]);
 
     const payMethodLabel = {
         bank_transfer: 'Bank Transfer (VietQR)',
@@ -427,8 +450,8 @@ const CheckoutSuccessPage = () => {
                         <div className="r-row">
                             <span className="r-label">Vehicle</span>
                             <span className="r-value" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                {vehicleType === 'motorcycle' ? <MotoIcon /> : <CarIcon />}
-                                {vehicleType === 'motorcycle' ? 'Motorcycle' : 'Car'}
+                                {isMoto ? <MotoIcon /> : <CarIcon />}
+                                {vehicleTypeName}
                             </span>
                         </div>
                         <div className="r-row">
@@ -437,7 +460,7 @@ const CheckoutSuccessPage = () => {
                         </div>
                         <div className="r-row">
                             <span className="r-label">Floor / Slot</span>
-                            <span className="r-value">Floor {floor} — {slotCode}</span>
+                            <span className="r-value">{floorName} — {slotCode}</span>
                         </div>
 
                         <div className="r-divider"></div>

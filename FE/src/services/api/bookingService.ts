@@ -5,7 +5,7 @@ const bookingService = {
         return axiosClient.post('/bookings', data);
     },
     getMyBookings: (params?: any): Promise<any> => {
-        return axiosClient.get('/bookings/my-bookings', { params });
+        return axiosClient.get('/bookings/my', { params });
     },
     getById: (id: string): Promise<any> => {
         return axiosClient.get(`/bookings/${id}`);
