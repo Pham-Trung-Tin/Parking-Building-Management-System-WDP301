@@ -685,6 +685,9 @@ const MyTicketsPage = () => {
                     font-size: 11px; font-weight: 800;
                     text-transform: uppercase; letter-spacing: 0.05em;
                 }
+                .t-badge.unpaid {
+                    background: #fef3c7; color: #d97706;
+                }
                 .t-list-item-btn {
                     padding: 8px 16px; border-radius: 10px;
                     background: #2563eb; color: white;
@@ -938,7 +941,9 @@ const MyTicketsPage = () => {
                                             </div>
                                         </div>
                                         <div className="t-list-item-right">
-                                            <span className="t-badge">Paid</span>
+                                            <span className={`t-badge ${ticket.payMethod === 'cash' ? 'unpaid' : ''}`}>
+                                                {ticket.payMethod === 'cash' ? 'PAY LATER' : 'PAID'}
+                                            </span>
                                             <button className="t-list-item-btn" onClick={(e) => { e.stopPropagation(); setSelectedTicket(ticket); }}>View Ticket</button>
                                         </div>
                                     </div>
@@ -956,7 +961,9 @@ const MyTicketsPage = () => {
                                                 <div className="t-card-top">
                                                     <div className="t-card-header">
                                                         <h3 className="t-spot-title">{ticket.spot.title}</h3>
-                                                        <span className="t-badge">Paid</span>
+                                                        <span className={`t-badge ${ticket.payMethod === 'cash' ? 'unpaid' : ''}`}>
+                                                            {ticket.payMethod === 'cash' ? 'PAY LATER' : 'PAID'}
+                                                        </span>
                                                     </div>
 
                                                     <div className="t-info-grid">
@@ -997,8 +1004,8 @@ const MyTicketsPage = () => {
                                                     </div>
 
                                                     <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #f1f5f9', paddingTop: '12px', fontSize: '12px' }}>
-                                                        <span style={{ color: '#64748b', fontWeight: 600 }}>Total Amount Paid:</span>
-                                                        <span style={{ color: '#10b981', fontWeight: 800 }}>{fmtVND(ticket.totalAmount)}</span>
+                                                        <span style={{ color: '#64748b', fontWeight: 600 }}>Total Amount {ticket.payMethod === 'cash' ? 'Due' : 'Paid'}:</span>
+                                                        <span style={{ color: ticket.payMethod === 'cash' ? '#d97706' : '#10b981', fontWeight: 800 }}>{fmtVND(ticket.totalAmount)}</span>
                                                     </div>
                                                 </div>
 
