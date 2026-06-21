@@ -371,6 +371,11 @@ const SessionPage = () => {
                 @keyframes spin { to { transform: rotate(360deg); } }
 
                 /* ── Fade animations ── */
+                @keyframes pulse {
+                    0% { transform: scale(0.95); opacity: 0.5; }
+                    50% { transform: scale(1.1); opacity: 1; }
+                    100% { transform: scale(0.95); opacity: 0.5; }
+                }
                 @keyframes fadeSlideIn {
                     from { opacity: 0; transform: translateY(14px); }
                     to   { opacity: 1; transform: translateY(0); }
@@ -423,7 +428,7 @@ const SessionPage = () => {
                                 </div>
                             )}
                         </div>
-                        <p className="qr-caption">Quét mã tại cổng ra để thanh toán</p>
+                        <p className="qr-caption">Đưa mã này cho nhân viên cổng ra để thanh toán</p>
                         {sessionCode && (
                             <div className="qr-code-text">{sessionCode}</div>
                         )}
@@ -448,8 +453,14 @@ const SessionPage = () => {
                     {/* Timer + Fee */}
                     <div className="stat-grid s-in-2">
                         <div className="stat-card blue">
-                            <div className="stat-label blue">
-                                <TimerIcon /> Thời Gian Đỗ
+                            <div className="stat-label blue" style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
+                                    <TimerIcon /> Thời Gian Đỗ
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '9px', color: '#10b981', background: '#ecfdf5', padding: '3px 8px', borderRadius: '12px' }}>
+                                    <div style={{ width: '6px', height: '6px', backgroundColor: '#10b981', borderRadius: '50%', animation: 'pulse 1.5s infinite' }} />
+                                    ĐANG TÍNH
+                                </div>
                             </div>
                             <div className="stat-value blue">{formatHMS(Math.max(0, elapsed))}</div>
                             <div className="stat-sub blue">HH:MM:SS</div>
@@ -458,7 +469,7 @@ const SessionPage = () => {
                             <div className="stat-label green">
                                 <CardIcon /> Phí Hiện Tại
                             </div>
-                            <div className="stat-value green" style={{ fontSize: '20px' }}>
+                            <div className="stat-value green" style={{ fontSize: '24px', color: '#059669' }}>
                                 {fmtVND(currentFee)}
                             </div>
                             <div className="stat-sub green">{fmtVND(hourlyRate)}/giờ</div>
@@ -559,13 +570,36 @@ const SessionPage = () => {
                     {/* Actions */}
                     <div className="s-in-6">
                         {amountDue > 0 ? (
-                            <button
-                                className="pay-btn"
-                                onClick={handlePayCheckout}
-                            >
-                                <PayIcon />
-                                {advancePayment > 0 ? `Thanh Toán Phụ Trội (${fmtVND(amountDue)})` : `Thanh Toán (${fmtVND(amountDue)})`}
-                            </button>
+                            <>
+                                <div style={{
+                                    width: '100%', padding: '16px', borderRadius: '14px',
+                                    background: '#f8fafc', border: '1.5px dashed #cbd5e1',
+                                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px',
+                                    marginBottom: '12px'
+                                }}>
+                                    <div style={{ fontSize: '13px', color: '#475569', fontWeight: 600 }}>
+                                        Vui lòng chuẩn bị tiền mặt
+                                    </div>
+                                    <div style={{ fontSize: '24px', fontWeight: 900, color: '#0f172a' }}>
+                                        {fmtVND(amountDue)}
+                                    </div>
+                                    <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 500 }}>
+                                        để thanh toán trực tiếp tại cổng ra
+                                    </div>
+                                </div>
+
+                                <div style={{ textAlign: 'center', fontSize: '12px', color: '#94a3b8', fontWeight: 700, marginBottom: '12px' }}>
+                                    — HOẶC —
+                                </div>
+
+                                <button
+                                    className="pay-btn"
+                                    onClick={handlePayCheckout}
+                                >
+                                    <PayIcon />
+                                    Chuyển sang thanh toán Online
+                                </button>
+                            </>
                         ) : (
                             <div className="pay-btn" style={{ background: '#10b981', cursor: 'default' }}>
                                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 8 }}>
