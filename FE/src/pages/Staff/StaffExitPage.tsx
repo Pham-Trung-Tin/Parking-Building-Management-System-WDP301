@@ -180,10 +180,9 @@ const StaffExitPage = () => {
 
     // Has Booking
     if (activeSession.booking?.endTime && activeSession.booking?.scheduledDate) {
-      // Base fee for booking is the advance payment or estimated booking fee
-      fee = activeSession.advancePayment > 0 ? activeSession.advancePayment : (activeSession.booking.estimatedFee || 0);
-
-      const scheduledDateStr = activeSession.booking.scheduledDate.split('T')[0];
+      const scheduledDateStr = typeof activeSession.booking.scheduledDate === 'string'
+        ? activeSession.booking.scheduledDate.split('T')[0]
+        : new Date(activeSession.booking.scheduledDate).toISOString().split('T')[0];
       const scheduledEnd = new Date(`${scheduledDateStr}T${activeSession.booking.endTime}:00`);
 
       if (now > scheduledEnd) {
@@ -192,22 +191,6 @@ const StaffExitPage = () => {
           // Overtime: same block logic, no multiplier
           overtimeFee = countBlockFee(scheduledEnd, now);
         }
-      }
-    } else {
-      // Walk-in Guest
-      const durationMs = now.getTime() - entryTime.getTime();
-      const durationHours = durationMs / (1000 * 60 * 60);
-      const durationDays = Math.floor(durationHours / 24);
-      const remainingHours = durationHours % 24;
-
-      if (durationDays > 0) {
-        fee += durationDays * (pricing.dailyRate || 0);
-      }
-      if (remainingHours > 0) {
-        fee += Math.ceil(remainingHours) * (pricing.hourlyRate || 0);
-      }
-      if (fee === 0 && durationMs > 0) {
-        fee = pricing.hourlyRate || 0;
       }
     }
 

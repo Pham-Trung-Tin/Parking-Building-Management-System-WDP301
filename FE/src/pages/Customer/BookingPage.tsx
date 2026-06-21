@@ -684,7 +684,7 @@ const BookingPage = () => {
     // ── Compatibility for TicketsPage & Header ──
     const saveToMyTickets = (backendData: any) => {
         const dayBlockRate = vehicleType?.pricing?.dayBlockRate || (parkingSpot.settings?.pricePerHour ?? parkingSpot.price ?? 20000);
-        const estimatedPrice = dayBlockRate * duration;
+        const estimatedPrice = Math.ceil(duration / 4) * dayBlockRate;
         const grandTotal = Math.round(estimatedPrice);
         const rawExit = exitTime;
 
@@ -894,7 +894,7 @@ const BookingPage = () => {
 
     const exitTime = new Date(new Date(entryDate).getTime() + duration * 3600000);
     const dayBlockRate = vehicleType?.pricing?.dayBlockRate ?? 0;
-    const estimatedPrice = dayBlockRate * duration;
+    const estimatedPrice = Math.ceil(duration / 4) * dayBlockRate;
 
     // ─── Navigation ─────────────────────────────────────────────────────────
     const canProceed = (step: number): boolean => {
@@ -2426,7 +2426,7 @@ const BookingPage = () => {
                                             <div style={{ textAlign: 'right', flexShrink: 0 }}>
                                                 <div style={{ fontSize: 10, color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Est. Cost</div>
                                                 <div style={{ fontSize: 20, fontWeight: 900, color: '#fbbf24', letterSpacing: -0.5 }}>
-                                                    {new Intl.NumberFormat('vi-VN').format(Math.round((vehicleType.pricing?.dayBlockRate ?? 0) * duration))}₫
+                                                    {new Intl.NumberFormat('vi-VN').format(Math.round(Math.ceil(duration / 4) * (vehicleType.pricing?.dayBlockRate ?? 0)))}₫
                                                 </div>
                                             </div>
                                         )}

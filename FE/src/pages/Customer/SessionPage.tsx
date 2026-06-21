@@ -99,13 +99,20 @@ const SessionPage = () => {
     const slotData: ParkingSlot | null = state.slot || null;
     const sessionId: string | null = state.sessionId || null; // nếu có session đã tạo từ trước
 
-    // Đơn giá block ban ngày từ VehicleType object
-    const dayBlockRate = vehicleTypeData?.pricing?.dayBlockRate ?? spot.price ?? 20000;
-
     // ── Session data từ API (nếu có sessionId) ────────────────────────────────
     const initialSession = state.session || null;
     const [session, setSession] = useState<ParkingSession | null>(initialSession);
     const [sessionLoading, setSessionLoading] = useState(false);
+
+    // Đơn giá block ban ngày & ban đêm từ VehicleType hoặc fallback
+    const dayBlockRate = (typeof session?.vehicleType === 'object' ? (session.vehicleType as any)?.pricing?.dayBlockRate : null)
+        || vehicleTypeData?.pricing?.dayBlockRate 
+        || spot.price 
+        || 20000;
+
+    const nightBlockRate = (typeof session?.vehicleType === 'object' ? (session.vehicleType as any)?.pricing?.nightBlockRate : null)
+        || vehicleTypeData?.pricing?.nightBlockRate 
+        || (dayBlockRate * 1.5);
 
     useEffect(() => {
         if (!sessionId) return;
@@ -147,10 +154,33 @@ const SessionPage = () => {
         return () => clearInterval(id);
     }, []);
 
-    // ── Phí ước tính thực tế: (elapsed / 4h block) × dayBlockRate ────────────
-    const elapsedHours = elapsed / 3600;
-    const BLOCK_HOURS = 4;
-    const currentFee = Math.ceil(elapsedHours / BLOCK_HOURS) * dayBlockRate;
+    const entryTime: Date = session?.entryTime
+        ? new Date(session.entryTime)
+        : new Date(sessionStart.current);
+
+    // ── Phí ước tính thực tế: Tính theo block 4h ban ngày & ban đêm ────────────
+    const calculateSessionFee = (): number => {
+        if (elapsed <= 0) return 0;
+        const BLOCK_MS = 4 * 60 * 60 * 1000;
+        const entryTimeMs = entryTime.getTime();
+        const exitTimeMs = entryTimeMs + elapsed * 1000;
+        
+        let fee = 0;
+        let cur = entryTimeMs;
+        while (cur < exitTimeMs) {
+            const date = new Date(cur);
+            const h = date.getHours();
+            // 06:00–17:59 daytime, 18:00–05:59 nighttime
+            const isDaytime = h >= 6 && h < 18;
+            fee += isDaytime ? dayBlockRate : nightBlockRate;
+            cur += BLOCK_MS;
+        }
+        return Math.round(fee);
+    };
+    const currentFee = calculateSessionFee();
+
+    const advancePayment = session?.advancePayment ?? state.advancePayment ?? 0;
+    const amountDue = Math.max(0, currentFee - advancePayment);
 
     // ── Thông tin hiển thị ────────────────────────────────────────────────────
     // Ưu tiên data từ API session, fallback về state từ BookingPage
@@ -166,9 +196,6 @@ const SessionPage = () => {
     const zoneName: string = (typeof session?.zone === 'object' ? (session.zone as any)?.name : '') || zoneData?.name || 'N/A';
     const slotCode: string = (typeof session?.slot === 'object' ? (session.slot as any)?.slotCode : '') || slotData?.slotCode || 'N/A';
     const sessionCode: string = session?.sessionCode ?? '';
-    const entryTime: Date = session?.entryTime
-        ? new Date(session.entryTime)
-        : new Date(sessionStart.current);
 
     const [qrValue, setQrValue] = useState<string>('');
     useEffect(() => {
@@ -534,17 +561,15 @@ const SessionPage = () => {
 
                         {/* Pricing summary */}
                         <div className="pricing-row">
-                            <span className="pricing-label">Đơn giá áp dụng</span>
+                            <span className="pricing-label">Đơn giá block ngày (6h - 18h)</span>
                             <span className="pricing-value">{fmtVND(dayBlockRate)} / block</span>
                         </div>
-                        {vehicleTypeData?.pricing?.dailyRate && (
-                            <div className="pricing-row" style={{ paddingTop: 8, marginTop: 0, borderTop: 'none' }}>
-                                <span className="pricing-label">Giá cả ngày</span>
-                                <span style={{ fontSize: 13, fontWeight: 700, color: '#64748b' }}>
-                                    {fmtVND(vehicleTypeData.pricing.dailyRate)} / ngày
-                                </span>
-                            </div>
-                        )}
+                        <div className="pricing-row" style={{ paddingTop: 8, marginTop: 0, borderTop: 'none' }}>
+                            <span className="pricing-label">Đơn giá block đêm (18h - 6h)</span>
+                            <span className="pricing-value" style={{ fontWeight: 700, color: '#64748b' }}>
+                                {fmtVND(nightBlockRate)} / block
+                            </span>
+                        </div>
                         {advancePayment > 0 && (
                             <div className="pricing-row" style={{ paddingTop: 8, marginTop: 0, borderTop: 'none' }}>
                                 <span className="pricing-label" style={{ color: '#10b981' }}>Đã thanh toán trước (Booking)</span>
@@ -562,7 +587,7 @@ const SessionPage = () => {
                             <div className="notice-title">Lưu Ý Quan Trọng</div>
                             <div className="notice-text">
                                 Giữ mã QR để xuất trình tại cổng ra. Thời gian đỗ tối đa 24 giờ.
-                                Phí tính theo block 4h với đơn giá <strong>{fmtVND(dayBlockRate)}/block</strong>.
+                                Phí tính theo block 4h (Ngày: <strong>{fmtVND(dayBlockRate)}</strong>, Đêm: <strong>{fmtVND(nightBlockRate)}</strong>).
                             </div>
                         </div>
                     </div>
