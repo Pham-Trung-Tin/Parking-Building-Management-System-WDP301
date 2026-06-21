@@ -439,36 +439,38 @@ const SlotMapGrid = ({ slots, selectedSlot, onSelect, vehicleType, currentUserId
                     </div>
                 ))}
             </div>
-            
+
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                 {/* Road lanes */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', maxWidth: '640px', marginBottom: 6, padding: '0 8px' }}>
                     <span style={{ fontSize: 11, fontWeight: 700, color: '#10b981', letterSpacing: 1, textTransform: 'uppercase' }}>← Entry</span>
                     <span style={{ fontSize: 11, fontWeight: 700, color: '#ef4444', letterSpacing: 1, textTransform: 'uppercase' }}>Exit →</span>
                 </div>
-            {rows.map(([rowKey, rowSlots]) => {
-                const mid = Math.ceil(rowSlots.length / 2);
-                const top = rowSlots.slice(0, mid);
-                const bot = rowSlots.slice(mid);
-                return (
-                    <div key={rowKey} style={{ marginBottom: 16 }}>
-                        <div style={{ overflowX: 'auto', paddingBottom: 4 }}>
-                            {/* Top row */}
-                            <div style={{ display: 'flex', gap: 6, marginBottom: 6, minWidth: 'max-content' }}>
-                                {top.map(slot => <SlotBtn key={slot._id} slot={slot} />)}
-                            </div>
-                            {/* Road stripe */}
-                            <div style={{ height: 18, background: 'repeating-linear-gradient(90deg,#f59e0b 0,#f59e0b 20px,transparent 20px,transparent 40px)', borderRadius: 4, opacity: 0.25, margin: '0 2px' }} />
-                            {/* Bottom row */}
-                            {bot.length > 0 && (
-                                <div style={{ display: 'flex', gap: 6, marginTop: 6, minWidth: 'max-content' }}>
-                                    {bot.map(slot => <SlotBtn key={slot._id} slot={slot} />)}
+                {rows.map(([rowKey, rowSlots]) => {
+                    const mid = Math.ceil(rowSlots.length / 2);
+                    const top = rowSlots.slice(0, mid);
+                    const bot = rowSlots.slice(mid);
+                    return (
+                        <div key={rowKey} style={{ marginBottom: 16 }}>
+                            <div style={{ overflowX: 'auto', paddingBottom: 4 }}>
+                                {/* Top row */}
+                                <div style={{ display: 'flex', gap: 6, marginBottom: 6, minWidth: 'max-content' }}>
+                                    {top.map(slot => <SlotBtn key={slot._id} slot={slot} />)}
                                 </div>
-                            )}
+                                {/* Road stripe */}
+                                <div style={{ height: 18, background: 'repeating-linear-gradient(90deg,#f59e0b 0,#f59e0b 20px,transparent 20px,transparent 40px)', borderRadius: 4, opacity: 0.25, margin: '0 2px' }} />
+                                {/* Bottom row */}
+                                {bot.length > 0 && (
+                                    <div style={{ display: 'flex', gap: 6, marginTop: 6, minWidth: 'max-content' }}>
+                                        {bot.map(slot => <SlotBtn key={slot._id} slot={slot} />)}
+                                        Scan to Enter
+
+                                    </div>
+                                )}
+                            </div>
                         </div>
-                    </div>
-                );
-            })}
+                    );
+                })}
             </div>
 
         </div>
@@ -476,6 +478,15 @@ const SlotMapGrid = ({ slots, selectedSlot, onSelect, vehicleType, currentUserId
 };
 
 // ─── Main Booking Page ────────────────────────────────────────────────────────
+const TEMP_PRICES: Record<string, { dayBlockRate: number, dailyRate: number }> = {
+    'CAR': { dayBlockRate: 20000, dailyRate: 100000 },
+    'ELECTRIC_CAR': { dayBlockRate: 25000, dailyRate: 120000 },
+    'MOTORBIKE': { dayBlockRate: 8000, dailyRate: 40000 },
+    'BICYCLE': { dayBlockRate: 4000, dailyRate: 20000 },
+    'ELECTRIC_BIKE': { dayBlockRate: 10000, dailyRate: 50000 },
+    'SMALL_TRUCK': { dayBlockRate: 40000, dailyRate: 200000 },
+};
+
 const BookingPage = () => {
     const navigate = useNavigate();
     const location = useLocation();
@@ -683,8 +694,9 @@ const BookingPage = () => {
 
     // ── Compatibility for TicketsPage & Header ──
     const saveToMyTickets = (backendData: any) => {
-        const hourlyRate = vehicleType?.pricing?.hourlyRate || (parkingSpot.settings?.pricePerHour ?? parkingSpot.price ?? 20000);
-        const estimatedPrice = hourlyRate * duration;
+        const blockRate = vehicleType?.pricing?.dayBlockRate || (TEMP_PRICES[vehicleType?.code?.toUpperCase()]?.dayBlockRate) || (vehicleType?.pricing?.hourlyRate ? vehicleType.pricing.hourlyRate * 4 : 20000);
+        const estimatedBlocks = Math.ceil(duration / 4);
+        const estimatedPrice = blockRate * estimatedBlocks;
         const grandTotal = Math.round(estimatedPrice);
         const rawExit = exitTime;
 
@@ -893,8 +905,9 @@ const BookingPage = () => {
     }, [floorSlots, selectedZone]);
 
     const exitTime = new Date(new Date(entryDate).getTime() + duration * 3600000);
-    const hourlyRate = vehicleType?.pricing?.hourlyRate ?? 0;
-    const estimatedPrice = hourlyRate * duration;
+    const blockRate = vehicleType?.pricing?.dayBlockRate || (TEMP_PRICES[vehicleType?.code?.toUpperCase()]?.dayBlockRate) || (vehicleType?.pricing?.hourlyRate ? vehicleType.pricing.hourlyRate * 4 : 0);
+    const estimatedBlocks = Math.ceil(duration / 4);
+    const estimatedPrice = blockRate * estimatedBlocks;
 
     // ─── Navigation ─────────────────────────────────────────────────────────
     const canProceed = (step: number): boolean => {
@@ -1914,7 +1927,7 @@ const BookingPage = () => {
                                                     <VehicleSvgIcon code={vt.code} size={38} />
                                                 </div>
                                                 <div className="vt-name">{vt.name}</div>
-                                                <div className="vt-price">{fmtVND(vt.pricing?.hourlyRate ?? 0)}/hr</div>
+                                                <div className="vt-price">{fmtVND(vt.pricing?.dayBlockRate || TEMP_PRICES[vt.code?.toUpperCase()]?.dayBlockRate || (vt.pricing?.hourlyRate ? vt.pricing.hourlyRate * 4 : 0))}/4h</div>
                                                 {vehicleType?._id === vt._id && (
                                                     <div className="vt-check">✓</div>
                                                 )}
@@ -2426,7 +2439,10 @@ const BookingPage = () => {
                                             <div style={{ textAlign: 'right', flexShrink: 0 }}>
                                                 <div style={{ fontSize: 10, color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Est. Cost</div>
                                                 <div style={{ fontSize: 20, fontWeight: 900, color: '#fbbf24', letterSpacing: -0.5 }}>
-                                                    {new Intl.NumberFormat('vi-VN').format(Math.round((vehicleType.pricing?.hourlyRate ?? 0) * duration))}₫
+                                                    {new Intl.NumberFormat('vi-VN').format(Math.round((vehicleType.pricing?.dayBlockRate || TEMP_PRICES[vehicleType?.code?.toUpperCase()]?.dayBlockRate || (vehicleType.pricing?.hourlyRate ? vehicleType.pricing.hourlyRate * 4 : 0)) * Math.ceil(duration / 4)))}₫
+                                                </div>
+                                                <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 500, marginTop: 4, maxWidth: '120px' }}>
+                                                    Phí tính theo block 4h. {duration}h = {Math.ceil(duration / 4)} block(s).
                                                 </div>
                                             </div>
                                         )}
@@ -2557,7 +2573,7 @@ const BookingPage = () => {
                                                 ) return false;
                                                 return true;
                                             }).length : z.availableSlots;
-                                            
+
                                             const liveTotal = z.totalSlots;
                                             const pct = liveTotal > 0 ? Math.round((liveAvailable / liveTotal) * 100) : 0;
                                             const isFull = liveAvailable === 0;
@@ -2709,7 +2725,7 @@ const BookingPage = () => {
                                         </div>
                                         <div className="modal-row">
                                             <span className="modal-row-label">Rate</span>
-                                            <span className="modal-row-value">{fmtVND(hourlyRate)}/hr</span>
+                                            <span className="modal-row-value">{fmtVND(blockRate)}/4h</span>
                                         </div>
                                     </div>
 
