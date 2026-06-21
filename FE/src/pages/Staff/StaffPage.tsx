@@ -37,14 +37,15 @@ import vehicleTypeService from '../../services/api/vehicleTypeService';
 import parkingLotService from '../../services/api/parkingLotService';
 import floorService from '../../services/api/floorService';
 import parkingSlotService from '../../services/api/parkingSlotService';
+import bookingService from '../../services/api/bookingService';
 
-// Interface for mock booking data
 interface BookingData {
   id: string;
   plate: string;
   customerName: string;
   spot: string;
   status: 'VALID' | 'INVALID';
+  bookingId?: string;
 }
 
 const StaffPage = () => {
@@ -378,24 +379,54 @@ const StaffPage = () => {
 
     setIsLoadingQR(true);
     try {
-      const payload = await verifyQRToken(code);
+      let payload: any;
+      try {
+        payload = await verifyQRToken(code);
+      } catch (tokenErr: any) {
+        // Fallback: Check if it's a plain JSON string from the mobile app
+        try {
+          payload = JSON.parse(code);
+        } catch (jsonErr) {
+           // Fallback: Check if it's just a plain text booking ID
+           if (typeof code === 'string' && code.trim().length > 0) {
+             payload = { bookingId: code.trim(), id: code.trim(), type: 'checkin' };
+           } else {
+             throw tokenErr;
+           }
+        }
+      }
+
+      if (payload.type && payload.type !== 'checkin') {
+        throw new Error('Mã QR không phải là loại Check-in hợp lệ');
+      }
+
+      const safeBookingId = String(payload.bookingId || payload.id || payload.receiptId || code || '');
       
-      setTimeout(() => {
+      try {
+        const bookingRes = await bookingService.getById(safeBookingId);
+        const booking = bookingRes.data || bookingRes;
+
         setIsLoadingQR(false);
         const mockResult: BookingData = {
-          id: payload.receiptId || payload.bookingId.substring(0, 8).toUpperCase(),
-          plate: payload.licensePlate,
-          customerName: 'Customer',
-          spot: payload.slotCode,
-          status: 'VALID'
+          id: booking.bookingCode || safeBookingId.substring(0, 8).toUpperCase(),
+          plate: booking.vehicleInfo?.licensePlate || payload.licensePlate || 'N/A',
+          customerName: booking.user?.fullName || payload.customerName || 'Customer',
+          spot: booking.assignedSlot?.slotCode || payload.slotCode || 'Unassigned',
+          status: 'VALID',
+          bookingId: safeBookingId
         };
         setModalData(mockResult);
         setShowModal(true);
-      }, 500);
+      } catch (fetchErr: any) {
+        throw new Error('Không tìm thấy thông tin Booking từ mã QR này.');
+      }
     } catch (error: any) {
       setIsLoadingQR(false);
-      setIsProcessingQR(false);
       showNotification(error.message || 'Mã QR không hợp lệ', 'error');
+      // Cooldown 3s to prevent 429 Too Many Requests spam
+      setTimeout(() => {
+        setIsProcessingQR(false);
+      }, 3000);
     }
   };
 
@@ -428,15 +459,34 @@ const StaffPage = () => {
     setCameraError('Cannot access Camera. Please grant permission in browser settings.');
   };
 
-  const handleConfirmCheckInQR = () => {
-    setToastMessageQR(`Check-in successful! Direct vehicle ${modalData?.plate} to ${modalData?.spot}!`);
-    setShowModal(false);
-    setModalData(null);
-
-    setTimeout(() => {
-      setToastMessageQR(null);
+  const handleConfirmCheckInQR = async () => {
+    if (!modalData?.bookingId) {
+      showNotification('Dữ liệu Booking không hợp lệ hoặc thiếu ID', 'error');
       setIsProcessingQR(false);
-    }, 3000);
+      return;
+    }
+
+    const lotId = (profile as any)?.assignedParkingLot?._id || (profile as any)?.assignedParkingLot || defaultLotId;
+
+    try {
+      await parkingSessionService.checkIn({
+        bookingId: modalData.bookingId,
+        licensePlate: modalData.plate,
+        parkingLotId: lotId
+      });
+
+      setToastMessageQR(`Check-in successful! Direct vehicle ${modalData?.plate} to ${modalData?.spot}!`);
+      setShowModal(false);
+      setModalData(null);
+
+      setTimeout(() => {
+        setToastMessageQR(null);
+        setIsProcessingQR(false);
+      }, 3000);
+    } catch (err: any) {
+      showNotification(err?.response?.data?.message || err?.message || 'Failed to check in from QR', 'error');
+      setIsProcessingQR(false);
+    }
   };
 
   const handleCancelCheckInQR = () => {
@@ -820,7 +870,7 @@ const StaffPage = () => {
 
               {/* LEFT: CAMERA AREA */}
               <div className="flex-[2] flex flex-col bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm relative min-h-[500px]">
-                <div className="p-5 bg-white/90 backdrop-blur-md border-b border-gray-200 flex justify-between items-center z-10 absolute top-0 left-0 right-0">
+                <div className="p-5 bg-white border-b border-gray-200 flex justify-between items-center z-10">
                   <div className="flex items-center gap-3">
                     <Camera className="w-6 h-6 text-gray-900" />
                     <h2 className="font-bold text-gray-900 tracking-wide text-lg">PRE-BOOKED QR SCANNER</h2>
@@ -840,9 +890,9 @@ const StaffPage = () => {
                       </button>
                     </div>
                   ) : (
-                    <div className="w-full h-full relative pt-16">
+                    <div className="w-full h-full relative">
                       {/* Overlay Scanner Laser */}
-                      <div className="absolute inset-0 z-10 pointer-events-none flex items-center justify-center mt-16">
+                      <div className="absolute inset-0 z-10 pointer-events-none flex items-center justify-center">
                         <div className={`relative w-72 h-72 border-2 ${isProcessingQR ? 'border-yellow-500/50' : 'border-blue-500/40'} rounded-3xl overflow-hidden transition-colors duration-300`}>
                           <div className="absolute top-0 left-0 w-10 h-10 border-t-[5px] border-l-[5px] border-blue-500 rounded-tl-[1.3rem]"></div>
                           <div className="absolute top-0 right-0 w-10 h-10 border-t-[5px] border-r-[5px] border-blue-500 rounded-tr-[1.3rem]"></div>
@@ -857,7 +907,7 @@ const StaffPage = () => {
 
                       {/* Loading Overlay */}
                       {isLoadingQR && (
-                        <div className="absolute inset-0 bg-white/80 backdrop-blur-sm z-20 flex flex-col items-center justify-center animate-in fade-in duration-200 pt-16">
+                        <div className="absolute inset-0 bg-white/80 backdrop-blur-sm z-20 flex flex-col items-center justify-center animate-in fade-in duration-200">
                           <div className="w-16 h-16 border-[5px] border-blue-500/20 border-t-blue-500 rounded-full animate-spin mb-6"></div>
                           <p className="text-xl font-bold text-gray-900 tracking-widest animate-pulse">FETCHING DATA...</p>
                         </div>
@@ -866,9 +916,13 @@ const StaffPage = () => {
                       <Scanner
                         onScan={handleScanQR}
                         onError={handleErrorQR}
-                        formats={['qr_code']}
                         allowMultiple={true}
-                        scanDelay={2000}
+                        scanDelay={300}
+                        constraints={{
+                          facingMode: 'environment',
+                          width: { ideal: 1280 },
+                          height: { ideal: 720 }
+                        }}
                         styles={{ container: { width: '100%', height: '100%' }, video: { objectFit: 'cover' } }}
                         paused={isProcessingQR}
                       />
