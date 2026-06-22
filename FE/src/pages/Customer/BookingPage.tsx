@@ -555,6 +555,11 @@ const BookingPage = () => {
     });
     const [duration, setDuration] = useState(2);
 
+    useEffect(() => {
+        const bs = 4;
+        setDuration(d => Math.max(bs, Math.ceil(d / bs) * bs));
+    }, [vehicleType]);
+
     const selHour = parseInt(entryDate.slice(11, 13)) || 0;
     const selMin = parseInt(entryDate.slice(14, 16)) || 0;
     const handleSetEntryDate = (dateStr: string, h: number, m: number) => {
@@ -584,6 +589,15 @@ const BookingPage = () => {
 
     const [showCalendar, setShowCalendar] = useState(false);
     const [showTimePicker, setShowTimePicker] = useState(false);
+
+    useEffect(() => {
+        if (showTimePicker) {
+            setTimeout(() => {
+                document.getElementById(`time-picker-hour-${selHour}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+                document.getElementById(`time-picker-min-${selMin}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+            }, 50);
+        }
+    }, [showTimePicker, selHour, selMin]);
     const [calMonth, setCalMonth] = useState(() => new Date().getMonth());
     const [calYear, setCalYear] = useState(() => new Date().getFullYear());
     const [activeInput, setActiveInput] = useState<'from' | 'to'>('from');
@@ -2172,15 +2186,12 @@ const BookingPage = () => {
                             const fmtT = (d: Date) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
                             const fmtD = (d: Date) => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
 
+                            const bs = 4;
                             const DURATION_OPTIONS = [
-                                { label: '1h', val: 1 },
-                                { label: '2h', val: 2 },
-                                { label: '3h', val: 3 },
-                                { label: '4h', val: 4 },
-                                { label: '6h', val: 6 },
-                                { label: '8h', val: 8 },
-                                { label: '12h', val: 12 },
-                                { label: 'All day', val: 24 },
+                                { label: '4h (1 block)', val: 4 },
+                                { label: '8h (2 blocks)', val: 8 },
+                                { label: '12h (3 blocks)', val: 12 },
+                                { label: '24h (6 blocks)', val: 24 },
                             ];
                             const isCustomDur = !DURATION_OPTIONS.find(o => o.val === duration);
 
@@ -2309,13 +2320,13 @@ const BookingPage = () => {
                                                 border: `2px solid ${isCustomDur ? '#2563eb' : '#e2e8f0'}`,
                                                 borderRadius: 14, overflow: 'hidden', background: isCustomDur ? '#eff6ff' : 'white',
                                             }}>
-                                                <button onClick={() => setDuration(d => Math.max(1, d - 1))}
+                                                <button onClick={() => setDuration(d => Math.max(bs, d - bs))}
                                                     style={{ width: 38, height: 52, border: 'none', background: 'transparent', fontSize: 20, fontWeight: 900, color: '#1e293b', cursor: 'pointer' }}>−</button>
                                                 <div style={{ padding: '0 8px', textAlign: 'center', borderLeft: '1.5px solid #e2e8f0', borderRight: '1.5px solid #e2e8f0', minWidth: 52 }}>
                                                     <div style={{ fontSize: 18, fontWeight: 900, color: isCustomDur ? '#2563eb' : '#64748b', lineHeight: 1 }}>{duration}</div>
                                                     <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 600 }}>hr</div>
                                                 </div>
-                                                <button onClick={() => setDuration(d => Math.min(72, d + 1))}
+                                                <button onClick={() => setDuration(d => Math.min(72, d + bs))}
                                                     style={{ width: 38, height: 52, border: 'none', background: 'transparent', fontSize: 20, fontWeight: 900, color: '#1e293b', cursor: 'pointer' }}>+</button>
                                             </div>
                                         </div>
@@ -3046,6 +3057,7 @@ const BookingPage = () => {
                                                 const isPastHour = isTodaySelection && i < currentHour;
                                                 return (
                                                     <div key={i}
+                                                         id={`time-picker-hour-${i}`}
                                                          onClick={() => {
                                                              if (!isPastHour) setSlot(i, selMin);
                                                          }}
@@ -3067,10 +3079,11 @@ const BookingPage = () => {
                                         </div>
                                         <div style={{ flex: 1, overflowY: 'auto' }} className="custom-scrollbar">
                                             <div style={{ padding: '10px 0', textAlign: 'center', fontSize: 12, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em', borderBottom: '1.5px solid #f1f5f9', position: 'sticky', top: 0, background: '#f8fafc', zIndex: 2 }}>Minute</div>
-                                            {[0, 15, 30, 45].map(m => {
+                                            {Array.from({ length: 60 }).map((_, m) => {
                                                 const isPastMin = isTodaySelection && selHour === currentHour && m < currentMin;
                                                 return (
                                                     <div key={m}
+                                                         id={`time-picker-min-${m}`}
                                                          onClick={() => {
                                                              if (!isPastMin) {
                                                                  setSlot(selHour, m); 
