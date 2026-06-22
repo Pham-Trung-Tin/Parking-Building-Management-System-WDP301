@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useSocket } from '../../contexts/SocketContext';
 import Header from '../../components/Header/Header';
 import parkingSessionService, { ParkingSession } from '../../services/api/parkingSessionService';
-import { VehicleType } from '../../services/api/vehicleTypeService';
+import vehicleTypeService, { VehicleType, VehicleTypePricing } from '../../services/api/vehicleTypeService';
 import { Floor } from '../../services/api/floorService';
 import { Zone } from '../../services/api/zoneService';
 import { ParkingSlot } from '../../services/api/parkingSlotService';
@@ -89,6 +90,7 @@ const fmtDateTime = (d: Date) =>
 const SessionPage = () => {
     const navigate = useNavigate();
     const location = useLocation();
+    const { socket } = useSocket();
     const state = location.state || {} as any;
 
     // ── Dữ liệu từ BookingPage navigate ──────────────────────────────────────
@@ -99,20 +101,32 @@ const SessionPage = () => {
     const slotData: ParkingSlot | null = state.slot || null;
     const sessionId: string | null = state.sessionId || null; // nếu có session đã tạo từ trước
 
+    // estimatedPrice, duration, blockRate — do BookingPage tính và truyền sang
+    const stateEstimatedPrice: number = state.estimatedPrice || 0;
+    const stateDuration: number = state.duration || 4;
+    const stateBlockRate: number = state.blockRate || 0; // Giá 1 block mà user đã thanh toán
+
     // ── Session data từ API (nếu có sessionId) ────────────────────────────────
     const initialSession = state.session || null;
     const [session, setSession] = useState<ParkingSession | null>(initialSession);
-    const [sessionLoading, setSessionLoading] = useState(false);
+    const [sessionLoading, setSessionLoading] = useState(true);
+    const [showQrModal, setShowQrModal] = useState(false);
 
-    // Đơn giá block ban ngày & ban đêm từ VehicleType hoặc fallback
-    const dayBlockRate = (typeof session?.vehicleType === 'object' ? (session.vehicleType as any)?.pricing?.dayBlockRate : null)
-        || vehicleTypeData?.pricing?.dayBlockRate 
-        || spot.price 
-        || 20000;
+    // ── Fetch vehicle type pricing trực tiếp từ API (vì navigate state có thể thiếu pricing) ─
+    const [fetchedVTPricing, setFetchedVTPricing] = useState<VehicleTypePricing | null>(null);
 
-    const nightBlockRate = (typeof session?.vehicleType === 'object' ? (session.vehicleType as any)?.pricing?.nightBlockRate : null)
-        || vehicleTypeData?.pricing?.nightBlockRate 
-        || (dayBlockRate * 1.5);
+    useEffect(() => {
+        const vtId = vehicleTypeData?._id || state.vehicleTypeId;
+        if (!vtId) return;
+        vehicleTypeService.getById(vtId)
+            .then((res: any) => {
+                const vt = res?.data || res;
+                if (vt?.pricing?.dayBlockRate) {
+                    setFetchedVTPricing(vt.pricing as VehicleTypePricing);
+                }
+            })
+            .catch(() => {}); // Fail silently — sẽ dùng fallback
+    }, [vehicleTypeData?._id, state.vehicleTypeId]);
 
     useEffect(() => {
         if (!sessionId) return;
@@ -120,7 +134,7 @@ const SessionPage = () => {
             setSessionLoading(true);
             try {
                 const data = await parkingSessionService.getById(sessionId);
-                setSession(data as ParkingSession);
+                setSession((data.data || data) as ParkingSession);
             } catch {
                 // session không load được — vẫn dùng state data từ BookingPage
             } finally {
@@ -129,6 +143,7 @@ const SessionPage = () => {
         };
         load();
     }, [sessionId]);
+
 
     // ── Live timer kể từ lúc vào trang / entryTime của session ───────────────
     const sessionStart = useRef<number>(
@@ -144,45 +159,125 @@ const SessionPage = () => {
         }
     }, [session]);
 
-    const initialElapsed = Math.floor((Date.now() - sessionStart.current) / 1000);
+    // ── Dev Tool Time Offset ──────────────────────────────────────────────────
+    const [devTimeOffset, setDevTimeOffset] = useState<number>(() => {
+        const stored = localStorage.getItem('devTimeOffset');
+        return stored ? parseInt(stored, 10) : 0;
+    });
+
+    useEffect(() => {
+        const handleOffsetChange = (e: any) => {
+            if (e.detail !== undefined) {
+                setDevTimeOffset(e.detail);
+            }
+        };
+        window.addEventListener('devTimeOffsetChanged', handleOffsetChange);
+        return () => window.removeEventListener('devTimeOffsetChanged', handleOffsetChange);
+    }, []);
+
+    const initialElapsed = Math.floor((Date.now() + devTimeOffset - sessionStart.current) / 1000);
     const [elapsed, setElapsed] = useState(Math.max(0, initialElapsed));
 
     useEffect(() => {
         const id = setInterval(() => {
-            setElapsed(Math.floor((Date.now() - sessionStart.current) / 1000));
+            setElapsed(Math.floor((Date.now() + devTimeOffset - sessionStart.current) / 1000));
         }, 1000);
         return () => clearInterval(id);
-    }, []);
+    }, [devTimeOffset]);
 
-    const entryTime: Date = session?.entryTime
-        ? new Date(session.entryTime)
-        : new Date(sessionStart.current);
+    // ── Phí ước tính thực tế (Pre-booked Overtime logic) ────────────────────
+    let overtimeFee = 0;
+    const bookingInfo = typeof session?.booking === 'object' ? session.booking : null;
+    
+    const vtCodeForPricing = (typeof session?.vehicleType === 'object' ? (session.vehicleType as any)?.code : '') || vehicleTypeData?.code || '';
+    const isMotorbikeType = ['MOTORBIKE', 'MOTORCYCLE', 'ELECTRIC_BIKE', 'BICYCLE'].some(c => vtCodeForPricing.toUpperCase().includes(c));
+    
+    // Rút trích đúng giá tiền từ API thay vì fallback cứng
+    const vehicleTypePricing = (typeof session?.vehicleType === 'object' ? (session.vehicleType as any)?.pricing : null) || vehicleTypeData?.pricing;
+    const hourlyRate = vehicleTypePricing?.hourlyRate ?? spot.price ?? 20000;
 
-    // ── Phí ước tính thực tế: Tính theo block 4h ban ngày & ban đêm ────────────
-    const calculateSessionFee = (): number => {
-        if (elapsed <= 0) return 0;
-        const BLOCK_MS = 4 * 60 * 60 * 1000;
-        const entryTimeMs = entryTime.getTime();
-        const exitTimeMs = entryTimeMs + elapsed * 1000;
+    // advancePayment từ session API (nếu có)
+    const advancePayment = session?.advancePayment ?? 0;
+
+    // blockRate = giá 1 block lố giờ, ưu tiên theo thứ tự:
+    // 1. fetchedVTPricing.dayBlockRate — fetch trực tiếp từ API vehicleType (CHÍNH XÁC NHẤT)
+    // 2. stateBlockRate — BookingPage đã tính đúng và truyền sang
+    // 3. session.advancePayment — tiền thực tế đã thanh toán
+    // 4. estimatedPrice / bookedBlocks — tính ngược
+    // 5. hourlyRate * 4 (fallback cuối)
+    const bookedBlocks = Math.max(1, Math.ceil(stateDuration / 4));
+    const resolvedDayBlockRate = fetchedVTPricing?.dayBlockRate
+        || (typeof session?.vehicleType === 'object' ? (session.vehicleType as any)?.pricing?.dayBlockRate : 0)
+        || vehicleTypePricing?.dayBlockRate;
+    const blockRate = resolvedDayBlockRate
+        ? resolvedDayBlockRate
+        : stateBlockRate > 0
+            ? stateBlockRate
+            : advancePayment > 0
+                ? advancePayment
+                : stateEstimatedPrice > 0
+                    ? Math.round(stateEstimatedPrice / bookedBlocks)
+                    : hourlyRate * 4;
+
+    if (bookingInfo && (bookingInfo as any).endTime && (bookingInfo as any).scheduledDate) {
+        const scheduledDateStr = (bookingInfo as any).scheduledDate.split('T')[0];
+        const scheduledEnd = new Date(`${scheduledDateStr}T${(bookingInfo as any).endTime}:00`);
+        const now = new Date(Date.now() + devTimeOffset);
         
-        let fee = 0;
-        let cur = entryTimeMs;
-        while (cur < exitTimeMs) {
-            const date = new Date(cur);
-            const h = date.getHours();
-            // 06:00–17:59 daytime, 18:00–05:59 nighttime
-            const isDaytime = h >= 6 && h < 18;
-            fee += isDaytime ? dayBlockRate : nightBlockRate;
-            cur += BLOCK_MS;
+        if (now > scheduledEnd) {
+            const otHours = (now.getTime() - scheduledEnd.getTime()) / (1000 * 60 * 60);
+            // 15 mins grace period
+            if (otHours > (15 / 60)) {
+                // Đậu lố: mỗi block thêm tính bằng blockRate
+                overtimeFee = Math.ceil(otHours / 4) * blockRate;
+            }
         }
-        return Math.round(fee);
-    };
-    const currentFee = calculateSessionFee();
+    } else {
+        // Fallback: Nếu không có dữ liệu booking từ API, giả định user đã mua 1 block 4 tiếng tính từ entryTime
+        const elapsedHours = elapsed / 3600;
+        if (elapsedHours > 4.25) { // Đã lố qua 4h + 15p (grace period)
+            const otHours = elapsedHours - 4;
+            overtimeFee = Math.ceil(otHours / 4) * blockRate;
+        }
+    }
 
-    const advancePayment = session?.advancePayment ?? state.advancePayment ?? 0;
-    const amountDue = Math.max(0, currentFee - advancePayment);
+    // Vì khách đã thanh toán lúc book nên phí hiện tại chỉ hiện Overtime Fee
+    const currentFee = overtimeFee;
+    // Số tiền cần thanh toán thêm cũng chỉ là phần overtime chưa thanh toán
+    const amountDue = overtimeFee;
 
-    // ── Thông tin hiển thị ────────────────────────────────────────────────────
+    // ── Lắng nghe sự kiện Checkout từ Staff qua Socket ────────────────────────
+    useEffect(() => {
+        if (!socket) return;
+        const handleCheckout = (notif: any) => {
+            if (notif.type === 'checkout_success') {
+                const notifSessionId = notif.sessionId || notif.session?._id || notif.data?.sessionId || notif.data?._id;
+                // Chỉ chuyển cảnh nếu không có session ID trong notif (fallback) hoặc đúng bằng sessionId hiện tại
+                if (!notifSessionId || String(notifSessionId) === String(sessionId)) {
+                    navigate('/checkoutsuccess', {
+                        state: {
+                            spot,
+                            vehicleType: vehicleTypeData,
+                            floor: floorData,
+                            slot: slotData,
+                            licensePlate: session?.licensePlate || state.licensePlate,
+                            entryDate: session?.entryTime || sessionStart.current,
+                            exitTime: Date.now(),
+                            elapsed: elapsed,
+                            totalAmount: session?.totalFee || (currentFee + overtimeFee),
+                            transactionId: notif.transactionId || session?._id,
+                        }
+                    });
+                }
+            }
+        };
+        socket.on('newNotification', handleCheckout);
+        return () => {
+            socket.off('newNotification', handleCheckout);
+        };
+    }, [socket, sessionId, navigate, spot, vehicleTypeData, floorData, slotData, session, state.licensePlate, elapsed, currentFee, overtimeFee]);
+
+    // ── Tải dữ liệu ─────────────────────────────────────────────────────────────
     // Ưu tiên data từ API session, fallback về state từ BookingPage
     const licensePlate: string = session?.vehicleInfo?.licensePlate || state.licensePlate || '';
 
@@ -196,6 +291,9 @@ const SessionPage = () => {
     const zoneName: string = (typeof session?.zone === 'object' ? (session.zone as any)?.name : '') || zoneData?.name || 'N/A';
     const slotCode: string = (typeof session?.slot === 'object' ? (session.slot as any)?.slotCode : '') || slotData?.slotCode || 'N/A';
     const sessionCode: string = session?.sessionCode ?? '';
+    const entryTime: Date = session?.entryTime
+        ? new Date(session.entryTime)
+        : new Date(sessionStart.current);
 
     const [qrValue, setQrValue] = useState<string>('');
     useEffect(() => {
@@ -227,8 +325,10 @@ const SessionPage = () => {
                 sessionId,
                 entryDate: entryTime.toISOString(),
                 elapsed,
-                totalAmount: currentFee,
-                dayBlockRate,
+                totalAmount: amountDue, // The remaining due amount to pay
+                currentFee,
+                advancePayment,
+                hourlyRate,
                 licensePlate,
             }
         });
@@ -238,18 +338,20 @@ const SessionPage = () => {
         <>
             <style>{`
                 * { box-sizing: border-box; margin: 0; padding: 0; }
-                body { background: #f0f4f8; }
+                body { background: #f4f7f6; }
 
                 .session-page {
                     min-height: 100vh;
-                    background: #f0f4f8;
+                    background: #f4f7f6;
                     font-family: 'Inter', 'Segoe UI', sans-serif;
                     color: #0f172a;
                 }
 
                 /* ── Banner ── */
                 .session-banner {
-                    padding: 16px 24px 0;
+                    max-width: 1100px;
+                    margin: 0 auto;
+                    padding: 24px 24px 0;
                     display: flex;
                     align-items: center;
                 }
@@ -264,138 +366,263 @@ const SessionPage = () => {
                 }
                 .banner-back:hover { background: #f8fafc; color: #0f172a; border-color: #cbd5e1; }
 
-                /* ── Content ── */
-                .session-content { max-width: 600px; margin: 0 auto; padding: 28px 20px 80px; }
-
-                /* ── Cards ── */
-                .s-card {
-                    background: white; border-radius: 18px;
-                    border: 1px solid #e2e8f0; padding: 24px;
-                    margin-bottom: 16px; box-shadow: 0 2px 16px rgba(0,0,0,0.05);
+                /* ── Content Grid ── */
+                .session-content { 
+                    max-width: 1100px; 
+                    margin: 0 auto; 
+                    padding: 24px 20px 80px; 
                 }
 
-                /* ── QR ── */
-                .qr-section { display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 28px 24px; }
-                .qr-wrapper {
-                    padding: 12px; background: white; border-radius: 20px;
-                    border: 3px solid #1e293b; box-shadow: 0 8px 32px rgba(0,0,0,0.12);
-                }
-                .qr-caption { font-size: 14px; color: #475569; font-weight: 600; }
-                .qr-code-text {
-                    font-size: 13px; font-weight: 800; color: #1e293b;
-                    letter-spacing: 1.5px; font-family: monospace;
-                    background: #f1f5f9; padding: 6px 16px; border-radius: 8px;
+                .desktop-grid {
+                    display: grid;
+                    grid-template-columns: 1fr;
+                    gap: 24px;
                 }
 
-                /* ── Divider ── */
-                .divider { height: 1px; background: #f1f5f9; margin: 0 -24px 20px; }
-
-                /* ── License plate ── */
-                .lp-row { display: flex; align-items: center; gap: 14px; }
-                .lp-icon {
-                    width: 52px; height: 52px; background: #eff6ff;
-                    border-radius: 14px; display: flex; align-items: center;
-                    justify-content: center; flex-shrink: 0;
+                @media (min-width: 800px) {
+                    .desktop-grid {
+                        grid-template-columns: 380px 1fr;
+                        align-items: start;
+                    }
                 }
-                .lp-label { font-size: 11px; color: #94a3b8; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
-                .lp-value { font-size: 22px; font-weight: 900; color: #0f172a; letter-spacing: 0.06em; }
-                .lp-sub { font-size: 12px; color: #64748b; font-weight: 500; margin-top: 3px; }
-
-                /* ── Stat grid ── */
-                .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
-                .stat-card { background: white; border: 1px solid #e2e8f0; box-shadow: 0 2px 16px rgba(0,0,0,0.05); border-radius: 18px; padding: 18px 16px; }
-                .stat-label { display: flex; align-items: center; gap: 7px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 10px; }
-                .stat-label.blue { color: #3b82f6; }
-                .stat-label.green { color: #10b981; }
-                .stat-value { font-size: 28px; font-weight: 900; letter-spacing: -0.5px; font-variant-numeric: tabular-nums; line-height: 1; color: #0f172a; }
-                .stat-sub { font-size: 11px; font-weight: 600; margin-top: 5px; color: #64748b; }
-
-                /* ── Location card ── */
-                .location-card {
-                    background: white; border: 1px solid #e2e8f0; box-shadow: 0 2px 16px rgba(0,0,0,0.05);
-                    border-radius: 18px; padding: 18px 20px; margin-bottom: 16px;
-                }
-                .location-top { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
-                .location-icon {
-                    width: 42px; height: 42px; background: #fffbeb;
-                    border-radius: 12px; display: flex; align-items: center;
-                    justify-content: center; flex-shrink: 0; color: #d97706;
-                }
-                .location-label { font-size: 11px; color: #d97706; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 2px; }
-                .location-value { font-size: 22px; font-weight: 900; color: #0f172a; letter-spacing: 0.04em; }
-                .location-sub { font-size: 12px; color: #64748b; font-weight: 600; margin-top: 2px; }
-                .find-car-btn {
-                    width: 100%; padding: 12px;
-                    background: #f8fafc; border: 1.5px solid #e2e8f0;
-                    border-radius: 10px; font-size: 13px; font-weight: 700; color: #475569;
-                    cursor: pointer; display: flex; align-items: center;
-                    justify-content: center; gap: 8px; transition: all 0.2s;
-                }
-                .find-car-btn:hover { background: #f1f5f9; border-color: #cbd5e1; color: #0f172a; }
-
-                /* ── Details grid ── */
-                .details-title { font-size: 15px; font-weight: 800; color: #0f172a; margin-bottom: 16px; }
-                .details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px 24px; }
-                .detail-item-label { font-size: 11px; color: #3b82f6; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 5px; }
-                .detail-item-value { font-size: 14px; font-weight: 700; color: #0f172a; }
-
-                /* ── Pricing badge ── */
-                .pricing-row {
-                    margin-top: 16px; padding-top: 14px;
-                    border-top: 1px solid #f1f5f9;
-                    display: flex; align-items: center; justify-content: space-between;
-                }
-                .pricing-label { font-size: 12px; color: #64748b; font-weight: 600; }
-                .pricing-value { font-size: 15px; font-weight: 800; color: #2563eb; }
-
-                /* ── Notice ── */
-                .notice-card {
-                    background: white; border: 1px solid #e2e8f0; box-shadow: 0 2px 16px rgba(0,0,0,0.05);
-                    border-radius: 18px; padding: 16px 20px; margin-bottom: 16px;
-                    display: flex; align-items: flex-start; gap: 14px;
-                }
-                .notice-title { font-size: 13px; font-weight: 800; color: #0f172a; margin-bottom: 4px; }
-                .notice-text { font-size: 12px; color: #475569; font-weight: 500; line-height: 1.5; }
-
-                /* ── Action buttons ── */
-                .pay-btn {
-                    width: 100%; padding: 17px; border: none; border-radius: 14px;
-                    background: linear-gradient(135deg, #2563eb, #1d4ed8);
-                    color: white; font-size: 16px; font-weight: 800;
-                    cursor: pointer; display: flex; align-items: center;
-                    justify-content: center; gap: 10px; margin-bottom: 12px;
-                    transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
-                    box-shadow: 0 6px 24px rgba(37,99,235,0.4);
-                }
-                .pay-btn:hover { transform: translateY(-2px); box-shadow: 0 10px 32px rgba(37,99,235,0.5); }
-                .pay-btn:active { transform: scale(0.98); }
-                .pay-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
-
-                .report-btn {
-                    width: 100%; padding: 14px;
-                    border: 1.5px solid #e2e8f0; border-radius: 14px;
-                    background: white; color: #475569;
-                    font-size: 14px; font-weight: 700; cursor: pointer;
-                    display: flex; align-items: center; justify-content: center; gap: 8px;
-                    transition: all 0.2s; box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-                }
-                .report-btn:hover { border-color: #ef4444; color: #ef4444; background: #fef2f2; }
 
                 /* ── Loading ── */
                 .session-loading {
                     display: flex; align-items: center; justify-content: center;
-                    gap: 10px; padding: 12px; margin-bottom: 12px;
+                    gap: 10px; padding: 12px; margin-bottom: 24px;
                     background: #eff6ff; border-radius: 10px;
-                    font-size: 12px; font-weight: 600; color: #2563eb;
+                    font-size: 13px; font-weight: 600; color: #2563eb;
                 }
                 .spin {
-                    width: 14px; height: 14px;
+                    width: 16px; height: 16px;
                     border: 2px solid #bfdbfe;
                     border-top-color: #2563eb;
                     border-radius: 50%;
                     animation: spin 0.7s linear infinite;
                 }
                 @keyframes spin { to { transform: rotate(360deg); } }
+
+                /* ══════════════════════════════════════════════════════
+                   LEFT COLUMN: DIGITAL TICKET
+                ══════════════════════════════════════════════════════ */
+                .digital-ticket {
+                    background: linear-gradient(145deg, #0f172a 0%, #1e293b 100%);
+                    border-radius: 24px;
+                    padding: 32px 24px;
+                    color: white;
+                    box-shadow: 0 20px 40px -10px rgba(15,23,42,0.3);
+                    position: relative;
+                    overflow: hidden;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                }
+                .digital-ticket::before {
+                    content: '';
+                    position: absolute;
+                    top: 0; left: 0; right: 0; height: 6px;
+                    background: linear-gradient(90deg, #3b82f6, #10b981);
+                }
+                
+                .dt-header {
+                    width: 100%;
+                    text-align: center;
+                    margin-bottom: 24px;
+                }
+                .dt-title {
+                    font-size: 13px;
+                    color: #94a3b8;
+                    text-transform: uppercase;
+                    letter-spacing: 2px;
+                    font-weight: 700;
+                    margin-bottom: 4px;
+                }
+                .dt-session-id {
+                    font-family: monospace;
+                    font-size: 16px;
+                    color: #e2e8f0;
+                    font-weight: 800;
+                    letter-spacing: 1px;
+                }
+
+                .dt-qr-wrapper {
+                    background: white;
+                    padding: 16px;
+                    border-radius: 20px;
+                    box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+                    margin-bottom: 32px;
+                    border: 4px solid #334155;
+                    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                }
+                .dt-qr-wrapper:hover {
+                    transform: scale(1.05) translateY(-4px);
+                    box-shadow: 0 25px 45px rgba(0,0,0,0.7);
+                    border-color: #475569;
+                }
+
+                .dt-plate-box {
+                    width: 100%;
+                    background: rgba(255,255,255,0.05);
+                    border: 1px solid rgba(255,255,255,0.1);
+                    border-radius: 16px;
+                    padding: 16px;
+                    text-align: center;
+                    margin-bottom: 16px;
+                }
+                .dt-plate-label {
+                    font-size: 11px;
+                    color: #94a3b8;
+                    text-transform: uppercase;
+                    letter-spacing: 1px;
+                    font-weight: 600;
+                    margin-bottom: 4px;
+                }
+                .dt-plate-number {
+                    font-size: 28px;
+                    font-weight: 900;
+                    color: #ffffff;
+                    letter-spacing: 2px;
+                }
+                .dt-vehicle-type {
+                    font-size: 13px;
+                    color: #3b82f6;
+                    font-weight: 600;
+                    margin-top: 4px;
+                }
+
+                .dt-info-row {
+                    width: 100%;
+                    display: flex;
+                    justify-content: space-between;
+                    background: rgba(255,255,255,0.05);
+                    border-radius: 12px;
+                    padding: 16px;
+                }
+                .dt-info-col {
+                    display: flex;
+                    flex-direction: column;
+                }
+                .dt-info-col.right {
+                    text-align: right;
+                }
+                .dt-info-label {
+                    font-size: 11px;
+                    color: #94a3b8;
+                    text-transform: uppercase;
+                    letter-spacing: 1px;
+                    margin-bottom: 4px;
+                }
+                .dt-info-value {
+                    font-size: 14px;
+                    font-weight: 700;
+                    color: #f8fafc;
+                }
+
+                /* ══════════════════════════════════════════════════════
+                   RIGHT COLUMN: DASHBOARD & ACTIONS
+                ══════════════════════════════════════════════════════ */
+                .dashboard-panel {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 20px;
+                }
+
+                /* ── Stat grid ── */
+                .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+                .stat-card { 
+                    background: white; border: 1px solid #e2e8f0; 
+                    box-shadow: 0 10px 30px -10px rgba(0,0,0,0.05); 
+                    border-radius: 20px; padding: 24px; 
+                    position: relative; overflow: hidden;
+                }
+                .stat-card::after {
+                    content: ''; position: absolute; right: -20px; bottom: -20px;
+                    width: 100px; height: 100px; border-radius: 50%; opacity: 0.1;
+                }
+                .stat-card.blue::after { background: #3b82f6; }
+                .stat-card.green::after { background: #10b981; }
+
+                .stat-label { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; }
+                .stat-label.blue { color: #3b82f6; }
+                .stat-label.green { color: #10b981; }
+                .stat-value { font-size: 36px; font-weight: 900; letter-spacing: -1px; font-variant-numeric: tabular-nums; line-height: 1; color: #0f172a; }
+                .stat-sub { font-size: 13px; font-weight: 600; margin-top: 8px; color: #64748b; }
+
+                /* ── Details Card ── */
+                .s-card {
+                    background: white; border-radius: 20px;
+                    border: 1px solid #e2e8f0; padding: 28px;
+                    box-shadow: 0 10px 30px -10px rgba(0,0,0,0.05);
+                }
+
+                .location-row {
+                    display: flex; align-items: center; gap: 16px; margin-bottom: 24px;
+                    padding-bottom: 24px; border-bottom: 1px solid #f1f5f9;
+                }
+                .location-icon {
+                    width: 56px; height: 56px; background: #fffbeb;
+                    border-radius: 16px; display: flex; align-items: center;
+                    justify-content: center; flex-shrink: 0; color: #d97706;
+                }
+                .location-label { font-size: 12px; color: #d97706; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
+                .location-value { font-size: 24px; font-weight: 900; color: #0f172a; }
+                .location-sub { font-size: 14px; color: #64748b; font-weight: 600; margin-top: 2px; }
+
+                .details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px 24px; }
+                .detail-item-label { font-size: 11px; color: #3b82f6; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+                .detail-item-value { font-size: 15px; font-weight: 700; color: #0f172a; }
+
+                /* Pricing */
+                .pricing-section {
+                    margin-top: 24px; padding-top: 20px;
+                    border-top: 1px solid #f1f5f9;
+                }
+                .pricing-row {
+                    display: flex; align-items: center; justify-content: space-between;
+                    margin-bottom: 8px;
+                }
+                .pricing-row:last-child { margin-bottom: 0; }
+                .pricing-label { font-size: 13px; color: #64748b; font-weight: 600; }
+                .pricing-value { font-size: 15px; font-weight: 800; color: #0f172a; }
+
+                /* ── Notice ── */
+                .notice-card {
+                    background: #fff8f1; border: 1px solid #fed7aa; 
+                    border-radius: 16px; padding: 16px 20px;
+                    display: flex; align-items: flex-start; gap: 14px;
+                }
+                .notice-title { font-size: 14px; font-weight: 800; color: #9a3412; margin-bottom: 4px; }
+                .notice-text { font-size: 13px; color: #c2410c; font-weight: 500; line-height: 1.5; }
+
+                /* ── Actions ── */
+                .action-group {
+                    display: flex; flex-direction: column; gap: 12px;
+                }
+                @media (min-width: 800px) {
+                    .action-group { flex-direction: row; }
+                    .btn-primary { flex: 2; }
+                    .btn-secondary { flex: 1; }
+                }
+
+                .btn-primary, .btn-secondary {
+                    padding: 16px 24px; border-radius: 16px; border: none;
+                    font-size: 16px; font-weight: 800; cursor: pointer;
+                    display: flex; align-items: center; justify-content: center; gap: 10px;
+                    transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+                }
+                .btn-primary {
+                    background: linear-gradient(135deg, #10b981, #059669);
+                    color: white; box-shadow: 0 10px 25px rgba(16,185,129,0.3);
+                }
+                .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 15px 35px rgba(16,185,129,0.4); }
+                .btn-primary:active { transform: scale(0.98); }
+                
+                .btn-secondary {
+                    background: white; color: #475569;
+                    border: 2px solid #e2e8f0;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+                }
+                .btn-secondary:hover { border-color: #ef4444; color: #ef4444; background: #fef2f2; }
 
                 /* ── Fade animations ── */
                 @keyframes pulse {
@@ -404,16 +631,13 @@ const SessionPage = () => {
                     100% { transform: scale(0.95); opacity: 0.5; }
                 }
                 @keyframes fadeSlideIn {
-                    from { opacity: 0; transform: translateY(14px); }
+                    from { opacity: 0; transform: translateY(20px); }
                     to   { opacity: 1; transform: translateY(0); }
                 }
-                .s-in   { animation: fadeSlideIn 0.4s ease-out forwards; }
-                .s-in-1 { animation: fadeSlideIn 0.4s 0.05s ease-out both; }
-                .s-in-2 { animation: fadeSlideIn 0.4s 0.10s ease-out both; }
-                .s-in-3 { animation: fadeSlideIn 0.4s 0.15s ease-out both; }
-                .s-in-4 { animation: fadeSlideIn 0.4s 0.20s ease-out both; }
-                .s-in-5 { animation: fadeSlideIn 0.4s 0.25s ease-out both; }
-                .s-in-6 { animation: fadeSlideIn 0.4s 0.30s ease-out both; }
+                .s-in   { animation: fadeSlideIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+                .s-in-1 { animation: fadeSlideIn 0.5s 0.05s cubic-bezier(0.16, 1, 0.3, 1) both; }
+                .s-in-2 { animation: fadeSlideIn 0.5s 0.10s cubic-bezier(0.16, 1, 0.3, 1) both; }
+                .s-in-3 { animation: fadeSlideIn 0.5s 0.15s cubic-bezier(0.16, 1, 0.3, 1) both; }
             `}</style>
 
             <div className="session-page">
@@ -427,8 +651,6 @@ const SessionPage = () => {
                 </div>
 
                 <div className="session-content">
-
-                    {/* Loading indicator khi fetch session */}
                     {sessionLoading && (
                         <div className="session-loading">
                             <div className="spin" />
@@ -436,210 +658,240 @@ const SessionPage = () => {
                         </div>
                     )}
 
-                    {/* QR Code */}
-                    <div className="s-card qr-section s-in">
-                        <div className="qr-wrapper">
-                            {qrValue ? (
-                                <QRCodeSVG
-                                    value={qrValue}
-                                    size={180}
-                                    bgColor="#ffffff"
-                                    fgColor="#0f172a"
-                                    level="H"
-                                    includeMargin={true}
-                                    style={{ borderRadius: '12px' }}
-                                />
-                            ) : (
-                                <div style={{ width: 180, height: 180, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                    Loading QR...
-                                </div>
-                            )}
-                        </div>
-                        <p className="qr-caption">Đưa mã này cho nhân viên cổng ra để thanh toán</p>
-                        {sessionCode && (
-                            <div className="qr-code-text">{sessionCode}</div>
-                        )}
-                    </div>
+                    <div className="desktop-grid">
+                        
+                        {/* LEFT COLUMN: DIGITAL TICKET */}
+                        <div className="digital-ticket s-in">
+                            <div className="dt-header">
+                                <div className="dt-title">Parking Ticket</div>
+                                {sessionCode && <div className="dt-session-id">#{sessionCode}</div>}
+                            </div>
 
-                    {/* License Plate + Vehicle */}
-                    <div className="s-card s-in-1">
-                        <div className="lp-row">
-                            <div className="lp-icon">
-                                {isMotorbike ? <MotoIcon /> : <CarIcon />}
-                            </div>
-                            <div>
-                                <div className="lp-label">Biển Số Xe</div>
-                                <div className="lp-value">
-                                    {licensePlate || <span style={{ color: '#94a3b8', fontSize: 14 }}>Chưa có biển số</span>}
-                                </div>
-                                <div className="lp-sub">{vehicleTypeName}</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Timer + Fee */}
-                    <div className="stat-grid s-in-2">
-                        <div className="stat-card blue">
-                            <div className="stat-label blue" style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
-                                    <TimerIcon /> Thời Gian Đỗ
-                                </div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '9px', color: '#10b981', background: '#ecfdf5', padding: '3px 8px', borderRadius: '12px' }}>
-                                    <div style={{ width: '6px', height: '6px', backgroundColor: '#10b981', borderRadius: '50%', animation: 'pulse 1.5s infinite' }} />
-                                    ĐANG TÍNH
-                                </div>
-                            </div>
-                            <div className="stat-value blue">{formatHMS(Math.max(0, elapsed))}</div>
-                            <div className="stat-sub blue">HH:MM:SS</div>
-                        </div>
-                        <div className="stat-card green">
-                            <div className="stat-label green">
-                                <CardIcon /> Phí Hiện Tại
-                            </div>
-                            <div className="stat-value green" style={{ fontSize: '24px', color: '#059669' }}>
-                                {fmtVND(currentFee)}
-                            </div>
-                            <div className="stat-sub green">{fmtVND(dayBlockRate)}/block (4h)</div>
-                        </div>
-                    </div>
-
-                    {/* Location */}
-                    <div className="location-card s-in-3">
-                        <div className="location-top">
-                            <div className="location-icon">
-                                <PinIcon />
-                            </div>
-                            <div>
-                                <div className="location-label">Vị Trí Đỗ Xe</div>
-                                <div className="location-value">{floorName} — {slotCode}</div>
-                                {zoneName && zoneName !== 'N/A' && (
-                                    <div className="location-sub">Khu {zoneName}</div>
+                            <div 
+                                className="dt-qr-wrapper" 
+                                onClick={() => qrValue && setShowQrModal(true)}
+                                style={{ cursor: qrValue ? 'pointer' : 'default' }}
+                                title="Click để phóng to mã QR"
+                            >
+                                {qrValue ? (
+                                    <QRCodeSVG
+                                        value={qrValue}
+                                        size={200}
+                                        bgColor="#ffffff"
+                                        fgColor="#0f172a"
+                                        level="H"
+                                        includeMargin={false}
+                                    />
+                                ) : (
+                                    <div style={{ width: 200, height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b' }}>
+                                        Loading QR...
+                                    </div>
                                 )}
                             </div>
-                        </div>
-                        <button className="find-car-btn" onClick={() => alert('🗺️ Tính năng bản đồ đang phát triển...')}>
-                            <NavigateIcon /> Tìm Xe Của Tôi
-                        </button>
-                    </div>
 
-                    {/* Session Details */}
-                    <div className="s-card s-in-4">
-                        <div className="details-title">Chi Tiết Phiên Đỗ</div>
-                        <div className="divider" style={{ margin: '0 -24px 18px' }} />
-                        <div className="details-grid">
-                            <div>
-                                <div className="detail-item-label">Giờ Vào</div>
-                                <div className="detail-item-value" style={{ fontSize: 13 }}>
-                                    {fmtDateTime(entryTime)}
+                            <div className="dt-plate-box">
+                                <div className="dt-plate-label">License Plate</div>
+                                <div className="dt-plate-number">
+                                    {licensePlate || <span style={{ opacity: 0.5, fontSize: 18 }}>N/A</span>}
+                                </div>
+                                <div className="dt-vehicle-type">
+                                    {vehicleTypeName}
                                 </div>
                             </div>
-                            <div>
-                                <div className="detail-item-label">Khu Vực</div>
-                                <div className="detail-item-value">{zoneName}</div>
+
+                            <div className="dt-info-row">
+                                <div className="dt-info-col">
+                                    <span className="dt-info-label">Entry Date</span>
+                                    <span className="dt-info-value">
+                                        {entryTime.toLocaleDateString('vi-VN')}
+                                    </span>
+                                </div>
+                                <div className="dt-info-col right">
+                                    <span className="dt-info-label">Entry Time</span>
+                                    <span className="dt-info-value">
+                                        {entryTime.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                                    </span>
+                                </div>
                             </div>
-                            <div>
-                                <div className="detail-item-label">Loại Phương Tiện</div>
-                                <div className="detail-item-value">{vehicleTypeName}</div>
+                        </div>
+
+                        {/* RIGHT COLUMN: DASHBOARD */}
+                        <div className="dashboard-panel">
+                            
+                            {/* Stats Grid */}
+                            <div className="stat-grid s-in-1">
+                                <div className="stat-card blue">
+                                    <div className="stat-label blue" style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
+                                            <TimerIcon /> Thời Gian Đỗ
+                                        </div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '9px', color: '#10b981', background: '#ecfdf5', padding: '4px 10px', borderRadius: '12px' }}>
+                                            <div style={{ width: '6px', height: '6px', backgroundColor: '#10b981', borderRadius: '50%', animation: 'pulse 1.5s infinite' }} />
+                                            ĐANG TÍNH
+                                        </div>
+                                    </div>
+                                    <div className="stat-value blue">{formatHMS(Math.max(0, elapsed))}</div>
+                                    <div className="stat-sub blue">Giờ : Phút : Giây</div>
+                                </div>
+                                
+                                <div className="stat-card green">
+                                    <div className="stat-label green">
+                                        <CardIcon /> Phí Hiện Tại
+                                    </div>
+                                    <div className="stat-value green" style={{ color: '#059669' }}>
+                                        {fmtVND(currentFee)}
+                                    </div>
+                                    <div className="stat-sub green">{fmtVND(blockRate)} / block 4 tiếng</div>
+                                </div>
                             </div>
-                            <div>
-                                <div className="detail-item-label">Ô Đỗ</div>
-                                <div className="detail-item-value" style={{ color: '#2563eb' }}>{slotCode}</div>
+
+                            {/* Details Card */}
+                            <div className="s-card s-in-2">
+                                <div className="location-row">
+                                    <div className="location-icon">
+                                        <PinIcon />
+                                    </div>
+                                    <div>
+                                        <div className="location-label">Vị Trí Đỗ Xe</div>
+                                        <div className="location-value">{floorName} — {slotCode}</div>
+                                        {zoneName && zoneName !== 'N/A' && (
+                                            <div className="location-sub">Khu {zoneName}</div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div className="details-grid">
+                                    <div>
+                                        <div className="detail-item-label">Khu Vực Bãi</div>
+                                        <div className="detail-item-value">{spot.title}</div>
+                                    </div>
+                                    {spot.code && (
+                                        <div>
+                                            <div className="detail-item-label">Mã Bãi Đỗ</div>
+                                            <div className="detail-item-value">{spot.code}</div>
+                                        </div>
+                                    )}
+                                    {slotData?.features?.hasEVCharger && (
+                                        <div>
+                                            <div className="detail-item-label">Tính Năng</div>
+                                            <div className="detail-item-value" style={{ color: '#10b981' }}>⚡ Sạc EV</div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Pricing Summary */}
+                                <div className="pricing-details">
+                                    <div className="pricing-row">
+                                        <span className="pricing-label">Phí phát sinh (Block 4 tiếng)</span>
+                                        <span className="pricing-value" style={{ color: '#2563eb' }}>{fmtVND(blockRate)} / block</span>
+                                    </div>
+                                    {vehicleTypeData?.pricing?.dailyRate && (
+                                        <div className="pricing-row">
+                                            <span className="pricing-label">Giá tối đa ngày</span>
+                                            <span className="pricing-value" style={{ color: '#64748b', fontSize: '13px' }}>
+                                                {fmtVND(vehicleTypeData.pricing.dailyRate)} / ngày
+                                            </span>
+                                        </div>
+                                    )}
+                                    {advancePayment > 0 && (
+                                        <div className="pricing-row">
+                                            <span className="pricing-label" style={{ color: '#10b981' }}>Đã thanh toán trước (Booking)</span>
+                                            <span className="pricing-value" style={{ color: '#10b981' }}>
+                                                - {fmtVND(advancePayment)}
+                                            </span>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
-                            {slotData?.features?.hasEVCharger && (
+
+                            {/* Notice */}
+                            <div className="notice-card s-in-3">
+                                <WarningIcon />
                                 <div>
-                                    <div className="detail-item-label">Tính Năng</div>
-                                    <div className="detail-item-value" style={{ color: '#10b981' }}>⚡ Sạc EV</div>
+                                    <div className="notice-title">Lưu Ý Quan Trọng</div>
+                                    <div className="notice-text">
+                                        Giữ mã QR để xuất trình tại cổng ra. 
+                                        Vui lòng thanh toán trực tiếp cho nhân viên hoặc thanh toán online trước khi lấy xe.
+                                    </div>
                                 </div>
-                            )}
-                            {spot.code && (
-                                <div>
-                                    <div className="detail-item-label">Mã Bãi Đỗ</div>
-                                    <div className="detail-item-value">{spot.code}</div>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Pricing summary */}
-                        <div className="pricing-row">
-                            <span className="pricing-label">Đơn giá block ngày (6h - 18h)</span>
-                            <span className="pricing-value">{fmtVND(dayBlockRate)} / block</span>
-                        </div>
-                        <div className="pricing-row" style={{ paddingTop: 8, marginTop: 0, borderTop: 'none' }}>
-                            <span className="pricing-label">Đơn giá block đêm (18h - 6h)</span>
-                            <span className="pricing-value" style={{ fontWeight: 700, color: '#64748b' }}>
-                                {fmtVND(nightBlockRate)} / block
-                            </span>
-                        </div>
-                        {advancePayment > 0 && (
-                            <div className="pricing-row" style={{ paddingTop: 8, marginTop: 0, borderTop: 'none' }}>
-                                <span className="pricing-label" style={{ color: '#10b981' }}>Đã thanh toán trước (Booking)</span>
-                                <span style={{ fontSize: 13, fontWeight: 700, color: '#10b981' }}>
-                                    - {fmtVND(advancePayment)}
-                                </span>
                             </div>
-                        )}
-                    </div>
 
-                    {/* Important Notice */}
-                    <div className="notice-card s-in-5">
-                        <WarningIcon />
-                        <div>
-                            <div className="notice-title">Lưu Ý Quan Trọng</div>
-                            <div className="notice-text">
-                                Giữ mã QR để xuất trình tại cổng ra. Thời gian đỗ tối đa 24 giờ.
-                                Phí tính theo block 4h (Ngày: <strong>{fmtVND(dayBlockRate)}</strong>, Đêm: <strong>{fmtVND(nightBlockRate)}</strong>).
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Actions */}
-                    <div className="s-in-6">
-                        {amountDue > 0 ? (
-                            <>
-                                <div style={{
-                                    width: '100%', padding: '16px', borderRadius: '14px',
-                                    background: '#f8fafc', border: '1.5px dashed #cbd5e1',
-                                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px',
-                                    marginBottom: '12px'
-                                }}>
-                                    <div style={{ fontSize: '13px', color: '#475569', fontWeight: 600 }}>
-                                        Vui lòng chuẩn bị tiền mặt
-                                    </div>
-                                    <div style={{ fontSize: '24px', fontWeight: 900, color: '#0f172a' }}>
-                                        {fmtVND(amountDue)}
-                                    </div>
-                                    <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 500 }}>
-                                        để thanh toán trực tiếp tại cổng ra
-                                    </div>
-                                </div>
-
-                                <div style={{ textAlign: 'center', fontSize: '12px', color: '#94a3b8', fontWeight: 700, marginBottom: '12px' }}>
-                                    — HOẶC —
-                                </div>
-
-                                <button
-                                    className="pay-btn"
-                                    onClick={handlePayCheckout}
-                                >
-                                    <PayIcon />
-                                    Chuyển sang thanh toán Online
+                            {/* Actions */}
+                            <div className="action-group s-in-3">
+                                {amountDue > 0 ? (
+                                    <button className="btn-primary" onClick={handlePayCheckout}>
+                                        <PayIcon /> Thanh Toán Online: {fmtVND(amountDue)}
+                                    </button>
+                                ) : (
+                                    <button className="btn-primary" style={{ cursor: 'default' }} disabled>
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline>
+                                        </svg>
+                                        Đã Thanh Toán Đủ
+                                    </button>
+                                )}
+                                <button className="btn-secondary" onClick={() => alert('🚩 Báo cáo đã được gửi. Nhân viên sẽ hỗ trợ bạn sớm nhất!')}>
+                                    <FlagIcon /> Báo Cáo
                                 </button>
-                            </>
-                        ) : (
-                            <div className="pay-btn" style={{ background: '#10b981', cursor: 'default' }}>
-                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 8 }}>
-                                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline>
-                                </svg>
-                                Đã thanh toán đủ. Vui lòng quẹt QR tại cổng ra.
                             </div>
-                        )}
-                        <button className="report-btn" onClick={() => alert('🚩 Báo cáo đã được gửi. Nhân viên sẽ hỗ trợ bạn sớm nhất!')}>
-                            <FlagIcon />
-                            Báo Cáo Sự Cố
-                        </button>
+
+                        </div>
                     </div>
                 </div>
             </div>
+            {/* ── Modal Phóng To QR ── */}
+            {showQrModal && (
+                <div 
+                    style={{
+                        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                        backgroundColor: 'rgba(0, 0, 0, 0.75)',
+                        backdropFilter: 'blur(4px)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        zIndex: 99999, padding: '20px'
+                    }}
+                    onClick={() => setShowQrModal(false)}
+                >
+                    <div 
+                        style={{
+                            background: '#fff', padding: '32px', borderRadius: '24px',
+                            display: 'flex', flexDirection: 'column', alignItems: 'center',
+                            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+                            transform: 'scale(1)', animation: 'qrZoomIn 0.2s ease-out'
+                        }}
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <style>{`
+                            @keyframes qrZoomIn {
+                                from { opacity: 0; transform: scale(0.9); }
+                                to { opacity: 1; transform: scale(1); }
+                            }
+                        `}</style>
+                        <h3 style={{ margin: '0 0 24px 0', color: '#0f172a', fontSize: '20px', fontWeight: 800 }}>Mã QR Chuyến Đi</h3>
+                        {qrValue && (
+                            <div style={{ background: '#fff', padding: '16px', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
+                                <QRCodeSVG
+                                    value={qrValue}
+                                    size={Math.min(window.innerWidth - 100, 320)}
+                                    bgColor="#ffffff"
+                                    fgColor="#0f172a"
+                                    level="H"
+                                    includeMargin={false}
+                                />
+                            </div>
+                        )}
+                        <p style={{ marginTop: '24px', color: '#64748b', fontSize: '14px', textAlign: 'center', maxWidth: '300px' }}>
+                            Đưa mã này cho nhân viên hoặc quét tại trạm kiểm soát để xác nhận xe.
+                        </p>
+                        <button 
+                            className="btn-primary" 
+                            style={{ marginTop: '24px', width: '100%', padding: '14px' }}
+                            onClick={() => setShowQrModal(false)}
+                        >
+                            Đóng Lại
+                        </button>
+                    </div>
+                </div>
+            )}
         </>
     );
 };

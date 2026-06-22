@@ -439,36 +439,38 @@ const SlotMapGrid = ({ slots, selectedSlot, onSelect, vehicleType, currentUserId
                     </div>
                 ))}
             </div>
-            
+
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                 {/* Road lanes */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', maxWidth: '640px', marginBottom: 6, padding: '0 8px' }}>
                     <span style={{ fontSize: 11, fontWeight: 700, color: '#10b981', letterSpacing: 1, textTransform: 'uppercase' }}>← Entry</span>
                     <span style={{ fontSize: 11, fontWeight: 700, color: '#ef4444', letterSpacing: 1, textTransform: 'uppercase' }}>Exit →</span>
                 </div>
-            {rows.map(([rowKey, rowSlots]) => {
-                const mid = Math.ceil(rowSlots.length / 2);
-                const top = rowSlots.slice(0, mid);
-                const bot = rowSlots.slice(mid);
-                return (
-                    <div key={rowKey} style={{ marginBottom: 16 }}>
-                        <div style={{ overflowX: 'auto', paddingBottom: 4 }}>
-                            {/* Top row */}
-                            <div style={{ display: 'flex', gap: 6, marginBottom: 6, minWidth: 'max-content' }}>
-                                {top.map(slot => <SlotBtn key={slot._id} slot={slot} />)}
-                            </div>
-                            {/* Road stripe */}
-                            <div style={{ height: 18, background: 'repeating-linear-gradient(90deg,#f59e0b 0,#f59e0b 20px,transparent 20px,transparent 40px)', borderRadius: 4, opacity: 0.25, margin: '0 2px' }} />
-                            {/* Bottom row */}
-                            {bot.length > 0 && (
-                                <div style={{ display: 'flex', gap: 6, marginTop: 6, minWidth: 'max-content' }}>
-                                    {bot.map(slot => <SlotBtn key={slot._id} slot={slot} />)}
+                {rows.map(([rowKey, rowSlots]) => {
+                    const mid = Math.ceil(rowSlots.length / 2);
+                    const top = rowSlots.slice(0, mid);
+                    const bot = rowSlots.slice(mid);
+                    return (
+                        <div key={rowKey} style={{ marginBottom: 16 }}>
+                            <div style={{ overflowX: 'auto', paddingBottom: 4 }}>
+                                {/* Top row */}
+                                <div style={{ display: 'flex', gap: 6, marginBottom: 6, minWidth: 'max-content' }}>
+                                    {top.map(slot => <SlotBtn key={slot._id} slot={slot} />)}
                                 </div>
-                            )}
+                                {/* Road stripe */}
+                                <div style={{ height: 18, background: 'repeating-linear-gradient(90deg,#f59e0b 0,#f59e0b 20px,transparent 20px,transparent 40px)', borderRadius: 4, opacity: 0.25, margin: '0 2px' }} />
+                                {/* Bottom row */}
+                                {bot.length > 0 && (
+                                    <div style={{ display: 'flex', gap: 6, marginTop: 6, minWidth: 'max-content' }}>
+                                        {bot.map(slot => <SlotBtn key={slot._id} slot={slot} />)}
+                                        Scan to Enter
+
+                                    </div>
+                                )}
+                            </div>
                         </div>
-                    </div>
-                );
-            })}
+                    );
+                })}
             </div>
 
         </div>
@@ -476,6 +478,15 @@ const SlotMapGrid = ({ slots, selectedSlot, onSelect, vehicleType, currentUserId
 };
 
 // ─── Main Booking Page ────────────────────────────────────────────────────────
+const TEMP_PRICES: Record<string, { dayBlockRate: number, dailyRate: number }> = {
+    'CAR': { dayBlockRate: 20000, dailyRate: 100000 },
+    'ELECTRIC_CAR': { dayBlockRate: 25000, dailyRate: 120000 },
+    'MOTORBIKE': { dayBlockRate: 8000, dailyRate: 40000 },
+    'BICYCLE': { dayBlockRate: 4000, dailyRate: 20000 },
+    'ELECTRIC_BIKE': { dayBlockRate: 10000, dailyRate: 50000 },
+    'SMALL_TRUCK': { dayBlockRate: 40000, dailyRate: 200000 },
+};
+
 const BookingPage = () => {
     const navigate = useNavigate();
     const location = useLocation();
@@ -537,10 +548,56 @@ const BookingPage = () => {
     const [vehicleTypes, setVehicleTypes] = useState<VehicleType[]>([]);
     const [vehicleTypesLoading, setVehicleTypesLoading] = useState(false);
 
-    const [entryDate, setEntryDate] = useState(() => new Date().toISOString().slice(0, 16));
+    const [entryDate, setEntryDate] = useState(() => {
+        const d = new Date();
+        d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+        return d.toISOString().slice(0, 16);
+    });
     const [duration, setDuration] = useState(2);
 
+    useEffect(() => {
+        const bs = 4;
+        setDuration(d => Math.max(bs, Math.ceil(d / bs) * bs));
+    }, [vehicleType]);
+
+    const selHour = parseInt(entryDate.slice(11, 13)) || 0;
+    const selMin = parseInt(entryDate.slice(14, 16)) || 0;
+    const handleSetEntryDate = (dateStr: string, h: number, m: number) => {
+        const now = new Date();
+        const localNow = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
+        const todayStr = localNow.toISOString().slice(0, 10);
+        
+        let finalH = h;
+        let finalM = m;
+        
+        if (dateStr === todayStr) {
+            const currentHour = now.getHours();
+            const currentMin = now.getMinutes();
+            if (finalH < currentHour) {
+                finalH = currentHour;
+                finalM = Math.max(finalM, currentMin);
+            } else if (finalH === currentHour && finalM < currentMin) {
+                finalM = currentMin;
+            }
+        }
+        setEntryDate(`${dateStr}T${String(finalH).padStart(2, '0')}:${String(finalM).padStart(2, '0')}`);
+    };
+
+    const setSlot = (h: number, m: number) => {
+        handleSetEntryDate(entryDate.slice(0, 10), h, m);
+    };
+
     const [showCalendar, setShowCalendar] = useState(false);
+    const [showTimePicker, setShowTimePicker] = useState(false);
+
+    useEffect(() => {
+        if (showTimePicker) {
+            setTimeout(() => {
+                document.getElementById(`time-picker-hour-${selHour}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+                document.getElementById(`time-picker-min-${selMin}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+            }, 50);
+        }
+    }, [showTimePicker, selHour, selMin]);
     const [calMonth, setCalMonth] = useState(() => new Date().getMonth());
     const [calYear, setCalYear] = useState(() => new Date().getFullYear());
     const [activeInput, setActiveInput] = useState<'from' | 'to'>('from');
@@ -683,8 +740,9 @@ const BookingPage = () => {
 
     // ── Compatibility for TicketsPage & Header ──
     const saveToMyTickets = (backendData: any) => {
-        const dayBlockRate = vehicleType?.pricing?.dayBlockRate || (parkingSpot.settings?.pricePerHour ?? parkingSpot.price ?? 20000);
-        const estimatedPrice = Math.ceil(duration / 4) * dayBlockRate;
+        const blockRate = vehicleType?.pricing?.dayBlockRate || (TEMP_PRICES[vehicleType?.code?.toUpperCase()]?.dayBlockRate) || (vehicleType?.pricing?.hourlyRate ? vehicleType.pricing.hourlyRate * 4 : 20000);
+        const estimatedBlocks = Math.ceil(duration / 4);
+        const estimatedPrice = blockRate * estimatedBlocks;
         const grandTotal = Math.round(estimatedPrice);
         const rawExit = exitTime;
 
@@ -824,8 +882,8 @@ const BookingPage = () => {
                 setVehicleTypes(list.filter((v: VehicleType) => v.isActive && !v.isDeleted));
             })
             .catch(() => setVehicleTypes([
-                { _id: 'car', name: 'Car', code: 'CAR', size: 'medium', isActive: true, pricing: { dayBlockRate: 10000, dailyRate: 80000 } },
-                { _id: 'motorcycle', name: 'Motorcycle', code: 'MOTORBIKE', size: 'small', isActive: true, pricing: { dayBlockRate: 5000, dailyRate: 40000 } },
+                { _id: 'car', name: 'Car', code: 'CAR', size: 'medium', isActive: true, pricing: { hourlyRate: 10000, dailyRate: 80000 } },
+                { _id: 'motorcycle', name: 'Motorcycle', code: 'MOTORBIKE', size: 'small', isActive: true, pricing: { hourlyRate: 5000, dailyRate: 40000 } },
             ]))
             .finally(() => setVehicleTypesLoading(false));
 
@@ -893,8 +951,9 @@ const BookingPage = () => {
     }, [floorSlots, selectedZone]);
 
     const exitTime = new Date(new Date(entryDate).getTime() + duration * 3600000);
-    const dayBlockRate = vehicleType?.pricing?.dayBlockRate ?? 0;
-    const estimatedPrice = Math.ceil(duration / 4) * dayBlockRate;
+    const blockRate = vehicleType?.pricing?.dayBlockRate || (TEMP_PRICES[vehicleType?.code?.toUpperCase()]?.dayBlockRate) || (vehicleType?.pricing?.hourlyRate ? vehicleType.pricing.hourlyRate * 4 : 0);
+    const estimatedBlocks = Math.ceil(duration / 4);
+    const estimatedPrice = blockRate * estimatedBlocks;
 
     // ─── Navigation ─────────────────────────────────────────────────────────
     const canProceed = (step: number): boolean => {
@@ -940,6 +999,7 @@ const BookingPage = () => {
                 entryDate,
                 duration,
                 estimatedPrice,
+                blockRate,  // Truyền thẳng giá 1 block để SessionPage dùng
             }
         });
     };
@@ -1914,7 +1974,7 @@ const BookingPage = () => {
                                                     <VehicleSvgIcon code={vt.code} size={38} />
                                                 </div>
                                                 <div className="vt-name">{vt.name}</div>
-                                                <div className="vt-price">{fmtVND(vt.pricing?.dayBlockRate ?? 0)}/block</div>
+                                                <div className="vt-price">{fmtVND(vt.pricing?.dayBlockRate || TEMP_PRICES[vt.code?.toUpperCase()]?.dayBlockRate || (vt.pricing?.hourlyRate ? vt.pricing.hourlyRate * 4 : 0))}/4h</div>
                                                 {vehicleType?._id === vt._id && (
                                                     <div className="vt-check">✓</div>
                                                 )}
@@ -2090,8 +2150,6 @@ const BookingPage = () => {
                             const now = new Date();
                             const todayStr = now.toISOString().slice(0, 10);
                             const selectedDate = entryDate.slice(0, 10);
-                            const selHour = parseInt(entryDate.slice(11, 13)) || 0;
-                            const selMin = parseInt(entryDate.slice(14, 16)) || 0;
 
                             // Build next 7 day options
                             const dayOptions = Array.from({ length: 7 }, (_, i) => {
@@ -2120,26 +2178,21 @@ const BookingPage = () => {
                                 }
                             }
 
-                            const setSlot = (h: number, m: number) => {
-                                setEntryDate(`${selectedDate}T${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
-                            };
+                            // setSlot is now globally defined
                             const setDay = (dateStr: string) => {
-                                setEntryDate(`${dateStr}T${String(selHour).padStart(2, '0')}:${String(selMin).padStart(2, '0')}`);
+                                handleSetEntryDate(dateStr, selHour, selMin);
                             };
 
                             const exitDt = new Date(new Date(entryDate).getTime() + duration * 3600000);
                             const fmtT = (d: Date) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
                             const fmtD = (d: Date) => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
 
+                            const bs = 4;
                             const DURATION_OPTIONS = [
-                                { label: '1h', val: 1 },
-                                { label: '2h', val: 2 },
-                                { label: '3h', val: 3 },
-                                { label: '4h', val: 4 },
-                                { label: '6h', val: 6 },
-                                { label: '8h', val: 8 },
-                                { label: '12h', val: 12 },
-                                { label: 'All day', val: 24 },
+                                { label: '4h (1 block)', val: 4 },
+                                { label: '8h (2 blocks)', val: 8 },
+                                { label: '12h (3 blocks)', val: 12 },
+                                { label: '24h (6 blocks)', val: 24 },
                             ];
                             const isCustomDur = !DURATION_OPTIONS.find(o => o.val === duration);
 
@@ -2204,154 +2257,36 @@ const BookingPage = () => {
                                         );
                                     })()}
 
-                                    {/* ── 2. ARRIVAL TIME — Dual Drum Spinner ── */}
-                                    <div style={{ marginBottom: 28 }}>
-                                        <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 16 }}>
-                                            Arrival Time
-                                            <span style={{ fontSize: 13, fontWeight: 800, color: '#2563eb', marginLeft: 10, letterSpacing: 0, textTransform: 'none' }}>
-                                                {String(selHour).padStart(2, '0')}:{String(selMin).padStart(2, '0')}
-                                            </span>
-                                        </div>
-
-                                        {/* Drum spinner container */}
-                                        <div style={{
-                                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0,
-                                            background: 'linear-gradient(135deg,#f8fafc,#f1f5f9)',
-                                            borderRadius: 22, border: '1.5px solid #e2e8f0',
-                                            padding: '16px 24px',
-                                            boxShadow: '0 4px 20px rgba(0,0,0,0.06)',
-                                        }}>
-                                            {/* ── HOUR drum ── */}
-                                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0, flex: 1 }}>
-                                                <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Hour</div>
-                                                <button
-                                                    onClick={() => setSlot((selHour - 1 + 24) % 24, selMin)}
-                                                    style={{ width: 48, height: 36, border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}>
-                                                    <svg width="18" height="12" viewBox="0 0 18 12" fill="none"><path d="M1 10L9 2L17 10" stroke="#94a3b8" strokeWidth="2.5" strokeLinecap="round" /></svg>
-                                                </button>
-                                                {/* prev */}
-                                                <div style={{ height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, fontWeight: 900, color: '#d1d5db', opacity: 0.5, letterSpacing: -1 }}>
-                                                    {String((selHour - 1 + 24) % 24).padStart(2, '0')}
-                                                </div>
-                                                {/* selected hour — click to edit */}
-                                                <input
-                                                    type="number"
-                                                    className="time-drum-input"
-                                                    min={0}
-                                                    max={23}
-                                                    value={String(selHour).padStart(2, '0')}
-                                                    onChange={e => {
-                                                        if (e.target.value === '') {
-                                                            setSlot(0, selMin);
-                                                            return;
-                                                        }
-                                                        const v = parseInt(e.target.value);
-                                                        if (!isNaN(v)) setSlot(Math.min(23, Math.max(0, v)), selMin);
-                                                    }}
-                                                    onFocus={e => e.target.select()}
-                                                    onBlur={e => {
-                                                        const v = parseInt(e.target.value);
-                                                        if (isNaN(v)) setSlot(0, selMin);
-                                                        else setSlot(Math.min(23, Math.max(0, v)), selMin);
-                                                    }}
-                                                    onKeyDown={e => {
-                                                        if (e.key === 'ArrowUp') { e.preventDefault(); setSlot((selHour + 1) % 24, selMin); }
-                                                        if (e.key === 'ArrowDown') { e.preventDefault(); setSlot((selHour - 1 + 24) % 24, selMin); }
-                                                        if (e.key === 'Enter') { e.currentTarget.blur(); }
-                                                    }}
-                                                />
-                                                {/* next */}
-                                                <div style={{ height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, fontWeight: 900, color: '#d1d5db', opacity: 0.5, letterSpacing: -1 }}>
-                                                    {String((selHour + 1) % 24).padStart(2, '0')}
-                                                </div>
-                                                <button
-                                                    onClick={() => setSlot((selHour + 1) % 24, selMin)}
-                                                    style={{ width: 48, height: 36, border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}>
-                                                    <svg width="18" height="12" viewBox="0 0 18 12" fill="none"><path d="M1 2L9 10L17 2" stroke="#94a3b8" strokeWidth="2.5" strokeLinecap="round" /></svg>
-                                                </button>
+                                    {/* ── 2. ARRIVAL TIME ── */}
+                                    <div style={{ marginBottom: 28, position: 'relative' }}>
+                                        <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}> Arrival Time</div>
+                                        <button
+                                            onClick={() => {
+                                                if (showTimePicker) setShowTimePicker(false);
+                                                else setShowTimePicker(true);
+                                            }}
+                                            style={{
+                                                width: '100%',
+                                                background: 'white',
+                                                border: showTimePicker ? '1.5px solid #2563eb' : '1.5px solid #e2e8f0',
+                                                borderRadius: 14,
+                                                padding: '14px 18px',
+                                                fontSize: 15,
+                                                fontWeight: 700,
+                                                color: '#334155',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'space-between',
+                                                cursor: 'pointer',
+                                                boxShadow: showTimePicker ? '0 0 0 3px rgba(37,99,235,0.15)' : '0 1px 3px rgba(0,0,0,0.05)',
+                                                transition: 'all 0.2s',
+                                            }}
+                                        >
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                                <span>{String(selHour).padStart(2, '0')}:{String(selMin).padStart(2, '0')}</span>
                                             </div>
-
-                                            {/* colon */}
-                                            <div style={{ fontSize: 44, fontWeight: 900, color: '#1e293b', padding: '0 4px', lineHeight: 1, marginTop: 8 }}>:</div>
-
-                                            {/* ── MINUTE drum ── */}
-                                            {(() => {
-                                                const MINS = [0, 15, 30, 45];
-                                                const selIdx = MINS.indexOf(selMin) === -1 ? 0 : MINS.indexOf(selMin);
-                                                const prevMin = MINS[(selIdx - 1 + MINS.length) % MINS.length];
-                                                const nextMin = MINS[(selIdx + 1) % MINS.length];
-                                                return (
-                                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0, flex: 1 }}>
-                                                        <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Min</div>
-                                                        <button
-                                                            onClick={() => setSlot(selHour, prevMin)}
-                                                            style={{ width: 48, height: 36, border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}>
-                                                            <svg width="18" height="12" viewBox="0 0 18 12" fill="none"><path d="M1 10L9 2L17 10" stroke="#94a3b8" strokeWidth="2.5" strokeLinecap="round" /></svg>
-                                                        </button>
-                                                        <div style={{ height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, fontWeight: 900, color: '#d1d5db', opacity: 0.5, letterSpacing: -1 }}>
-                                                            {String(prevMin).padStart(2, '0')}
-                                                        </div>
-                                                        {/* selected minute — click to edit */}
-                                                        <input
-                                                            type="number"
-                                                            className="time-drum-input"
-                                                            min={0}
-                                                            max={59}
-                                                            value={String(selMin).padStart(2, '0')}
-                                                            onChange={e => {
-                                                                if (e.target.value === '') {
-                                                                    setSlot(selHour, 0);
-                                                                    return;
-                                                                }
-                                                                const v = parseInt(e.target.value);
-                                                                if (!isNaN(v)) {
-                                                                    const clamped = Math.min(59, Math.max(0, v));
-                                                                    setSlot(selHour, clamped);
-                                                                }
-                                                            }}
-                                                            onFocus={e => e.target.select()}
-                                                            onBlur={e => {
-                                                                const v = parseInt(e.target.value);
-                                                                if (isNaN(v)) {
-                                                                    setSlot(selHour, 0);
-                                                                } else {
-                                                                    const clamped = Math.min(59, Math.max(0, v));
-                                                                    setSlot(selHour, clamped);
-                                                                }
-                                                            }}
-                                                            onKeyDown={e => {
-                                                                const MINS = [0, 15, 30, 45];
-                                                                const selIdx = MINS.indexOf(selMin) === -1 ? 0 : MINS.indexOf(selMin);
-                                                                if (e.key === 'ArrowUp') {
-                                                                    e.preventDefault();
-                                                                    const prevMin = MINS[(selIdx - 1 + MINS.length) % MINS.length];
-                                                                    setSlot(selHour, prevMin);
-                                                                }
-                                                                if (e.key === 'ArrowDown') {
-                                                                    e.preventDefault();
-                                                                    const nextMin = MINS[(selIdx + 1) % MINS.length];
-                                                                    setSlot(selHour, nextMin);
-                                                                }
-                                                                if (e.key === 'Enter') {
-                                                                    e.currentTarget.blur();
-                                                                }
-                                                            }}
-                                                        />
-                                                        <div style={{ height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, fontWeight: 900, color: '#d1d5db', opacity: 0.5, letterSpacing: -1 }}>
-                                                            {String(nextMin).padStart(2, '0')}
-                                                        </div>
-                                                        <button
-                                                            onClick={() => setSlot(selHour, nextMin)}
-                                                            style={{ width: 48, height: 36, border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}>
-                                                            <svg width="18" height="12" viewBox="0 0 18 12" fill="none"><path d="M1 2L9 10L17 2" stroke="#94a3b8" strokeWidth="2.5" strokeLinecap="round" /></svg>
-                                                        </button>
-                                                    </div>
-                                                );
-                                            })()}
-                                        </div>
-                                        <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 10, textAlign: 'center', fontWeight: 500 }}>
-                                            Tap ▲▼ to adjust &nbsp;·&nbsp; Click number to type directly
-                                        </div>
+                                            <span style={{ color: '#94a3b8', fontSize: 10 }}>▼</span>
+                                        </button>
                                     </div>
 
 
@@ -2386,13 +2321,13 @@ const BookingPage = () => {
                                                 border: `2px solid ${isCustomDur ? '#2563eb' : '#e2e8f0'}`,
                                                 borderRadius: 14, overflow: 'hidden', background: isCustomDur ? '#eff6ff' : 'white',
                                             }}>
-                                                <button onClick={() => setDuration(d => Math.max(1, d - 1))}
+                                                <button onClick={() => setDuration(d => Math.max(bs, d - bs))}
                                                     style={{ width: 38, height: 52, border: 'none', background: 'transparent', fontSize: 20, fontWeight: 900, color: '#1e293b', cursor: 'pointer' }}>−</button>
                                                 <div style={{ padding: '0 8px', textAlign: 'center', borderLeft: '1.5px solid #e2e8f0', borderRight: '1.5px solid #e2e8f0', minWidth: 52 }}>
                                                     <div style={{ fontSize: 18, fontWeight: 900, color: isCustomDur ? '#2563eb' : '#64748b', lineHeight: 1 }}>{duration}</div>
                                                     <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 600 }}>hr</div>
                                                 </div>
-                                                <button onClick={() => setDuration(d => Math.min(72, d + 1))}
+                                                <button onClick={() => setDuration(d => Math.min(72, d + bs))}
                                                     style={{ width: 38, height: 52, border: 'none', background: 'transparent', fontSize: 20, fontWeight: 900, color: '#1e293b', cursor: 'pointer' }}>+</button>
                                             </div>
                                         </div>
@@ -2400,33 +2335,37 @@ const BookingPage = () => {
 
                                     {/* ── 4. SUMMARY CARD ── */}
                                     <div style={{
-                                        background: 'linear-gradient(135deg,#0f172a,#1e293b)',
+                                        background: 'linear-gradient(135deg, #eff6ff, #dbeafe)',
+                                        border: '1.5px solid #bfdbfe',
                                         borderRadius: 20, padding: '18px 22px',
                                         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                                         gap: 12,
                                     }}>
                                         <div>
-                                            <div style={{ fontSize: 10, color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}> Your Parking</div>
+                                            <div style={{ fontSize: 10, color: '#475569', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}> Your Parking</div>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                                                 <div style={{ textAlign: 'center' }}>
-                                                    <div style={{ fontSize: 22, fontWeight: 900, color: '#60a5fa', letterSpacing: -0.5 }}>{fmtT(new Date(entryDate))}</div>
-                                                    <div style={{ fontSize: 10, color: '#475569', marginTop: 1 }}>{fmtD(new Date(entryDate))}</div>
+                                                    <div style={{ fontSize: 22, fontWeight: 900, color: '#1e3a8a', letterSpacing: -0.5 }}>{fmtT(new Date(entryDate))}</div>
+                                                    <div style={{ fontSize: 10, color: '#64748b', marginTop: 1 }}>{fmtD(new Date(entryDate))}</div>
                                                 </div>
                                                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, flex: 1 }}>
-                                                    <div style={{ fontSize: 11, color: '#64748b', fontWeight: 700 }}>{duration}h</div>
-                                                    <div style={{ height: 2, background: 'linear-gradient(90deg,#60a5fa,#34d399)', borderRadius: 1, width: '100%' }} />
+                                                    <div style={{ fontSize: 11, color: '#475569', fontWeight: 700 }}>{duration}h</div>
+                                                    <div style={{ height: 2, background: 'linear-gradient(90deg,#3b82f6,#2563eb)', borderRadius: 1, width: '100%' }} />
                                                 </div>
                                                 <div style={{ textAlign: 'center' }}>
-                                                    <div style={{ fontSize: 22, fontWeight: 900, color: '#34d399', letterSpacing: -0.5 }}>{fmtT(exitDt)}</div>
-                                                    <div style={{ fontSize: 10, color: '#475569', marginTop: 1 }}>{fmtD(exitDt)}</div>
+                                                    <div style={{ fontSize: 22, fontWeight: 900, color: '#1d4ed8', letterSpacing: -0.5 }}>{fmtT(exitDt)}</div>
+                                                    <div style={{ fontSize: 10, color: '#64748b', marginTop: 1 }}>{fmtD(exitDt)}</div>
                                                 </div>
                                             </div>
                                         </div>
                                         {vehicleType && (
                                             <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                                                <div style={{ fontSize: 10, color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Est. Cost</div>
-                                                <div style={{ fontSize: 20, fontWeight: 900, color: '#fbbf24', letterSpacing: -0.5 }}>
-                                                    {new Intl.NumberFormat('vi-VN').format(Math.round(Math.ceil(duration / 4) * (vehicleType.pricing?.dayBlockRate ?? 0)))}₫
+                                                <div style={{ fontSize: 10, color: '#475569', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Est. Cost</div>
+                                                <div style={{ fontSize: 20, fontWeight: 900, color: '#ea580c', letterSpacing: -0.5 }}>
+                                                    {new Intl.NumberFormat('vi-VN').format(Math.round((vehicleType.pricing?.dayBlockRate || TEMP_PRICES[vehicleType?.code?.toUpperCase()]?.dayBlockRate || (vehicleType.pricing?.hourlyRate ? vehicleType.pricing.hourlyRate * 4 : 0)) * Math.ceil(duration / 4)))}₫
+                                                </div>
+                                                <div style={{ fontSize: 10, color: '#64748b', fontWeight: 500, marginTop: 4, maxWidth: '120px' }}>
+                                                    Phí tính theo block 4h. {duration}h = {Math.ceil(duration / 4)} block(s).
                                                 </div>
                                             </div>
                                         )}
@@ -2557,7 +2496,7 @@ const BookingPage = () => {
                                                 ) return false;
                                                 return true;
                                             }).length : z.availableSlots;
-                                            
+
                                             const liveTotal = z.totalSlots;
                                             const pct = liveTotal > 0 ? Math.round((liveAvailable / liveTotal) * 100) : 0;
                                             const isFull = liveAvailable === 0;
@@ -2709,7 +2648,7 @@ const BookingPage = () => {
                                         </div>
                                         <div className="modal-row">
                                             <span className="modal-row-label">Rate</span>
-                                            <span className="modal-row-value">{fmtVND(dayBlockRate)}/block</span>
+                                            <span className="modal-row-value">{fmtVND(blockRate)}/4h</span>
                                         </div>
                                     </div>
 
@@ -3070,7 +3009,7 @@ const BookingPage = () => {
                                                 const selHour = parseInt(entryDate.slice(11, 13)) || 0;
                                                 const selMin = parseInt(entryDate.slice(14, 16)) || 0;
                                                 const dateStr = `${cellDate.getFullYear()}-${String(cellDate.getMonth() + 1).padStart(2, '0')}-${String(cellDate.getDate()).padStart(2, '0')}`;
-                                                setEntryDate(`${dateStr}T${String(selHour).padStart(2, '0')}:${String(selMin).padStart(2, '0')}`);
+                                                handleSetEntryDate(dateStr, selHour, selMin);
 
                                                 setTempFromDate(cellDate);
                                                 setTempToDate(cellDate);
@@ -3090,6 +3029,95 @@ const BookingPage = () => {
                     </div>
                 );
             })()}
+
+            {/* ── TIME PICKER POPUP ── */}
+            {showTimePicker && (
+                <div className="cal-modal-overlay" onClick={() => setShowTimePicker(false)}>
+                    <div className="cal-modal-content" onClick={e => e.stopPropagation()} style={{ padding: '24px', width: '90%', maxWidth: 360 }}>
+                        <div style={{ textAlign: 'center', marginBottom: 16, fontSize: 16, fontWeight: 800, color: '#1e293b' }}>
+                            Select Arrival Time
+                        </div>
+                        
+                        <div style={{
+                            background: 'white', border: '1.5px solid #e2e8f0', borderRadius: 14,
+                            boxShadow: '0 4px 15px rgba(0,0,0,0.05)',
+                            display: 'flex', height: 260, overflow: 'hidden'
+                        }}>
+                            {(() => {
+                                const now = new Date();
+                                const currentHour = now.getHours();
+                                const currentMin = now.getMinutes();
+                                const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+                                const isTodaySelection = entryDate.slice(0, 10) === todayStr;
+
+                                return (
+                                    <>
+                                        <div style={{ flex: 1, overflowY: 'auto', borderRight: '1.5px solid #e2e8f0' }} className="custom-scrollbar">
+                                            <div style={{ padding: '10px 0', textAlign: 'center', fontSize: 12, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em', borderBottom: '1.5px solid #f1f5f9', position: 'sticky', top: 0, background: '#f8fafc', zIndex: 2 }}>Hour</div>
+                                            {Array.from({ length: 24 }).map((_, i) => {
+                                                const isPastHour = isTodaySelection && i < currentHour;
+                                                return (
+                                                    <div key={i}
+                                                         id={`time-picker-hour-${i}`}
+                                                         onClick={() => {
+                                                             if (!isPastHour) setSlot(i, selMin);
+                                                         }}
+                                                         style={{
+                                                             padding: '14px 0', textAlign: 'center', 
+                                                             cursor: isPastHour ? 'not-allowed' : 'pointer',
+                                                             background: selHour === i ? '#2563eb' : 'white',
+                                                             color: selHour === i ? 'white' : '#334155',
+                                                             fontWeight: selHour === i ? 800 : 500,
+                                                             fontSize: 18,
+                                                             opacity: isPastHour ? 0.3 : 1,
+                                                             transition: 'background 0.2s'
+                                                         }}
+                                                    >
+                                                        {String(i).padStart(2, '0')}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                        <div style={{ flex: 1, overflowY: 'auto' }} className="custom-scrollbar">
+                                            <div style={{ padding: '10px 0', textAlign: 'center', fontSize: 12, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em', borderBottom: '1.5px solid #f1f5f9', position: 'sticky', top: 0, background: '#f8fafc', zIndex: 2 }}>Minute</div>
+                                            {Array.from({ length: 60 }).map((_, m) => {
+                                                const isPastMin = isTodaySelection && selHour === currentHour && m < currentMin;
+                                                return (
+                                                    <div key={m}
+                                                         id={`time-picker-min-${m}`}
+                                                         onClick={() => {
+                                                             if (!isPastMin) {
+                                                                 setSlot(selHour, m); 
+                                                                 setShowTimePicker(false);
+                                                             }
+                                                         }}
+                                                         style={{
+                                                             padding: '14px 0', textAlign: 'center', 
+                                                             cursor: isPastMin ? 'not-allowed' : 'pointer',
+                                                             background: selMin === m ? '#2563eb' : 'white',
+                                                             color: selMin === m ? 'white' : '#334155',
+                                                             fontWeight: selMin === m ? 800 : 500,
+                                                             fontSize: 18,
+                                                             opacity: isPastMin ? 0.3 : 1,
+                                                             transition: 'background 0.2s'
+                                                         }}
+                                                    >
+                                                        {String(m).padStart(2, '0')}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </>
+                                );
+                            })()}
+                        </div>
+
+                        <button className="cal-btn cal-btn-confirm" onClick={() => setShowTimePicker(false)} style={{ width: '100%', background: '#1e293b', color: 'white', border: 'none', padding: '12px', borderRadius: '12px', fontWeight: 'bold', cursor: 'pointer', marginTop: 20 }}>
+                            Confirm Time
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {/* ── Floating Lock Toast ── */}
             {slotLockUntil && slotLockUntil > new Date() && (

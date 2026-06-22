@@ -38,7 +38,20 @@ interface Booking {
 const DevPanel: React.FC = () => {
     const navigate = useNavigate();
     const [open, setOpen] = useState(false);
-    const [tab, setTab] = useState<'checkin' | 'sessions'>('checkin');
+    const [tab, setTab] = useState<'checkin' | 'sessions' | 'time'>('checkin');
+
+    const updateDevTimeOffset = (ms: number) => {
+        const stored = localStorage.getItem('devTimeOffset');
+        const current = stored ? parseInt(stored, 10) : 0;
+        const next = current + ms;
+        localStorage.setItem('devTimeOffset', next.toString());
+        window.dispatchEvent(new CustomEvent('devTimeOffsetChanged', { detail: next }));
+    };
+
+    const resetDevTimeOffset = () => {
+        localStorage.setItem('devTimeOffset', '0');
+        window.dispatchEvent(new CustomEvent('devTimeOffsetChanged', { detail: 0 }));
+    };
 
     // ── bookings ─────────────────────────────────────────────────────────────
     const [bookings, setBookings] = useState<Booking[]>([]);
@@ -87,7 +100,7 @@ const DevPanel: React.FC = () => {
     useEffect(() => {
         if (!open) return;
         if (tab === 'checkin') loadBookings();
-        else loadSessions();
+        else if (tab === 'sessions') loadSessions();
     }, [open, tab]);
 
     const handleSimulateCheckIn = async (booking: Booking) => {
@@ -327,6 +340,12 @@ const DevPanel: React.FC = () => {
                         >
                             🔴 Active Sessions
                         </button>
+                        <button
+                            className={`dev-tab ${tab === 'time' ? 'active' : ''}`}
+                            onClick={() => setTab('time')}
+                        >
+                            ⏱️ Fast Forward
+                        </button>
                     </div>
 
                     {/* Body */}
@@ -429,6 +448,37 @@ const DevPanel: React.FC = () => {
                                     })
                                 )}
                             </>
+                        )}
+
+                        {/* ── TAB: Fast Forward (Time Offset) ── */}
+                        {tab === 'time' && (
+                            <div style={{ padding: '20px 10px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                <div style={{ color: '#94a3b8', fontSize: '12px', marginBottom: '10px', textAlign: 'center' }}>
+                                    Simulate time passing to test Overtime logic in Session Page.
+                                </div>
+                                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'center' }}>
+                                    <button 
+                                        className="dev-util-btn" 
+                                        style={{ background: '#f1f5f9', color: '#334155', border: 'none' }}
+                                        onClick={() => updateDevTimeOffset(15 * 60 * 1000)}
+                                    >+ 15 Phút</button>
+                                    <button 
+                                        className="dev-util-btn" 
+                                        style={{ background: '#e0f2fe', color: '#0369a1', border: 'none' }}
+                                        onClick={() => updateDevTimeOffset(60 * 60 * 1000)}
+                                    >+ 1 Giờ</button>
+                                    <button 
+                                        className="dev-util-btn" 
+                                        style={{ background: '#fee2e2', color: '#b91c1c', border: 'none' }}
+                                        onClick={() => updateDevTimeOffset(4 * 60 * 60 * 1000)}
+                                    >+ 4 Giờ</button>
+                                </div>
+                                <button 
+                                    className="dev-util-btn" 
+                                    style={{ marginTop: '10px', background: '#f87171', color: '#fff', border: 'none' }}
+                                    onClick={() => resetDevTimeOffset()}
+                                >Reset Time to Now</button>
+                            </div>
                         )}
                     </div>
 

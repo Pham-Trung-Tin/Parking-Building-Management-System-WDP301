@@ -57,6 +57,17 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     socketRef.current = socket;
 
+    // Periodically check if token changed (e.g. after login/logout without page reload)
+    const tokenInterval = setInterval(() => {
+      const currentToken = localStorage.getItem('accessToken');
+      const auth = socket.auth as any;
+      if ((auth?.token || null) !== (currentToken || null)) {
+        console.log('[Socket] Token changed, reconnecting...');
+        socket.auth = currentToken ? { token: currentToken } : {};
+        socket.disconnect().connect();
+      }
+    }, 2000);
+
     socket.on('connect', () => {
       setIsConnected(true);
       console.log('[Socket] Connected:', socket.id);
@@ -72,6 +83,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     });
 
     return () => {
+      clearInterval(tokenInterval);
       socket.disconnect();
       socketRef.current = null;
     };
