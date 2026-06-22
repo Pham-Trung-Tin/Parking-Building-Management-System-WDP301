@@ -1,10 +1,13 @@
 import axiosClient from './axiosClient';
 
 export interface VehicleTypePricing {
-    hourlyRate: number;
+    dayBlockRate: number;      // Backend field — giá 1 block 4 tiếng (ban ngày)
+    nightBlockRate?: number;   // Backend field — giá block ban đêm (nếu có)
     dailyRate: number;
     monthlyRate?: number;
     overtimeMultiplier?: number;
+    // Legacy fallback (some older records might have this)
+    hourlyRate?: number;
 }
 
 export interface VehicleType {

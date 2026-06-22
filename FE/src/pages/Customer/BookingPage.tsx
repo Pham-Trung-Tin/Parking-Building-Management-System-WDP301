@@ -999,6 +999,7 @@ const BookingPage = () => {
                 entryDate,
                 duration,
                 estimatedPrice,
+                blockRate,  // Truyền thẳng giá 1 block để SessionPage dùng
             }
         });
     };

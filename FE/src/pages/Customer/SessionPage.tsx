@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import Header from '../../components/Header/Header';
 import parkingSessionService, { ParkingSession } from '../../services/api/parkingSessionService';
-import { VehicleType } from '../../services/api/vehicleTypeService';
+import vehicleTypeService, { VehicleType, VehicleTypePricing } from '../../services/api/vehicleTypeService';
 import { Floor } from '../../services/api/floorService';
 import { Zone } from '../../services/api/zoneService';
 import { ParkingSlot } from '../../services/api/parkingSlotService';
@@ -99,13 +99,32 @@ const SessionPage = () => {
     const slotData: ParkingSlot | null = state.slot || null;
     const sessionId: string | null = state.sessionId || null; // nếu có session đã tạo từ trước
 
-    // Giá theo giờ từ VehicleType object
-    const hourlyRate = vehicleTypeData?.pricing?.hourlyRate ?? spot.price ?? 20000;
+    // estimatedPrice, duration, blockRate — do BookingPage tính và truyền sang
+    const stateEstimatedPrice: number = state.estimatedPrice || 0;
+    const stateDuration: number = state.duration || 4;
+    const stateBlockRate: number = state.blockRate || 0; // Giá 1 block mà user đã thanh toán
 
     // ── Session data từ API (nếu có sessionId) ────────────────────────────────
     const initialSession = state.session || null;
     const [session, setSession] = useState<ParkingSession | null>(initialSession);
-    const [sessionLoading, setSessionLoading] = useState(false);
+    const [sessionLoading, setSessionLoading] = useState(true);
+    const [showQrModal, setShowQrModal] = useState(false);
+
+    // ── Fetch vehicle type pricing trực tiếp từ API (vì navigate state có thể thiếu pricing) ─
+    const [fetchedVTPricing, setFetchedVTPricing] = useState<VehicleTypePricing | null>(null);
+
+    useEffect(() => {
+        const vtId = vehicleTypeData?._id || state.vehicleTypeId;
+        if (!vtId) return;
+        vehicleTypeService.getById(vtId)
+            .then((res: any) => {
+                const vt = res?.data || res;
+                if (vt?.pricing?.dayBlockRate) {
+                    setFetchedVTPricing(vt.pricing as VehicleTypePricing);
+                }
+            })
+            .catch(() => {}); // Fail silently — sẽ dùng fallback
+    }, [vehicleTypeData?._id, state.vehicleTypeId]);
 
     useEffect(() => {
         if (!sessionId) return;
@@ -137,33 +156,76 @@ const SessionPage = () => {
         }
     }, [session]);
 
-    const initialElapsed = Math.floor((Date.now() - sessionStart.current) / 1000);
+    // ── Dev Tool Time Offset ──────────────────────────────────────────────────
+    const [devTimeOffset, setDevTimeOffset] = useState<number>(() => {
+        const stored = localStorage.getItem('devTimeOffset');
+        return stored ? parseInt(stored, 10) : 0;
+    });
+
+    useEffect(() => {
+        const handleOffsetChange = (e: any) => {
+            if (e.detail !== undefined) {
+                setDevTimeOffset(e.detail);
+            }
+        };
+        window.addEventListener('devTimeOffsetChanged', handleOffsetChange);
+        return () => window.removeEventListener('devTimeOffsetChanged', handleOffsetChange);
+    }, []);
+
+    const initialElapsed = Math.floor((Date.now() + devTimeOffset - sessionStart.current) / 1000);
     const [elapsed, setElapsed] = useState(Math.max(0, initialElapsed));
 
     useEffect(() => {
         const id = setInterval(() => {
-            setElapsed(Math.floor((Date.now() - sessionStart.current) / 1000));
+            setElapsed(Math.floor((Date.now() + devTimeOffset - sessionStart.current) / 1000));
         }, 1000);
         return () => clearInterval(id);
-    }, []);
+    }, [devTimeOffset]);
 
     // ── Phí ước tính thực tế (Pre-booked Overtime logic) ────────────────────
     let overtimeFee = 0;
     const bookingInfo = typeof session?.booking === 'object' ? session.booking : null;
     
-    // Giả sử 1 block là 4 tiếng. blockRate = dayBlockRate hoặc hourlyRate * 4.
-    const blockRate = (vehicleTypeData?.pricing as any)?.dayBlockRate || (hourlyRate * 4);
+    const vtCodeForPricing = (typeof session?.vehicleType === 'object' ? (session.vehicleType as any)?.code : '') || vehicleTypeData?.code || '';
+    const isMotorbikeType = ['MOTORBIKE', 'MOTORCYCLE', 'ELECTRIC_BIKE', 'BICYCLE'].some(c => vtCodeForPricing.toUpperCase().includes(c));
+    
+    // Rút trích đúng giá tiền từ API thay vì fallback cứng
+    const vehicleTypePricing = (typeof session?.vehicleType === 'object' ? (session.vehicleType as any)?.pricing : null) || vehicleTypeData?.pricing;
+    const hourlyRate = vehicleTypePricing?.hourlyRate ?? spot.price ?? 20000;
+
+    // advancePayment từ session API (nếu có)
+    const advancePayment = session?.advancePayment ?? 0;
+
+    // blockRate = giá 1 block lố giờ, ưu tiên theo thứ tự:
+    // 1. fetchedVTPricing.dayBlockRate — fetch trực tiếp từ API vehicleType (CHÍNH XÁC NHẤT)
+    // 2. stateBlockRate — BookingPage đã tính đúng và truyền sang
+    // 3. session.advancePayment — tiền thực tế đã thanh toán
+    // 4. estimatedPrice / bookedBlocks — tính ngược
+    // 5. hourlyRate * 4 (fallback cuối)
+    const bookedBlocks = Math.max(1, Math.ceil(stateDuration / 4));
+    const resolvedDayBlockRate = fetchedVTPricing?.dayBlockRate
+        || (typeof session?.vehicleType === 'object' ? (session.vehicleType as any)?.pricing?.dayBlockRate : 0)
+        || vehicleTypePricing?.dayBlockRate;
+    const blockRate = resolvedDayBlockRate
+        ? resolvedDayBlockRate
+        : stateBlockRate > 0
+            ? stateBlockRate
+            : advancePayment > 0
+                ? advancePayment
+                : stateEstimatedPrice > 0
+                    ? Math.round(stateEstimatedPrice / bookedBlocks)
+                    : hourlyRate * 4;
 
     if (bookingInfo && (bookingInfo as any).endTime && (bookingInfo as any).scheduledDate) {
         const scheduledDateStr = (bookingInfo as any).scheduledDate.split('T')[0];
         const scheduledEnd = new Date(`${scheduledDateStr}T${(bookingInfo as any).endTime}:00`);
-        const now = new Date();
+        const now = new Date(Date.now() + devTimeOffset);
         
         if (now > scheduledEnd) {
             const otHours = (now.getTime() - scheduledEnd.getTime()) / (1000 * 60 * 60);
             // 15 mins grace period
             if (otHours > (15 / 60)) {
-                // Đậu lố: tính theo block 4 tiếng
+                // Đậu lố: mỗi block thêm tính bằng blockRate
                 overtimeFee = Math.ceil(otHours / 4) * blockRate;
             }
         }
@@ -180,11 +242,9 @@ const SessionPage = () => {
     const currentFee = overtimeFee;
     // Số tiền cần thanh toán thêm cũng chỉ là phần overtime chưa thanh toán
     const amountDue = overtimeFee;
-    
-    // Add back advancePayment for UI rendering later down
-    const advancePayment = session?.advancePayment ?? 0;
 
-    // ── Thông tin hiển thị ────────────────────────────────────────────────────
+
+    // ── Tải dữ liệu ─────────────────────────────────────────────────────────────
     // Ưu tiên data từ API session, fallback về state từ BookingPage
     const licensePlate: string = session?.vehicleInfo?.licensePlate || state.licensePlate || '';
 
@@ -359,6 +419,12 @@ const SessionPage = () => {
                     box-shadow: 0 10px 25px rgba(0,0,0,0.5);
                     margin-bottom: 32px;
                     border: 4px solid #334155;
+                    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                }
+                .dt-qr-wrapper:hover {
+                    transform: scale(1.05) translateY(-4px);
+                    box-shadow: 0 25px 45px rgba(0,0,0,0.7);
+                    border-color: #475569;
                 }
 
                 .dt-plate-box {
@@ -568,7 +634,12 @@ const SessionPage = () => {
                                 {sessionCode && <div className="dt-session-id">#{sessionCode}</div>}
                             </div>
 
-                            <div className="dt-qr-wrapper">
+                            <div 
+                                className="dt-qr-wrapper" 
+                                onClick={() => qrValue && setShowQrModal(true)}
+                                style={{ cursor: qrValue ? 'pointer' : 'default' }}
+                                title="Click để phóng to mã QR"
+                            >
                                 {qrValue ? (
                                     <QRCodeSVG
                                         value={qrValue}
@@ -637,7 +708,7 @@ const SessionPage = () => {
                                     <div className="stat-value green" style={{ color: '#059669' }}>
                                         {fmtVND(currentFee)}
                                     </div>
-                                    <div className="stat-sub green">{fmtVND(hourlyRate)} / giờ</div>
+                                    <div className="stat-sub green">{fmtVND(blockRate)} / block 4 tiếng</div>
                                 </div>
                             </div>
 
@@ -654,13 +725,6 @@ const SessionPage = () => {
                                             <div className="location-sub">Khu {zoneName}</div>
                                         )}
                                     </div>
-                                    <button 
-                                        className="btn-secondary" 
-                                        style={{ marginLeft: 'auto', padding: '10px 16px', fontSize: '13px', borderRadius: '12px' }}
-                                        onClick={() => alert('🗺️ Tính năng bản đồ đang phát triển...')}
-                                    >
-                                        <NavigateIcon /> Tìm Xe
-                                    </button>
                                 </div>
 
                                 <div className="details-grid">
@@ -683,10 +747,10 @@ const SessionPage = () => {
                                 </div>
 
                                 {/* Pricing Summary */}
-                                <div className="pricing-section">
+                                <div className="pricing-details">
                                     <div className="pricing-row">
-                                        <span className="pricing-label">Đơn giá áp dụng</span>
-                                        <span className="pricing-value" style={{ color: '#2563eb' }}>{fmtVND(hourlyRate)} / giờ</span>
+                                        <span className="pricing-label">Phí phát sinh (Block 4 tiếng)</span>
+                                        <span className="pricing-value" style={{ color: '#2563eb' }}>{fmtVND(blockRate)} / block</span>
                                     </div>
                                     {vehicleTypeData?.pricing?.dailyRate && (
                                         <div className="pricing-row">
@@ -742,6 +806,59 @@ const SessionPage = () => {
                     </div>
                 </div>
             </div>
+            {/* ── Modal Phóng To QR ── */}
+            {showQrModal && (
+                <div 
+                    style={{
+                        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                        backgroundColor: 'rgba(0, 0, 0, 0.75)',
+                        backdropFilter: 'blur(4px)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        zIndex: 99999, padding: '20px'
+                    }}
+                    onClick={() => setShowQrModal(false)}
+                >
+                    <div 
+                        style={{
+                            background: '#fff', padding: '32px', borderRadius: '24px',
+                            display: 'flex', flexDirection: 'column', alignItems: 'center',
+                            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+                            transform: 'scale(1)', animation: 'qrZoomIn 0.2s ease-out'
+                        }}
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <style>{`
+                            @keyframes qrZoomIn {
+                                from { opacity: 0; transform: scale(0.9); }
+                                to { opacity: 1; transform: scale(1); }
+                            }
+                        `}</style>
+                        <h3 style={{ margin: '0 0 24px 0', color: '#0f172a', fontSize: '20px', fontWeight: 800 }}>Mã QR Chuyến Đi</h3>
+                        {qrValue && (
+                            <div style={{ background: '#fff', padding: '16px', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
+                                <QRCodeSVG
+                                    value={qrValue}
+                                    size={Math.min(window.innerWidth - 100, 320)}
+                                    bgColor="#ffffff"
+                                    fgColor="#0f172a"
+                                    level="H"
+                                    includeMargin={false}
+                                />
+                            </div>
+                        )}
+                        <p style={{ marginTop: '24px', color: '#64748b', fontSize: '14px', textAlign: 'center', maxWidth: '300px' }}>
+                            Đưa mã này cho nhân viên hoặc quét tại trạm kiểm soát để xác nhận xe.
+                        </p>
+                        <button 
+                            className="btn-primary" 
+                            style={{ marginTop: '24px', width: '100%', padding: '14px' }}
+                            onClick={() => setShowQrModal(false)}
+                        >
+                            Đóng Lại
+                        </button>
+                    </div>
+                </div>
+            )}
         </>
     );
 };
