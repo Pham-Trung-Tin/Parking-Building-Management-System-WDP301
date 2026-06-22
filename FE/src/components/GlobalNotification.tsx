@@ -22,7 +22,7 @@ const GlobalNotification: React.FC = () => {
                     visible: true,
                     title: 'Check-in Thành Công!',
                     message: 'Nhân viên vừa check-in vé của bạn. Bấm để xem phiên đỗ!',
-                    sessionId: notif.sessionId || notif.session?._id || notif.data?._id,
+                    sessionId: notif.sessionId || notif.session?._id || notif.data?.sessionId || notif.data?._id,
                     type: 'checkin_success'
                 });
             } else if (notif.type === 'checkout_success') {

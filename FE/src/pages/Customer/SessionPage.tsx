@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useSocket } from '../../contexts/SocketContext';
 import Header from '../../components/Header/Header';
 import parkingSessionService, { ParkingSession } from '../../services/api/parkingSessionService';
 import vehicleTypeService, { VehicleType, VehicleTypePricing } from '../../services/api/vehicleTypeService';
@@ -89,6 +90,7 @@ const fmtDateTime = (d: Date) =>
 const SessionPage = () => {
     const navigate = useNavigate();
     const location = useLocation();
+    const { socket } = useSocket();
     const state = location.state || {} as any;
 
     // ── Dữ liệu từ BookingPage navigate ──────────────────────────────────────
@@ -132,7 +134,7 @@ const SessionPage = () => {
             setSessionLoading(true);
             try {
                 const data = await parkingSessionService.getById(sessionId);
-                setSession(data as ParkingSession);
+                setSession((data.data || data) as ParkingSession);
             } catch {
                 // session không load được — vẫn dùng state data từ BookingPage
             } finally {
@@ -141,6 +143,7 @@ const SessionPage = () => {
         };
         load();
     }, [sessionId]);
+
 
     // ── Live timer kể từ lúc vào trang / entryTime của session ───────────────
     const sessionStart = useRef<number>(
@@ -243,6 +246,36 @@ const SessionPage = () => {
     // Số tiền cần thanh toán thêm cũng chỉ là phần overtime chưa thanh toán
     const amountDue = overtimeFee;
 
+    // ── Lắng nghe sự kiện Checkout từ Staff qua Socket ────────────────────────
+    useEffect(() => {
+        if (!socket) return;
+        const handleCheckout = (notif: any) => {
+            if (notif.type === 'checkout_success') {
+                const notifSessionId = notif.sessionId || notif.session?._id || notif.data?.sessionId || notif.data?._id;
+                // Chỉ chuyển cảnh nếu không có session ID trong notif (fallback) hoặc đúng bằng sessionId hiện tại
+                if (!notifSessionId || String(notifSessionId) === String(sessionId)) {
+                    navigate('/checkoutsuccess', {
+                        state: {
+                            spot,
+                            vehicleType: vehicleTypeData,
+                            floor: floorData,
+                            slot: slotData,
+                            licensePlate: session?.licensePlate || state.licensePlate,
+                            entryDate: session?.entryTime || sessionStart.current,
+                            exitTime: Date.now(),
+                            elapsed: elapsed,
+                            totalAmount: session?.totalFee || (currentFee + overtimeFee),
+                            transactionId: notif.transactionId || session?._id,
+                        }
+                    });
+                }
+            }
+        };
+        socket.on('newNotification', handleCheckout);
+        return () => {
+            socket.off('newNotification', handleCheckout);
+        };
+    }, [socket, sessionId, navigate, spot, vehicleTypeData, floorData, slotData, session, state.licensePlate, elapsed, currentFee, overtimeFee]);
 
     // ── Tải dữ liệu ─────────────────────────────────────────────────────────────
     // Ưu tiên data từ API session, fallback về state từ BookingPage

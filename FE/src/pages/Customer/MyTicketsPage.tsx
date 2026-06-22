@@ -117,6 +117,24 @@ const MyTicketsPage = () => {
     // ── DATA FETCHING ─────────────────────────────────────────────────────────
     const { socket } = useSocket();
     const [activeSessions, setActiveSessions] = useState<ParkingSession[]>([]);
+
+    // ── TỰ ĐỘNG CHUYỂN SANG SESSION PAGE KHI STAFF QUÉT VÉ VÀO ──────────────
+    useEffect(() => {
+        if (!socket) return;
+        const handleCheckin = (notif: any) => {
+            if (notif.type === 'checkin_success') {
+                const sid = notif.data?.sessionId;
+                if (sid) {
+                    setSelectedTicket(null); // Đóng modal nếu đang mở
+                    navigate('/session', { state: { sessionId: sid } });
+                }
+            }
+        };
+        socket.on('newNotification', handleCheckin);
+        return () => {
+            socket.off('newNotification', handleCheckin);
+        };
+    }, [socket, navigate]);
     const [sessionsLoading, setSessionsLoading] = useState(true);
     const [sessionsError, setSessionsError] = useState<string | null>(null);
     const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
