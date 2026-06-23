@@ -463,8 +463,6 @@ const SlotMapGrid = ({ slots, selectedSlot, onSelect, vehicleType, currentUserId
                                 {bot.length > 0 && (
                                     <div style={{ display: 'flex', gap: 6, marginTop: 6, minWidth: 'max-content' }}>
                                         {bot.map(slot => <SlotBtn key={slot._id} slot={slot} />)}
-                                        Scan to Enter
-
                                     </div>
                                 )}
                             </div>
@@ -554,6 +552,7 @@ const BookingPage = () => {
         return d.toISOString().slice(0, 16);
     });
     const [duration, setDuration] = useState(2);
+    const [showAllBlocks, setShowAllBlocks] = useState(false);
 
     useEffect(() => {
         const bs = 4;
@@ -566,10 +565,10 @@ const BookingPage = () => {
         const now = new Date();
         const localNow = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
         const todayStr = localNow.toISOString().slice(0, 10);
-        
+
         let finalH = h;
         let finalM = m;
-        
+
         if (dateStr === todayStr) {
             const currentHour = now.getHours();
             const currentMin = now.getMinutes();
@@ -1667,6 +1666,7 @@ const BookingPage = () => {
                 }
                 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
                 @keyframes slideUpToast { from { opacity: 0; transform: translate(-50%, 20px); } to { opacity: 1; transform: translate(-50%, 0); } }
+                @keyframes slideInRightToast { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
                 .modal-box {
                     background: white; border-radius: 24px; padding: 32px; width: 100%;
                     max-width: 520px; max-height: 90vh; overflow-y: auto;
@@ -2192,6 +2192,8 @@ const BookingPage = () => {
                                 { label: '4h (1 block)', val: 4 },
                                 { label: '8h (2 blocks)', val: 8 },
                                 { label: '12h (3 blocks)', val: 12 },
+                                { label: '16h (4 blocks)', val: 16 },
+                                { label: '20h (5 blocks)', val: 20 },
                                 { label: '24h (6 blocks)', val: 24 },
                             ];
                             const isCustomDur = !DURATION_OPTIONS.find(o => o.val === duration);
@@ -2327,42 +2329,48 @@ const BookingPage = () => {
                                     {/* ── 3. DURATION ── */}
                                     <div style={{ marginBottom: 24 }}>
                                         <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>Duration</div>
-                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 10, marginBottom: 16 }}>
                                             {DURATION_OPTIONS.map(opt => {
                                                 const isSel = duration === opt.val && !isCustomDur;
                                                 return (
                                                     <button key={opt.val} onClick={() => setDuration(opt.val)}
                                                         style={{
-                                                            padding: '14px 20px',
+                                                            padding: '12px 14px',
                                                             border: `2px solid ${isSel ? '#2563eb' : '#e2e8f0'}`,
                                                             borderRadius: 14,
                                                             background: isSel ? 'linear-gradient(135deg,#2563eb,#1d4ed8)' : 'white',
                                                             color: isSel ? 'white' : '#374151',
                                                             fontWeight: isSel ? 800 : 700,
-                                                            fontSize: 15,
+                                                            fontSize: 14,
                                                             cursor: 'pointer',
                                                             transition: 'all 0.2s cubic-bezier(0.34,1.56,0.64,1)',
-                                                            boxShadow: isSel ? '0 6px 18px rgba(37,99,235,0.35)' : '0 1px 4px rgba(0,0,0,0.05)',
-                                                            transform: isSel ? 'scale(1.06)' : 'scale(1)',
+                                                            boxShadow: isSel ? '0 4px 12px rgba(37,99,235,0.3)' : '0 1px 3px rgba(0,0,0,0.05)',
+                                                            transform: isSel ? 'translateY(-1px)' : 'none',
+                                                            textAlign: 'center'
                                                         }}>
                                                         {opt.label}
                                                     </button>
                                                 );
                                             })}
-                                            {/* Custom stepper */}
+                                        </div>
+
+                                        {/* Custom stepper row */}
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: '#f8fafc', borderRadius: 14, border: '1px solid #e2e8f0' }}>
+                                            <div style={{ fontSize: 13, fontWeight: 700, color: '#475569' }}>Custom Duration</div>
                                             <div style={{
                                                 display: 'flex', alignItems: 'center', gap: 0,
-                                                border: `2px solid ${isCustomDur ? '#2563eb' : '#e2e8f0'}`,
-                                                borderRadius: 14, overflow: 'hidden', background: isCustomDur ? '#eff6ff' : 'white',
+                                                border: `2px solid ${isCustomDur ? '#2563eb' : '#cbd5e1'}`,
+                                                borderRadius: 12, overflow: 'hidden', background: isCustomDur ? '#eff6ff' : 'white',
+                                                boxShadow: isCustomDur ? '0 0 0 3px rgba(37,99,235,0.1)' : 'none',
                                             }}>
                                                 <button onClick={() => setDuration(d => Math.max(bs, d - bs))}
-                                                    style={{ width: 38, height: 52, border: 'none', background: 'transparent', fontSize: 20, fontWeight: 900, color: '#1e293b', cursor: 'pointer' }}>−</button>
-                                                <div style={{ padding: '0 8px', textAlign: 'center', borderLeft: '1.5px solid #e2e8f0', borderRight: '1.5px solid #e2e8f0', minWidth: 52 }}>
-                                                    <div style={{ fontSize: 18, fontWeight: 900, color: isCustomDur ? '#2563eb' : '#64748b', lineHeight: 1 }}>{duration}</div>
-                                                    <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 600 }}>hr</div>
+                                                    style={{ width: 36, height: 42, border: 'none', background: 'transparent', fontSize: 18, fontWeight: 900, color: '#1e293b', cursor: 'pointer' }}>−</button>
+                                                <div style={{ padding: '0 8px', textAlign: 'center', borderLeft: '1.5px solid #e2e8f0', borderRight: '1.5px solid #e2e8f0', minWidth: 48 }}>
+                                                    <div style={{ fontSize: 16, fontWeight: 900, color: isCustomDur ? '#2563eb' : '#64748b', lineHeight: 1, marginTop: 4 }}>{duration}</div>
+                                                    <div style={{ fontSize: 9, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase' }}>hr</div>
                                                 </div>
                                                 <button onClick={() => setDuration(d => Math.min(72, d + bs))}
-                                                    style={{ width: 38, height: 52, border: 'none', background: 'transparent', fontSize: 20, fontWeight: 900, color: '#1e293b', cursor: 'pointer' }}>+</button>
+                                                    style={{ width: 36, height: 42, border: 'none', background: 'transparent', fontSize: 18, fontWeight: 900, color: '#1e293b', cursor: 'pointer' }}>+</button>
                                             </div>
                                         </div>
 
@@ -2370,19 +2378,54 @@ const BookingPage = () => {
                                         <div style={{ background: '#f8fafc', border: '1px dashed #cbd5e1', borderRadius: 12, padding: '12px 16px', marginTop: 16 }}>
                                             <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', marginBottom: 8, letterSpacing: '0.04em' }}>BLOCK BREAKDOWN ({blockDetails.length} BLOCKS)</div>
                                             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                                                {blockDetails.map((b, i) => (
-                                                    <div key={i} style={{ 
-                                                        display: 'flex', alignItems: 'center', gap: 6, 
-                                                        background: b.isNight ? '#1e293b' : '#fff', 
-                                                        color: b.isNight ? '#f8fafc' : '#334155', 
-                                                        border: b.isNight ? 'none' : '1px solid #e2e8f0', 
-                                                        padding: '6px 10px', borderRadius: 8, fontSize: 12, fontWeight: 600, 
-                                                        boxShadow: '0 1px 2px rgba(0,0,0,0.05)' 
+                                                {(showAllBlocks ? blockDetails : blockDetails.slice(0, 4)).map((b, i) => (
+                                                    <div key={i} style={{
+                                                        display: 'flex', alignItems: 'center', gap: 6,
+                                                        background: b.isNight ? '#1e293b' : '#fff',
+                                                        color: b.isNight ? '#f8fafc' : '#334155',
+                                                        border: b.isNight ? 'none' : '1px solid #e2e8f0',
+                                                        padding: '6px 10px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+                                                        boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
                                                     }}>
-                                                        <span style={{ fontSize: 14 }}>{b.isNight ? '🌙' : '☀️'}</span>
+                                                        <span style={{ display: 'flex', alignItems: 'center', opacity: 0.9 }}>
+                                                            {b.isNight ? (
+                                                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" /></svg>
+                                                            ) : (
+                                                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="4" /><path d="M12 2v2" /><path d="M12 20v2" /><path d="m4.93 4.93 1.41 1.41" /><path d="m17.66 17.66 1.41 1.41" /><path d="M2 12h2" /><path d="M20 12h2" /><path d="m6.34 17.66-1.41 1.41" /><path d="m19.07 4.93-1.41 1.41" /></svg>
+                                                            )}
+                                                        </span>
                                                         <span>{b.start} - {b.end} <span style={{ opacity: 0.8, fontWeight: 500, fontSize: 11, marginLeft: 2 }}>({new Intl.NumberFormat('vi-VN').format(b.cost)}₫)</span></span>
                                                     </div>
                                                 ))}
+                                                {blockDetails.length > 4 && (
+                                                    <button
+                                                        onClick={() => setShowAllBlocks(!showAllBlocks)}
+                                                        style={{
+                                                            background: 'transparent',
+                                                            border: '1px dashed #94a3b8',
+                                                            color: '#64748b',
+                                                            padding: '6px 10px',
+                                                            borderRadius: 8,
+                                                            fontSize: 12,
+                                                            fontWeight: 700,
+                                                            cursor: 'pointer',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            gap: 4,
+                                                            transition: 'all 0.2s'
+                                                        }}
+                                                        onMouseEnter={e => {
+                                                            e.currentTarget.style.background = '#e2e8f0';
+                                                            e.currentTarget.style.color = '#334155';
+                                                        }}
+                                                        onMouseLeave={e => {
+                                                            e.currentTarget.style.background = 'transparent';
+                                                            e.currentTarget.style.color = '#64748b';
+                                                        }}
+                                                    >
+                                                        {showAllBlocks ? 'Show less' : `+ ${blockDetails.length - 4} more`}
+                                                    </button>
+                                                )}
                                             </div>
                                         </div>
                                     </div>
@@ -2627,7 +2670,7 @@ const BookingPage = () => {
                                         onClick={handleNext}
                                         disabled={!selectedSlot}
                                         style={{ background: 'linear-gradient(135deg, #10b981, #059669)', boxShadow: '0 6px 20px rgba(16,185,129,0.4)' }}>
-                                        🎉 Review & Confirm
+                                        Review & Confirm
                                     </button>
                                 </div>
                             </div>
@@ -3091,7 +3134,7 @@ const BookingPage = () => {
                         <div style={{ textAlign: 'center', marginBottom: 16, fontSize: 16, fontWeight: 800, color: '#1e293b' }}>
                             Select Arrival Time
                         </div>
-                        
+
                         <div style={{
                             background: 'white', border: '1.5px solid #e2e8f0', borderRadius: 14,
                             boxShadow: '0 4px 15px rgba(0,0,0,0.05)',
@@ -3112,20 +3155,20 @@ const BookingPage = () => {
                                                 const isPastHour = isTodaySelection && i < currentHour;
                                                 return (
                                                     <div key={i}
-                                                         id={`time-picker-hour-${i}`}
-                                                         onClick={() => {
-                                                             if (!isPastHour) setSlot(i, selMin);
-                                                         }}
-                                                         style={{
-                                                             padding: '14px 0', textAlign: 'center', 
-                                                             cursor: isPastHour ? 'not-allowed' : 'pointer',
-                                                             background: selHour === i ? '#2563eb' : 'white',
-                                                             color: selHour === i ? 'white' : '#334155',
-                                                             fontWeight: selHour === i ? 800 : 500,
-                                                             fontSize: 18,
-                                                             opacity: isPastHour ? 0.3 : 1,
-                                                             transition: 'background 0.2s'
-                                                         }}
+                                                        id={`time-picker-hour-${i}`}
+                                                        onClick={() => {
+                                                            if (!isPastHour) setSlot(i, selMin);
+                                                        }}
+                                                        style={{
+                                                            padding: '14px 0', textAlign: 'center',
+                                                            cursor: isPastHour ? 'not-allowed' : 'pointer',
+                                                            background: selHour === i ? '#2563eb' : 'white',
+                                                            color: selHour === i ? 'white' : '#334155',
+                                                            fontWeight: selHour === i ? 800 : 500,
+                                                            fontSize: 18,
+                                                            opacity: isPastHour ? 0.3 : 1,
+                                                            transition: 'background 0.2s'
+                                                        }}
                                                     >
                                                         {String(i).padStart(2, '0')}
                                                     </div>
@@ -3138,23 +3181,23 @@ const BookingPage = () => {
                                                 const isPastMin = isTodaySelection && selHour === currentHour && m < currentMin;
                                                 return (
                                                     <div key={m}
-                                                         id={`time-picker-min-${m}`}
-                                                         onClick={() => {
-                                                             if (!isPastMin) {
-                                                                 setSlot(selHour, m); 
-                                                                 setShowTimePicker(false);
-                                                             }
-                                                         }}
-                                                         style={{
-                                                             padding: '14px 0', textAlign: 'center', 
-                                                             cursor: isPastMin ? 'not-allowed' : 'pointer',
-                                                             background: selMin === m ? '#2563eb' : 'white',
-                                                             color: selMin === m ? 'white' : '#334155',
-                                                             fontWeight: selMin === m ? 800 : 500,
-                                                             fontSize: 18,
-                                                             opacity: isPastMin ? 0.3 : 1,
-                                                             transition: 'background 0.2s'
-                                                         }}
+                                                        id={`time-picker-min-${m}`}
+                                                        onClick={() => {
+                                                            if (!isPastMin) {
+                                                                setSlot(selHour, m);
+                                                                setShowTimePicker(false);
+                                                            }
+                                                        }}
+                                                        style={{
+                                                            padding: '14px 0', textAlign: 'center',
+                                                            cursor: isPastMin ? 'not-allowed' : 'pointer',
+                                                            background: selMin === m ? '#2563eb' : 'white',
+                                                            color: selMin === m ? 'white' : '#334155',
+                                                            fontWeight: selMin === m ? 800 : 500,
+                                                            fontSize: 18,
+                                                            opacity: isPastMin ? 0.3 : 1,
+                                                            transition: 'background 0.2s'
+                                                        }}
                                                     >
                                                         {String(m).padStart(2, '0')}
                                                     </div>
@@ -3177,9 +3220,8 @@ const BookingPage = () => {
             {slotLockUntil && slotLockUntil > new Date() && (
                 <div style={{
                     position: 'fixed',
-                    bottom: 40,
-                    left: '50%',
-                    transform: 'translateX(-50%)',
+                    top: 100,
+                    right: 24,
                     background: 'rgba(15, 23, 42, 0.95)',
                     backdropFilter: 'blur(8px)',
                     color: 'white',
@@ -3190,7 +3232,7 @@ const BookingPage = () => {
                     alignItems: 'center',
                     gap: 12,
                     zIndex: 1000,
-                    animation: 'slideUpToast 0.4s cubic-bezier(0.16, 1, 0.3, 1)'
+                    animation: 'slideInRightToast 0.4s cubic-bezier(0.16, 1, 0.3, 1)'
                 }}>
                     {/* <span style={{ fontSize: 18 }}>🔒</span> */}
                     <div style={{ flex: 1, fontSize: 13, fontWeight: 500 }}>
