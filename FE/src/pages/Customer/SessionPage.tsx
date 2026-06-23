@@ -260,7 +260,7 @@ const SessionPage = () => {
                             vehicleType: vehicleTypeData,
                             floor: floorData,
                             slot: slotData,
-                            licensePlate: session?.licensePlate || state.licensePlate,
+                            licensePlate: session?.vehicleInfo?.licensePlate || state.licensePlate,
                             entryDate: session?.entryTime || sessionStart.current,
                             exitTime: Date.now(),
                             elapsed: elapsed,

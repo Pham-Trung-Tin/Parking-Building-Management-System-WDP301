@@ -91,7 +91,7 @@ const ParkingDetailSidebar: React.FC<ParkingDetailSidebarProps> = ({ selectedPar
             setLoadingSlots(true);
             try {
                 const res = await parkingSlotService.getFloorMap(selectedFloorId);
-                const slotList = res?.data || res || [];
+                const slotList = (res as any)?.data || res || [];
                 setSlots(Array.isArray(slotList) ? slotList : []);
             } catch (err) {
                 console.error("Error fetching slots:", err);

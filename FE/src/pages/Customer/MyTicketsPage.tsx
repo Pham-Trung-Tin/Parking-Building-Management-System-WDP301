@@ -113,6 +113,7 @@ const MyTicketsPage = () => {
     const [tickets, setTickets] = useState<Ticket[]>([]);
     const [qrTokens, setQrTokens] = useState<Record<string, string>>({});
     const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
+    const [zoomedQr, setZoomedQr] = useState<string | null>(null);
 
     // ── DATA FETCHING ─────────────────────────────────────────────────────────
     const { socket } = useSocket();
@@ -812,6 +813,11 @@ const MyTicketsPage = () => {
                     background: white; padding: 12px; border-radius: 16px;
                     box-shadow: 0 4px 12px rgba(0,0,0,0.03); border: 1px solid #e2e8f0;
                     margin-bottom: 16px; display: inline-block;
+                    cursor: pointer; transition: transform 0.2s cubic-bezier(0.34,1.56,0.64,1);
+                }
+                .t-qr-container:hover {
+                    transform: scale(1.04);
+                    box-shadow: 0 8px 24px rgba(0,0,0,0.06);
                 }
                 .t-qr-expiry { font-size: 10px; color: #94a3b8; font-weight: 600; margin-top: 8px; margin-bottom: 16px; }
                 .t-receipt-id { font-family: monospace; font-size: 12px; font-weight: 800; color: #64748b; letter-spacing: 0.08em; margin-bottom: 16px; }
@@ -1029,7 +1035,12 @@ const MyTicketsPage = () => {
 
                                                 <div className="t-card-bottom">
                                                     <p className="t-qr-label"> Scan to Enter</p>
-                                                    <div className="t-qr-container" id={`qr-svg-${ticket.receiptId}`}>
+                                                    <div 
+                                                        className="t-qr-container" 
+                                                        id={`qr-svg-${ticket.receiptId}`}
+                                                        onClick={() => qrTokens[ticket.receiptId] && setZoomedQr(qrTokens[ticket.receiptId])}
+                                                        title="Click to enlarge"
+                                                    >
                                                         {qrTokens[ticket.receiptId] ? (
                                                             <QRCodeSVG
                                                                 value={qrTokens[ticket.receiptId]}
@@ -1085,6 +1096,58 @@ const MyTicketsPage = () => {
                     )}
                 </div>
             </div>
+            {/* ── Modal Phóng To QR ── */}
+            {zoomedQr && (
+                <div
+                    style={{
+                        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                        backgroundColor: 'rgba(0, 0, 0, 0.75)',
+                        backdropFilter: 'blur(4px)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        zIndex: 9999, padding: '20px'
+                    }}
+                    onClick={() => setZoomedQr(null)}
+                >
+                    <div
+                        style={{
+                            background: '#fff', padding: '32px', borderRadius: '24px',
+                            display: 'flex', flexDirection: 'column', alignItems: 'center',
+                            boxShadow: '0 24px 48px rgba(0,0,0,0.2)',
+                            animation: 'qrZoomIn 0.3s cubic-bezier(0.34,1.56,0.64,1)',
+                            maxWidth: '400px', width: '100%'
+                        }}
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <style>{`
+                            @keyframes qrZoomIn {
+                                from { opacity: 0; transform: scale(0.9); }
+                                to { opacity: 1; transform: scale(1); }
+                            }
+                        `}</style>
+                        <h3 style={{ margin: '0 0 24px 0', color: '#0f172a', fontSize: '20px', fontWeight: 800 }}>QR Ticket</h3>
+                        <div style={{ background: '#fff', padding: '16px', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
+                            <QRCodeSVG
+                                value={zoomedQr}
+                                size={Math.min(window.innerWidth - 100, 320)}
+                                bgColor="#ffffff"
+                                fgColor="#0f172a"
+                                level="H"
+                                includeMargin={false}
+                            />
+                        </div>
+                        <p style={{ marginTop: '24px', color: '#64748b', fontSize: '14px', textAlign: 'center' }}>
+                            Show this code to the staff or scan at the checkpoint to enter.
+                        </p>
+                        <button
+                            className="btn-primary"
+                            style={{ marginTop: '24px', width: '100%', padding: '14px' }}
+                            onClick={() => setZoomedQr(null)}
+                        >
+                            Close
+                        </button>
+                    </div>
+                </div>
+            )}
         </>
     );
 };

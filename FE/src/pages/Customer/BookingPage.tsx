@@ -881,8 +881,8 @@ const BookingPage = () => {
                 setVehicleTypes(list.filter((v: VehicleType) => v.isActive && !v.isDeleted));
             })
             .catch(() => setVehicleTypes([
-                { _id: 'car', name: 'Car', code: 'CAR', size: 'medium', isActive: true, pricing: { hourlyRate: 10000, dailyRate: 80000 } },
-                { _id: 'motorcycle', name: 'Motorcycle', code: 'MOTORBIKE', size: 'small', isActive: true, pricing: { hourlyRate: 5000, dailyRate: 40000 } },
+                { _id: 'car', name: 'Car', code: 'CAR', size: 'medium', isActive: true, pricing: { hourlyRate: 10000, dailyRate: 80000, dayBlockRate: 20000, nightBlockRate: 30000 } },
+                { _id: 'motorcycle', name: 'Motorcycle', code: 'MOTORBIKE', size: 'small', isActive: true, pricing: { hourlyRate: 5000, dailyRate: 40000, dayBlockRate: 8000, nightBlockRate: 12000 } },
             ]))
             .finally(() => setVehicleTypesLoading(false));
 
