@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useSocket } from '../../contexts/SocketContext';
 import Header from '../../components/Header/Header';
 import parkingSessionService, { ParkingSession } from '../../services/api/parkingSessionService';
+import bookingService from '../../services/api/bookingService';
 import vehicleTypeService, { VehicleType, VehicleTypePricing } from '../../services/api/vehicleTypeService';
 import { Floor } from '../../services/api/floorService';
 import { Zone } from '../../services/api/zoneService';
@@ -112,6 +113,23 @@ const SessionPage = () => {
     const [sessionLoading, setSessionLoading] = useState(true);
     const [showQrModal, setShowQrModal] = useState(false);
 
+    // ── Booking data từ API (nếu có bookingId) ────────────────────────────────
+    const [fullBooking, setFullBooking] = useState<any>(null);
+
+    useEffect(() => {
+        const fetchBooking = async () => {
+            try {
+                const bookingId = typeof session?.booking === 'object' ? (session.booking as any)?._id : session?.booking;
+                if (!bookingId) return;
+                const res = await bookingService.getById(bookingId);
+                setFullBooking(res?.data || res);
+            } catch (err) {
+                console.warn('Failed to fetch full booking', err);
+            }
+        };
+        fetchBooking();
+    }, [session?.booking]);
+
     // ── Fetch vehicle type pricing trực tiếp từ API (vì navigate state có thể thiếu pricing) ─
     const [fetchedVTPricing, setFetchedVTPricing] = useState<VehicleTypePricing | null>(null);
 
@@ -187,7 +205,7 @@ const SessionPage = () => {
 
     // ── Phí ước tính thực tế (Pre-booked Overtime logic) ────────────────────
     let overtimeFee = 0;
-    const bookingInfo = typeof session?.booking === 'object' ? session.booking : null;
+    const bookingInfo = fullBooking || (typeof session?.booking === 'object' ? session.booking : null);
 
     const vtCodeForPricing = (typeof session?.vehicleType === 'object' ? (session.vehicleType as any)?.code : '') || vehicleTypeData?.code || '';
     const isMotorbikeType = ['MOTORBIKE', 'MOTORCYCLE', 'ELECTRIC_BIKE', 'BICYCLE'].some(c => vtCodeForPricing.toUpperCase().includes(c));
@@ -219,6 +237,11 @@ const SessionPage = () => {
                     ? Math.round(stateEstimatedPrice / bookedBlocks)
                     : hourlyRate * 4;
 
+    const resolvedNightBlockRate = fetchedVTPricing?.nightBlockRate
+        || (typeof session?.vehicleType === 'object' ? (session.vehicleType as any)?.pricing?.nightBlockRate : 0)
+        || vehicleTypePricing?.nightBlockRate
+        || blockRate * 1.5;
+
     if (bookingInfo && (bookingInfo as any).endTime && (bookingInfo as any).scheduledDate) {
         const scheduledDateStr = (bookingInfo as any).scheduledDate.split('T')[0];
         const scheduledEnd = new Date(`${scheduledDateStr}T${(bookingInfo as any).endTime}:00`);
@@ -228,16 +251,41 @@ const SessionPage = () => {
             const otHours = (now.getTime() - scheduledEnd.getTime()) / (1000 * 60 * 60);
             // 15 mins grace period
             if (otHours > (15 / 60)) {
-                // Đậu lố: mỗi block thêm tính bằng blockRate
-                overtimeFee = Math.ceil(otHours / 4) * blockRate;
+                let tempStart = new Date(scheduledEnd.getTime());
+                let calculatedOtFee = 0;
+                while (tempStart < now) {
+                    const blockEnd = new Date(tempStart.getTime() + 4 * 60 * 60 * 1000);
+                    const effectiveEnd = new Date(blockEnd.getTime() - 1);
+                    const startHour = tempStart.getHours();
+                    const endHour = effectiveEnd.getHours();
+                    const isNightBlock = startHour >= 18 || startHour < 6 || endHour >= 18 || endHour < 6;
+                    
+                    calculatedOtFee += isNightBlock ? resolvedNightBlockRate : blockRate;
+                    tempStart = new Date(tempStart.getTime() + 4 * 60 * 60 * 1000);
+                }
+                overtimeFee = calculatedOtFee;
             }
         }
     } else {
         // Fallback: Nếu không có dữ liệu booking từ API, giả định user đã mua 1 block 4 tiếng tính từ entryTime
         const elapsedHours = elapsed / 3600;
         if (elapsedHours > 4.25) { // Đã lố qua 4h + 15p (grace period)
-            const otHours = elapsedHours - 4;
-            overtimeFee = Math.ceil(otHours / 4) * blockRate;
+            const scheduledEnd = new Date(sessionStart.current + 4 * 60 * 60 * 1000);
+            const now = new Date(Date.now() + devTimeOffset);
+            
+            let tempStart = new Date(scheduledEnd.getTime());
+            let calculatedOtFee = 0;
+            while (tempStart < now) {
+                const blockEnd = new Date(tempStart.getTime() + 4 * 60 * 60 * 1000);
+                const effectiveEnd = new Date(blockEnd.getTime() - 1);
+                const startHour = tempStart.getHours();
+                const endHour = effectiveEnd.getHours();
+                const isNightBlock = startHour >= 18 || startHour < 6 || endHour >= 18 || endHour < 6;
+                
+                calculatedOtFee += isNightBlock ? resolvedNightBlockRate : blockRate;
+                tempStart = new Date(tempStart.getTime() + 4 * 60 * 60 * 1000);
+            }
+            overtimeFee = calculatedOtFee;
         }
     }
 
@@ -382,7 +430,7 @@ const SessionPage = () => {
                 @media (min-width: 800px) {
                     .desktop-grid {
                         grid-template-columns: 380px 1fr;
-                        align-items: start;
+                        align-items: stretch;
                     }
                 }
 
@@ -524,16 +572,20 @@ const SessionPage = () => {
                 .dashboard-panel {
                     display: flex;
                     flex-direction: column;
+                    justify-content: space-between;
+                    height: 100%;
                     gap: 20px;
                 }
 
                 /* ── Stat grid ── */
-                .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+                .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; flex: 1; }
                 .stat-card { 
                     background: white; border: 1px solid #e2e8f0; 
                     box-shadow: 0 10px 30px -10px rgba(0,0,0,0.05); 
                     border-radius: 20px; padding: 24px; 
                     position: relative; overflow: hidden;
+                    display: flex; flex-direction: column; justify-content: center; height: 100%;
+                    align-items: center; text-align: center;
                 }
                 .stat-card::after {
                     content: ''; position: absolute; right: -20px; bottom: -20px;
@@ -553,6 +605,10 @@ const SessionPage = () => {
                     background: white; border-radius: 20px;
                     border: 1px solid #e2e8f0; padding: 28px;
                     box-shadow: 0 10px 30px -10px rgba(0,0,0,0.05);
+                    flex: 1;
+                    display: flex;
+                    flex-direction: column;
+                    justify-content: center;
                 }
 
                 .location-row {
@@ -713,6 +769,53 @@ const SessionPage = () => {
                                     </span>
                                 </div>
                             </div>
+
+                            {bookingInfo && (
+                                <div className="dt-info-row" style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 16, marginTop: 16 }}>
+                                    <div className="dt-info-col">
+                                        <span className="dt-info-label" style={{ color: '#fbbf24' }}>Booked Arrival</span>
+                                        <span className="dt-info-value" style={{ fontSize: 13 }}>
+                                            {(() => {
+                                                const b = bookingInfo as any;
+                                                if (!b.scheduledDate || !b.startTime) return 'N/A';
+                                                const d = new Date(b.scheduledDate);
+                                                const [h, m] = b.startTime.split(':').map(Number);
+                                                d.setHours(h, m);
+                                                return (
+                                                    <>
+                                                        {d.toLocaleDateString('vi-VN')}
+                                                        <br />
+                                                        <span style={{ fontSize: 16, fontWeight: 700 }}>
+                                                            {d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                                                        </span>
+                                                    </>
+                                                );
+                                            })()}
+                                        </span>
+                                    </div>
+                                    <div className="dt-info-col right">
+                                        <span className="dt-info-label" style={{ color: '#fbbf24' }}>Booked Exit</span>
+                                        <span className="dt-info-value" style={{ fontSize: 13 }}>
+                                            {(() => {
+                                                const b = bookingInfo as any;
+                                                if (!b.scheduledDate || !b.endTime) return 'N/A';
+                                                const d = new Date(b.scheduledDate);
+                                                const [h, m] = b.endTime.split(':').map(Number);
+                                                d.setHours(h, m);
+                                                return (
+                                                    <>
+                                                        {d.toLocaleDateString('vi-VN')}
+                                                        <br />
+                                                        <span style={{ fontSize: 16, fontWeight: 700 }}>
+                                                            {d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                                                        </span>
+                                                    </>
+                                                );
+                                            })()}
+                                        </span>
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         {/* RIGHT COLUMN: DASHBOARD */}
@@ -721,22 +824,24 @@ const SessionPage = () => {
                             {/* Stats Grid */}
                             <div className="stat-grid s-in-1">
                                 <div className="stat-card blue">
-                                    <div className="stat-label blue" style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
+                                    <div className="stat-label blue" style={{ display: 'flex', width: '100%', justifyContent: 'center' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
                                             <TimerIcon /> Parking Duration
                                         </div>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '9px', color: '#10b981', background: '#ecfdf5', padding: '4px 10px', borderRadius: '12px' }}>
-                                            <div style={{ width: '6px', height: '6px', backgroundColor: '#10b981', borderRadius: '50%', animation: 'pulse 1.5s infinite' }} />
-                                            ACTIVE
-                                        </div>
                                     </div>
                                     <div className="stat-value blue">{formatHMS(Math.max(0, elapsed))}</div>
-                                    <div className="stat-sub blue">Hours : Mins : Secs</div>
+                                    <div className="stat-sub blue" style={{ marginBottom: '12px' }}>Hours : Mins : Secs</div>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', fontSize: '9px', color: '#10b981', background: '#ecfdf5', padding: '4px 10px', borderRadius: '12px', width: 'fit-content', margin: '0 auto' }}>
+                                        <div style={{ width: '6px', height: '6px', backgroundColor: '#10b981', borderRadius: '50%', animation: 'pulse 1.5s infinite' }} />
+                                        ACTIVE
+                                    </div>
                                 </div>
 
                                 <div className="stat-card green">
-                                    <div className="stat-label green">
-                                        <CardIcon /> Current Fee
+                                    <div className="stat-label green" style={{ display: 'flex', width: '100%', justifyContent: 'center' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
+                                            <CardIcon /> Current Fee
+                                        </div>
                                     </div>
                                     <div className="stat-value green" style={{ color: '#059669' }}>
                                         {fmtVND(currentFee)}
