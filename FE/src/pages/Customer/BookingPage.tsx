@@ -551,16 +551,18 @@ const BookingPage = () => {
         d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
         return d.toISOString().slice(0, 16);
     });
-    const [duration, setDuration] = useState(2);
+    const [exitDate, setExitDate] = useState(() => {
+        const d = new Date();
+        d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+        d.setHours(d.getHours() + 4);
+        return d.toISOString().slice(0, 16);
+    });
     const [showAllBlocks, setShowAllBlocks] = useState(false);
-
-    useEffect(() => {
-        const bs = 4;
-        setDuration(d => Math.max(bs, Math.ceil(d / bs) * bs));
-    }, [vehicleType]);
 
     const selHour = parseInt(entryDate.slice(11, 13)) || 0;
     const selMin = parseInt(entryDate.slice(14, 16)) || 0;
+    const exitSelHour = parseInt(exitDate.slice(11, 13)) || 0;
+    const exitSelMin = parseInt(exitDate.slice(14, 16)) || 0;
     const handleSetEntryDate = (dateStr: string, h: number, m: number) => {
         const now = new Date();
         const localNow = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
@@ -582,12 +584,44 @@ const BookingPage = () => {
         setEntryDate(`${dateStr}T${String(finalH).padStart(2, '0')}:${String(finalM).padStart(2, '0')}`);
     };
 
+    const handleSetExitDate = (h: number, m: number) => {
+        const dateStr = exitDate.slice(0, 10);
+        let finalH = h;
+        let finalM = m;
+        const proposed = new Date(`${dateStr}T${String(finalH).padStart(2, '0')}:${String(finalM).padStart(2, '0')}`);
+        const entry = new Date(entryDate);
+        if (proposed <= entry) {
+            finalH = entry.getHours() + 4;
+            finalM = entry.getMinutes();
+            if (finalH >= 24) {
+                const next = new Date(entry.getTime() + 4 * 3600000);
+                const iso = next.toISOString();
+                setExitDate(`${iso.slice(0,10)}T${String(next.getHours()).padStart(2,'0')}:${String(next.getMinutes()).padStart(2,'0')}`);
+                return;
+            }
+        }
+        setExitDate(`${dateStr}T${String(finalH).padStart(2, '0')}:${String(finalM).padStart(2, '0')}`);
+    };
+
     const setSlot = (h: number, m: number) => {
         handleSetEntryDate(entryDate.slice(0, 10), h, m);
+        // Ensure exit date shifts if entry passes it
+        const proposedEntry = new Date(`${entryDate.slice(0, 10)}T${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
+        const currentExit = new Date(exitDate);
+        if (proposedEntry >= currentExit) {
+            const nextExit = new Date(proposedEntry.getTime() + 4 * 3600000);
+            const iso = nextExit.toISOString();
+            setExitDate(`${iso.slice(0,10)}T${String(nextExit.getHours()).padStart(2,'0')}:${String(nextExit.getMinutes()).padStart(2,'0')}`);
+        }
+    };
+    
+    const setExitSlot = (h: number, m: number) => {
+        handleSetExitDate(h, m);
     };
 
     const [showCalendar, setShowCalendar] = useState(false);
     const [showTimePicker, setShowTimePicker] = useState(false);
+    const [showExitTimePicker, setShowExitTimePicker] = useState(false);
 
     useEffect(() => {
         if (showTimePicker) {
@@ -597,6 +631,16 @@ const BookingPage = () => {
             }, 50);
         }
     }, [showTimePicker, selHour, selMin]);
+
+    useEffect(() => {
+        if (showExitTimePicker) {
+            setTimeout(() => {
+                document.getElementById(`exit-picker-hour-${exitSelHour}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+                document.getElementById(`exit-picker-min-${exitSelMin}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+            }, 50);
+        }
+    }, [showExitTimePicker, exitSelHour, exitSelMin]);
+
     const [calMonth, setCalMonth] = useState(() => new Date().getMonth());
     const [calYear, setCalYear] = useState(() => new Date().getFullYear());
     const [activeInput, setActiveInput] = useState<'from' | 'to'>('from');
@@ -611,8 +655,7 @@ const BookingPage = () => {
 
     const openCalendar = (mode: 'from' | 'to') => {
         const fromDate = new Date(entryDate.slice(0, 10));
-        const toDate = new Date(entryDate);
-        toDate.setHours(toDate.getHours() + duration);
+        const toDate = new Date(exitDate);
 
         setTempFromDate(fromDate);
         setTempToDate(toDate);
@@ -752,7 +795,7 @@ const BookingPage = () => {
             licensePlate: formatPlate(licensePlate),
             entryDate: new Date(entryDate).toISOString(),
             exitTime: rawExit.toISOString(),
-            elapsed: duration * 3600,
+            elapsed: new Date(exitDate).getTime() - new Date(entryDate).getTime(),
             totalAmount: grandTotal,
             payMethod,
         };
@@ -792,7 +835,7 @@ const BookingPage = () => {
                                 licensePlate: formatPlate(licensePlate),
                                 entryDate: new Date(entryDate).toISOString(),
                                 exitTime: exitTime.toISOString(),
-                                elapsed: duration * 3600,
+                                elapsed: new Date(exitDate).getTime() - new Date(entryDate).getTime(),
                                 totalAmount: estimatedPrice,
                                 payMethod: payMethod,
                                 transactionId: `REC-${Math.floor(100000 + Math.random() * 900000)}`
@@ -860,7 +903,7 @@ const BookingPage = () => {
                         licensePlate: formatPlate(licensePlate),
                         entryDate: new Date(entryDate).toISOString(),
                         exitTime: exitTime.toISOString(),
-                        elapsed: duration * 3600,
+                        elapsed: new Date(exitDate).getTime() - new Date(entryDate).getTime(),
                         totalAmount: estimatedPrice,
                         payMethod: payMethod,
                         transactionId: `REC-${Math.floor(100000 + Math.random() * 900000)}`
@@ -967,7 +1010,9 @@ const BookingPage = () => {
         return floorSlots.filter(s => getZoneId(s.zone) === selectedZone._id);
     }, [floorSlots, selectedZone]);
 
-    const exitTime = new Date(new Date(entryDate).getTime() + duration * 3600000);
+    const exitTime = new Date(exitDate);
+    const durationMs = exitTime.getTime() - new Date(entryDate).getTime();
+    const duration = Math.max(0, Math.round(durationMs / 3600000));
     const baseRate = vehicleType?.pricing?.dayBlockRate || (TEMP_PRICES[vehicleType?.code?.toUpperCase()]?.dayBlockRate) || (vehicleType?.pricing?.hourlyRate ? vehicleType.pricing.hourlyRate * 4 : 20000);
     const nightRate = vehicleType?.pricing?.nightBlockRate || baseRate * 1.5;
     
@@ -994,7 +1039,7 @@ const BookingPage = () => {
         switch (step) {
             case 1: return !!vehicleType;
             case 2: return licensePlate.trim().length >= 4;
-            case 3: return !!entryDate && duration >= 1;
+            case 3: return !!entryDate && !!exitDate && new Date(exitDate).getTime() > new Date(entryDate).getTime();
             case 4: return !!selectedFloor;
             case 5: return !!selectedZone;
             case 6: return !!selectedSlot;
@@ -1031,7 +1076,7 @@ const BookingPage = () => {
                 slot: selectedSlot,
                 licensePlate: formatPlate(licensePlate),
                 entryDate,
-                duration,
+                exitDate,
                 estimatedPrice,
                 blockRate: baseRate,  // Truyền thẳng giá 1 block để SessionPage dùng
             }
@@ -2240,8 +2285,7 @@ const BookingPage = () => {
                             const blockDetails = [];
                             let totalEstCost = 0;
                             let currentStart = new Date(entryDate);
-                            const totalExitTime = new Date(entryDate);
-                            totalExitTime.setHours(totalExitTime.getHours() + duration);
+                            const totalExitTime = new Date(exitDate);
 
                             while (currentStart < totalExitTime) {
                                 const blockEnd = new Date(Math.min(totalExitTime.getTime(), currentStart.getTime() + 4 * 60 * 60 * 1000));
@@ -2361,53 +2405,42 @@ const BookingPage = () => {
                                     </div>
 
 
-                                    {/* ── 3. DURATION ── */}
-                                    <div style={{ marginBottom: 24 }}>
-                                        <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>Duration</div>
-                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 10, marginBottom: 16 }}>
-                                            {DURATION_OPTIONS.map(opt => {
-                                                const isSel = duration === opt.val && !isCustomDur;
-                                                return (
-                                                    <button key={opt.val} onClick={() => setDuration(opt.val)}
-                                                        style={{
-                                                            padding: '12px 14px',
-                                                            border: `2px solid ${isSel ? '#2563eb' : '#e2e8f0'}`,
-                                                            borderRadius: 14,
-                                                            background: isSel ? 'linear-gradient(135deg,#2563eb,#1d4ed8)' : 'white',
-                                                            color: isSel ? 'white' : '#374151',
-                                                            fontWeight: isSel ? 800 : 700,
-                                                            fontSize: 14,
-                                                            cursor: 'pointer',
-                                                            transition: 'all 0.2s cubic-bezier(0.34,1.56,0.64,1)',
-                                                            boxShadow: isSel ? '0 4px 12px rgba(37,99,235,0.3)' : '0 1px 3px rgba(0,0,0,0.05)',
-                                                            transform: isSel ? 'translateY(-1px)' : 'none',
-                                                            textAlign: 'center'
-                                                        }}>
-                                                        {opt.label}
-                                                    </button>
-                                                );
-                                            })}
-                                        </div>
-
-                                        {/* Custom stepper row */}
-                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: '#f8fafc', borderRadius: 14, border: '1px solid #e2e8f0' }}>
-                                            <div style={{ fontSize: 13, fontWeight: 700, color: '#475569' }}>Custom Duration</div>
-                                            <div style={{
-                                                display: 'flex', alignItems: 'center', gap: 0,
-                                                border: `2px solid ${isCustomDur ? '#2563eb' : '#cbd5e1'}`,
-                                                borderRadius: 12, overflow: 'hidden', background: isCustomDur ? '#eff6ff' : 'white',
-                                                boxShadow: isCustomDur ? '0 0 0 3px rgba(37,99,235,0.1)' : 'none',
-                                            }}>
-                                                <button onClick={() => setDuration(d => Math.max(bs, d - bs))}
-                                                    style={{ width: 36, height: 42, border: 'none', background: 'transparent', fontSize: 18, fontWeight: 900, color: '#1e293b', cursor: 'pointer' }}>−</button>
-                                                <div style={{ padding: '0 8px', textAlign: 'center', borderLeft: '1.5px solid #e2e8f0', borderRight: '1.5px solid #e2e8f0', minWidth: 48 }}>
-                                                    <div style={{ fontSize: 16, fontWeight: 900, color: isCustomDur ? '#2563eb' : '#64748b', lineHeight: 1, marginTop: 4 }}>{duration}</div>
-                                                    <div style={{ fontSize: 9, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase' }}>hr</div>
-                                                </div>
-                                                <button onClick={() => setDuration(d => Math.min(72, d + bs))}
-                                                    style={{ width: 36, height: 42, border: 'none', background: 'transparent', fontSize: 18, fontWeight: 900, color: '#1e293b', cursor: 'pointer' }}>+</button>
+                                    {/* ── 3. EXIT TIME ── */}
+                                    <div style={{ marginBottom: 28, position: 'relative' }}>
+                                        <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}> Exit Time</div>
+                                        <button
+                                            onClick={() => {
+                                                if (showExitTimePicker) setShowExitTimePicker(false);
+                                                else setShowExitTimePicker(true);
+                                            }}
+                                            style={{
+                                                width: '100%',
+                                                background: 'white',
+                                                border: showExitTimePicker ? '1.5px solid #2563eb' : '1.5px solid #e2e8f0',
+                                                borderRadius: 14,
+                                                padding: '14px 18px',
+                                                fontSize: 15,
+                                                fontWeight: 700,
+                                                color: '#334155',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'space-between',
+                                                cursor: 'pointer',
+                                                boxShadow: showExitTimePicker ? '0 0 0 3px rgba(37,99,235,0.15)' : '0 1px 3px rgba(0,0,0,0.05)',
+                                                transition: 'all 0.2s',
+                                            }}
+                                        >
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                                <span>{String(exitSelHour).padStart(2, '0')}:{String(exitSelMin).padStart(2, '0')}</span>
+                                                <span style={{ fontSize: 12, color: '#64748b', fontWeight: 500, marginLeft: 8 }}>
+                                                    ({new Date(exitDate).toLocaleDateString('en-GB')})
+                                                </span>
                                             </div>
-                                        </div>
+                                            <span style={{ color: '#94a3b8', fontSize: 10 }}>▼</span>
+                                        </button>
+                                    </div>
+
+                                    <div style={{ marginBottom: 24 }}>
 
                                         {/* Block Visualizer */}
                                         <div style={{ background: '#f8fafc', border: '1px dashed #cbd5e1', borderRadius: 12, padding: '12px 16px', marginTop: 16 }}>
@@ -3246,6 +3279,94 @@ const BookingPage = () => {
 
                         <button className="cal-btn cal-btn-confirm" onClick={() => setShowTimePicker(false)} style={{ width: '100%', background: '#1e293b', color: 'white', border: 'none', padding: '12px', borderRadius: '12px', fontWeight: 'bold', cursor: 'pointer', marginTop: 20 }}>
                             Confirm Time
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* ── EXIT TIME PICKER POPUP ── */}
+            {showExitTimePicker && (
+                <div className="cal-modal-overlay" onClick={() => setShowExitTimePicker(false)}>
+                    <div className="cal-modal-content" onClick={e => e.stopPropagation()} style={{ padding: '24px', width: '90%', maxWidth: 360 }}>
+                        <div style={{ textAlign: 'center', marginBottom: 16, fontSize: 16, fontWeight: 800, color: '#1e293b' }}>
+                            Select Exit Time
+                        </div>
+
+                        <div style={{
+                            background: 'white', border: '1.5px solid #e2e8f0', borderRadius: 14,
+                            boxShadow: '0 4px 15px rgba(0,0,0,0.05)',
+                            display: 'flex', height: 260, overflow: 'hidden'
+                        }}>
+                            {(() => {
+                                const entryObj = new Date(entryDate);
+                                const isSameDayAsEntry = exitDate.slice(0, 10) === entryDate.slice(0, 10);
+                                const minHour = entryObj.getHours();
+                                const minMin = entryObj.getMinutes();
+
+                                return (
+                                    <>
+                                        <div style={{ flex: 1, overflowY: 'auto', borderRight: '1.5px solid #e2e8f0' }} className="custom-scrollbar">
+                                            <div style={{ padding: '10px 0', textAlign: 'center', fontSize: 12, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em', borderBottom: '1.5px solid #f1f5f9', position: 'sticky', top: 0, background: '#f8fafc', zIndex: 2 }}>Hour</div>
+                                            {Array.from({ length: 24 }).map((_, i) => {
+                                                const isPastHour = isSameDayAsEntry && i < minHour;
+                                                return (
+                                                    <div key={i}
+                                                        id={`exit-picker-hour-${i}`}
+                                                        onClick={() => {
+                                                            if (!isPastHour) setExitSlot(i, exitSelMin);
+                                                        }}
+                                                        style={{
+                                                            padding: '14px 0', textAlign: 'center',
+                                                            cursor: isPastHour ? 'not-allowed' : 'pointer',
+                                                            background: exitSelHour === i ? '#2563eb' : 'white',
+                                                            color: exitSelHour === i ? 'white' : '#334155',
+                                                            fontWeight: exitSelHour === i ? 800 : 500,
+                                                            fontSize: 18,
+                                                            opacity: isPastHour ? 0.3 : 1,
+                                                            transition: 'background 0.2s'
+                                                        }}
+                                                    >
+                                                        {String(i).padStart(2, '0')}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                        <div style={{ flex: 1, overflowY: 'auto' }} className="custom-scrollbar">
+                                            <div style={{ padding: '10px 0', textAlign: 'center', fontSize: 12, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em', borderBottom: '1.5px solid #f1f5f9', position: 'sticky', top: 0, background: '#f8fafc', zIndex: 2 }}>Minute</div>
+                                            {Array.from({ length: 60 }).map((_, m) => {
+                                                const isPastMin = isSameDayAsEntry && exitSelHour === minHour && m < minMin;
+                                                return (
+                                                    <div key={m}
+                                                        id={`exit-picker-min-${m}`}
+                                                        onClick={() => {
+                                                            if (!isPastMin) {
+                                                                setExitSlot(exitSelHour, m);
+                                                                setShowExitTimePicker(false);
+                                                            }
+                                                        }}
+                                                        style={{
+                                                            padding: '14px 0', textAlign: 'center',
+                                                            cursor: isPastMin ? 'not-allowed' : 'pointer',
+                                                            background: exitSelMin === m ? '#2563eb' : 'white',
+                                                            color: exitSelMin === m ? 'white' : '#334155',
+                                                            fontWeight: exitSelMin === m ? 800 : 500,
+                                                            fontSize: 18,
+                                                            opacity: isPastMin ? 0.3 : 1,
+                                                            transition: 'background 0.2s'
+                                                        }}
+                                                    >
+                                                        {String(m).padStart(2, '0')}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </>
+                                );
+                            })()}
+                        </div>
+
+                        <button className="cal-btn cal-btn-confirm" onClick={() => setShowExitTimePicker(false)} style={{ width: '100%', background: '#1e293b', color: 'white', border: 'none', padding: '12px', borderRadius: '12px', fontWeight: 'bold', cursor: 'pointer', marginTop: 20 }}>
+                            Confirm Exit Time
                         </button>
                     </div>
                 </div>
