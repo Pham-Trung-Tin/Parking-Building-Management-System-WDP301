@@ -106,21 +106,20 @@ const CheckoutSuccessPage = () => {
 
     const isMoto = typeof vehicleType === 'object' ? vehicleType.code === 'motorcycle' : vehicleType === 'motorcycle';
     const vehicleTypeName = typeof vehicleType === 'object' ? vehicleType.name : (isMoto ? 'Motorcycle' : 'Car');
-    
+
     const floorName = typeof floorObj === 'object' && floorObj !== null ? (floorObj.name || `Floor ${floorObj.floorNumber}`) : `Floor ${floorObj || 3}`;
     const slotCode = data.slotCode || (typeof slotObj === 'object' && slotObj !== null ? slotObj.slotCode : `${String.fromCharCode(64 + Number(floorObj || 3))}-${floorObj || 3}05`);
-    
+
     const licensePlate = data.licensePlate || (isMoto ? '59T1-23456' : '51A-12345');
     const entryDate = data.entryDate ? new Date(data.entryDate) : new Date(Date.now() - 7200000);
     const exitTime = data.exitTime ? new Date(data.exitTime) : new Date();
     const elapsed = data.elapsed || 7200;
-    const totalAmount = data.totalAmount !== undefined 
-        ? data.totalAmount 
+    const totalAmount = data.totalAmount !== undefined
+        ? data.totalAmount
         : (isMoto
             ? ((elapsed / 3600) < 4 ? 2000 : 4000)
             : ((elapsed / 3600) < 4 ? 8000 : 16000));
-    const serviceFee = Math.round(totalAmount * 0.05);
-    const grandTotal = Math.round(totalAmount) + serviceFee;
+    const grandTotal = Math.round(totalAmount);
     const payMethod = data.payMethod || 'card';
     const cardLast4 = data.cardLast4;
 
@@ -423,7 +422,7 @@ const CheckoutSuccessPage = () => {
                     <div className="cs-check-wrap">
                         <AnimatedCheck />
                     </div>
-                    <div className="cs-hero-title">Payment Successful! 🎉</div>
+                    <div className="cs-hero-title">Payment Successful! </div>
                     <div className="cs-hero-sub">Your parking session has been checked out. Thank you!</div>
                 </div>
 
@@ -442,7 +441,7 @@ const CheckoutSuccessPage = () => {
                         </div>
 
                         {/* Parking info */}
-                        <div className="r-section-title">🏢 Parking Details</div>
+                        <div className="r-section-title"> Parking Details</div>
                         <div className="r-row">
                             <span className="r-label">Facility</span>
                             <span className="r-value" style={{ maxWidth: '55%', textAlign: 'right', fontSize: 12 }}>{spot.title}</span>
@@ -466,7 +465,7 @@ const CheckoutSuccessPage = () => {
                         <div className="r-divider"></div>
 
                         {/* Time info */}
-                        <div className="r-section-title">⏱ Time Details</div>
+                        <div className="r-section-title"> Time Details</div>
                         <div className="r-row">
                             <span className="r-label">Entry</span>
                             <span className="r-value" style={{ fontSize: 12 }}>{formatTime(entryDate)}</span>
@@ -483,15 +482,12 @@ const CheckoutSuccessPage = () => {
                         <div className="r-divider"></div>
 
                         {/* Payment info */}
-                        <div className="r-section-title">💳 Payment</div>
+                        <div className="r-section-title"> Payment</div>
                         <div className="r-row">
                             <span className="r-label">Parking Fee</span>
                             <span className="r-value">{Math.round(totalAmount).toLocaleString('vi-VN')} ₫</span>
                         </div>
-                        <div className="r-row">
-                            <span className="r-label">Service Fee</span>
-                            <span className="r-value">{serviceFee.toLocaleString('vi-VN')} ₫</span>
-                        </div>
+
                         <div className="r-row">
                             <span className="r-label">Payment Method</span>
                             <span className="r-value">{payMethodLabel}</span>
