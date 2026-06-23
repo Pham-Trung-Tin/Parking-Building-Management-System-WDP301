@@ -119,12 +119,12 @@ const HomePage = () => {
                     <Link to="/" className="text-[18px] font-bold tracking-tight no-underline text-inherit">
                         PARKING<span className="text-blue-600">BUILDING</span>
                     </Link>
-                    <div className="hidden md:flex items-center gap-8 lg:gap-12 text-[15px] font-bold text-inherit opacity-90">
-                        <Link to="/find-parking" className="hover:text-blue-600 transition-colors no-underline text-inherit py-2">Find Parking</Link>
-                        <Link to="/booking" className="hover:text-blue-600 transition-colors no-underline text-inherit py-2">Book a Slot</Link>
-                        <Link to="/contact" className="hover:text-blue-600 transition-colors no-underline text-inherit py-2">Support & Feedback</Link>
-
-                    </div>
+                    <nav className="hidden md:flex items-center gap-8 lg:gap-12 text-[15px] font-bold text-inherit opacity-90">
+                        <Link to="/find-parking" className="hover:text-blue-600 transition-colors no-underline text-inherit py-2">Book a Slot</Link>
+                        {user && (
+                            <Link to="/tickets" className="hover:text-blue-600 transition-colors no-underline text-inherit py-2">My QR</Link>
+                        )}
+                    </nav>
                     <div className="flex items-center gap-6 text-[15px] font-bold text-inherit">
                         {user ? (
                             <div className="relative" ref={dropdownRef}>
@@ -186,17 +186,7 @@ const HomePage = () => {
                                             My Vehicles
                                         </Link>
 
-                                        <Link
-                                            to="/tickets"
-                                            onClick={() => setShowDropdown(false)}
-                                            className="flex items-center gap-2 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors no-underline font-semibold"
-                                        >
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-400">
-                                                <path d="M2 9a3 3 0 0 0 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 0 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z" />
-                                                <path d="M13 5v14" />
-                                            </svg>
-                                            QR Ticket
-                                        </Link>
+
 
                                         <button
                                             onClick={handleLogout}
