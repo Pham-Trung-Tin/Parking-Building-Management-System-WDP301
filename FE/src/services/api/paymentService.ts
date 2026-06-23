@@ -5,6 +5,9 @@ export interface PaymentInitiateBankTransferResponse {
     qrUrl: string;
     transferContent: string;
     amount: number;
+    bankName?: string;
+    accountName?: string;
+    accountNumber?: string;
     bankInfo: {
         bankName: string;
         accountNumber: string;
@@ -30,6 +33,11 @@ const paymentService = {
     /** POST /payments/bank-transfer/booking/initiate — Initiate bank transfer payment for Booking */
     initiateBookingBankTransfer: (bookingId: string): Promise<PaymentInitiateBankTransferResponse> => {
         return axiosClient.post('/payments/bank-transfer/booking/initiate', { bookingId });
+    },
+
+    /** POST /payments/bank-transfer/monthly-pass/initiate — Initiate bank transfer payment for Monthly Pass */
+    initiateMonthlyPassBankTransfer: (monthlyPassId: string): Promise<PaymentInitiateBankTransferResponse> => {
+        return axiosClient.post('/payments/bank-transfer/monthly-pass/initiate', { monthlyPassId });
     },
 
     /** GET /payments/bank-transfer/:id/status — Check bank transfer status */
