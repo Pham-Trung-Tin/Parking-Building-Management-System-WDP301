@@ -205,6 +205,8 @@ const SessionPage = () => {
 
     // ── Phí ước tính thực tế (Pre-booked Overtime logic) ────────────────────
     let overtimeFee = 0;
+    let earlyOtFee = 0;
+    let lateOtFee = 0;
     const bookingInfo = fullBooking || (typeof session?.booking === 'object' ? session.booking : null);
 
     const vtCodeForPricing = (typeof session?.vehicleType === 'object' ? (session.vehicleType as any)?.code : '') || vehicleTypeData?.code || '';
@@ -242,33 +244,71 @@ const SessionPage = () => {
         || vehicleTypePricing?.nightBlockRate
         || blockRate * 1.5;
 
+    // --- State variables for UI status
+    let isOvertime = false;
+    let isExpiringSoon = false;
+    const feeLogs: { type: 'early' | 'late' | 'fallback', timestamp: Date, amount: number, label: string }[] = [];
+
     if (bookingInfo && (bookingInfo as any).endTime && (bookingInfo as any).scheduledDate) {
         const scheduledDateStr = (bookingInfo as any).scheduledDate.split('T')[0];
         const scheduledEnd = new Date(`${scheduledDateStr}T${(bookingInfo as any).endTime}:00`);
         const now = new Date(Date.now() + devTimeOffset);
+        const scheduledStart = new Date(`${scheduledDateStr}T${(bookingInfo as any).startTime}:00`);
+
+        if (now > scheduledEnd) {
+            isOvertime = true;
+        } else if (scheduledEnd.getTime() - now.getTime() <= 15 * 60 * 1000 && scheduledEnd.getTime() - now.getTime() > 0) {
+            isExpiringSoon = true;
+        }
+
+        // Early arrival logic: > 15 mins early gets charged extra blocks
+        if (scheduledStart.getTime() - sessionStart.current > 15 * 60 * 1000) {
+            let tempStart = new Date(sessionStart.current);
+            while (tempStart < scheduledStart) {
+                const blockEnd = new Date(tempStart.getTime() + 4 * 60 * 60 * 1000);
+                const effectiveEnd = new Date(blockEnd.getTime() - 1);
+                const startHour = tempStart.getHours();
+                const endHour = effectiveEnd.getHours();
+                const isNightBlock = startHour >= 18 || startHour < 6 || endHour >= 18 || endHour < 6;
+                const fee = isNightBlock ? resolvedNightBlockRate : blockRate;
+                earlyOtFee += fee;
+                feeLogs.push({
+                    type: 'early',
+                    timestamp: new Date(tempStart.getTime()),
+                    amount: fee,
+                    label: 'Early Arrival Surcharge'
+                });
+                tempStart = new Date(tempStart.getTime() + 4 * 60 * 60 * 1000);
+            }
+        }
 
         if (now > scheduledEnd) {
             let tempStart = new Date(scheduledEnd.getTime());
-            let calculatedOtFee = 0;
             while (tempStart < now) {
                 const blockEnd = new Date(tempStart.getTime() + 4 * 60 * 60 * 1000);
                 const effectiveEnd = new Date(blockEnd.getTime() - 1);
                 const startHour = tempStart.getHours();
                 const endHour = effectiveEnd.getHours();
                 const isNightBlock = startHour >= 18 || startHour < 6 || endHour >= 18 || endHour < 6;
-                
-                calculatedOtFee += isNightBlock ? resolvedNightBlockRate : blockRate;
+                const fee = isNightBlock ? resolvedNightBlockRate : blockRate;
+                lateOtFee += fee;
+                feeLogs.push({
+                    type: 'late',
+                    timestamp: new Date(tempStart.getTime()),
+                    amount: fee,
+                    label: 'Late Departure Surcharge'
+                });
                 tempStart = new Date(tempStart.getTime() + 4 * 60 * 60 * 1000);
             }
-            overtimeFee = calculatedOtFee;
         }
+        overtimeFee = earlyOtFee + lateOtFee;
     } else {
         // Fallback: Nếu không có dữ liệu booking từ API, giả định user đã mua 1 block 4 tiếng tính từ entryTime
         const elapsedHours = elapsed / 3600;
         if (elapsedHours > 4) { // Đã lố qua 4h
             const scheduledEnd = new Date(sessionStart.current + 4 * 60 * 60 * 1000);
             const now = new Date(Date.now() + devTimeOffset);
-            
+
             let tempStart = new Date(scheduledEnd.getTime());
             let calculatedOtFee = 0;
             while (tempStart < now) {
@@ -277,8 +317,14 @@ const SessionPage = () => {
                 const startHour = tempStart.getHours();
                 const endHour = effectiveEnd.getHours();
                 const isNightBlock = startHour >= 18 || startHour < 6 || endHour >= 18 || endHour < 6;
-                
-                calculatedOtFee += isNightBlock ? resolvedNightBlockRate : blockRate;
+                const fee = isNightBlock ? resolvedNightBlockRate : blockRate;
+                calculatedOtFee += fee;
+                feeLogs.push({
+                    type: 'fallback',
+                    timestamp: new Date(tempStart.getTime()),
+                    amount: fee,
+                    label: 'Overtime Surcharge'
+                });
                 tempStart = new Date(tempStart.getTime() + 4 * 60 * 60 * 1000);
             }
             overtimeFee = calculatedOtFee;
@@ -639,8 +685,9 @@ const SessionPage = () => {
 
                 /* ── Notice ── */
                 .notice-card {
-                    background: #fff8f1; border: 1px solid #fed7aa; 
-                    border-radius: 16px; padding: 16px 20px;
+                    background: white; border-radius: 20px;
+                    border: 1px solid #e2e8f0; padding: 20px;
+                    box-shadow: 0 10px 30px -10px rgba(0,0,0,0.05);
                     display: flex; align-items: flex-start; gap: 14px;
                 }
                 .notice-title { font-size: 14px; font-weight: 800; color: #9a3412; margin-bottom: 4px; }
@@ -777,6 +824,10 @@ const SessionPage = () => {
                                                 const d = new Date(b.scheduledDate);
                                                 const [h, m] = b.startTime.split(':').map(Number);
                                                 d.setHours(h, m);
+
+                                                // Calculate grace period start (15 mins before)
+                                                const gracePeriodStart = new Date(d.getTime() - 15 * 60000);
+
                                                 return (
                                                     <>
                                                         {d.toLocaleDateString('vi-VN')}
@@ -784,6 +835,9 @@ const SessionPage = () => {
                                                         <span style={{ fontSize: 16, fontWeight: 700 }}>
                                                             {d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
                                                         </span>
+                                                        <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.6)', marginTop: 4, fontWeight: 500 }}>
+                                                            (Check-in allowed from {gracePeriodStart.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })})
+                                                        </div>
                                                     </>
                                                 );
                                             })()}
@@ -817,6 +871,34 @@ const SessionPage = () => {
                         {/* RIGHT COLUMN: DASHBOARD */}
                         <div className="dashboard-panel">
 
+                            {/* Expiring Soon Alert (Floating Toast) */}
+                            {isExpiringSoon && (
+                                <div style={{ 
+                                    position: 'fixed', top: '32px', left: '50%', transform: 'translateX(-50%)', 
+                                    zIndex: 9999, background: '#fffbeb', border: '1px solid #fde68a', 
+                                    borderRadius: '16px', padding: '16px', display: 'flex', gap: '12px', 
+                                    alignItems: 'flex-start', boxShadow: '0 20px 40px -10px rgba(217,119,6,0.2), 0 0 0 4px rgba(253,230,138,0.5)',
+                                    width: 'max-content', maxWidth: '90vw',
+                                    animation: 'slideDownFadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1)'
+                                }}>
+                                    <style>{`
+                                        @keyframes slideDownFadeIn {
+                                            from { opacity: 0; transform: translate(-50%, -20px); }
+                                            to { opacity: 1; transform: translate(-50%, 0); }
+                                        }
+                                    `}</style>
+                                    <div style={{ color: '#d97706', marginTop: '2px' }}>
+                                        <WarningIcon />
+                                    </div>
+                                    <div>
+                                        <div style={{ color: '#b45309', fontWeight: 800, fontSize: '14px', marginBottom: '4px' }}>Session Expiring Soon</div>
+                                        <div style={{ color: '#b45309', fontSize: '12px', lineHeight: 1.5, fontWeight: 500, maxWidth: '280px' }}>
+                                            Your parking time is almost up. Please exit before the booked time to avoid late departure surcharges.
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
                             {/* Stats Grid */}
                             <div className="stat-grid s-in-1">
                                 <div className="stat-card blue">
@@ -827,10 +909,22 @@ const SessionPage = () => {
                                     </div>
                                     <div className="stat-value blue">{formatHMS(Math.max(0, elapsed))}</div>
                                     <div className="stat-sub blue" style={{ marginBottom: '12px' }}>Hours : Mins : Secs</div>
-                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', fontSize: '9px', color: '#10b981', background: '#ecfdf5', padding: '4px 10px', borderRadius: '12px', width: 'fit-content', margin: '0 auto' }}>
-                                        <div style={{ width: '6px', height: '6px', backgroundColor: '#10b981', borderRadius: '50%', animation: 'pulse 1.5s infinite' }} />
-                                        ACTIVE
-                                    </div>
+                                    {isOvertime ? (
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', fontSize: '9px', color: '#ef4444', background: '#fef2f2', padding: '4px 10px', borderRadius: '12px', width: 'fit-content', margin: '0 auto', border: '1px solid #fecaca' }}>
+                                            <div style={{ width: '6px', height: '6px', backgroundColor: '#ef4444', borderRadius: '50%', animation: 'pulse 1.5s infinite' }} />
+                                            OVERTIME
+                                        </div>
+                                    ) : isExpiringSoon ? (
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', fontSize: '9px', color: '#d97706', background: '#fffbeb', padding: '4px 10px', borderRadius: '12px', width: 'fit-content', margin: '0 auto', border: '1px solid #fde68a' }}>
+                                            <div style={{ width: '6px', height: '6px', backgroundColor: '#d97706', borderRadius: '50%', animation: 'pulse 1.5s infinite' }} />
+                                            EXPIRING SOON
+                                        </div>
+                                    ) : (
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', fontSize: '9px', color: '#10b981', background: '#ecfdf5', padding: '4px 10px', borderRadius: '12px', width: 'fit-content', margin: '0 auto' }}>
+                                            <div style={{ width: '6px', height: '6px', backgroundColor: '#10b981', borderRadius: '50%', animation: 'pulse 1.5s infinite' }} />
+                                            ACTIVE
+                                        </div>
+                                    )}
                                 </div>
 
                                 <div className="stat-card green">
@@ -842,7 +936,7 @@ const SessionPage = () => {
                                     <div className="stat-value green" style={{ color: '#059669' }}>
                                         {fmtVND(currentFee)}
                                     </div>
-                                    <div className="stat-sub green">{fmtVND(blockRate)} / 4-hour block</div>
+                                    <div className="stat-sub green" style={{ marginBottom: '6px' }}>{fmtVND(blockRate)} / 4-hour block</div>
                                 </div>
                             </div>
 
@@ -886,6 +980,18 @@ const SessionPage = () => {
                                         <span className="pricing-label">Surcharge (4-hour block)</span>
                                         <span className="pricing-value" style={{ color: '#2563eb' }}>{fmtVND(blockRate)} / block</span>
                                     </div>
+                                    {earlyOtFee > 0 && (
+                                        <div className="pricing-row">
+                                            <span className="pricing-label">Early Arrival Surcharge</span>
+                                            <span className="pricing-value" style={{ color: '#b45309' }}>{fmtVND(earlyOtFee)}</span>
+                                        </div>
+                                    )}
+                                    {lateOtFee > 0 && (
+                                        <div className="pricing-row">
+                                            <span className="pricing-label">Late Departure Surcharge</span>
+                                            <span className="pricing-value" style={{ color: '#b45309' }}>{fmtVND(lateOtFee)}</span>
+                                        </div>
+                                    )}
                                     {vehicleTypeData?.pricing?.dailyRate && (
                                         <div className="pricing-row">
                                             <span className="pricing-label">Daily Max Rate</span>
@@ -905,14 +1011,47 @@ const SessionPage = () => {
                                 </div>
                             </div>
 
+                            {/* Surcharge Logs */}
+                            <div className="s-card s-in-3" style={{ padding: '20px' }}>
+                                <h4 style={{ fontSize: 13, fontWeight: 800, color: '#0f172a', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <TimerIcon /> Surcharge Logs
+                                </h4>
+                                {feeLogs.length > 0 ? (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 180, overflowY: 'auto', paddingRight: 4 }}>
+                                        {feeLogs.map((log, i) => (
+                                            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, paddingBottom: 8, borderBottom: i < feeLogs.length - 1 ? '1px dashed #e2e8f0' : 'none' }}>
+                                                <div>
+                                                    <div style={{ fontWeight: 600, color: log.type === 'early' ? '#b45309' : '#ef4444' }}>{log.label}</div>
+                                                    <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>
+                                                        {log.timestamp.toLocaleDateString('vi-VN')} {log.timestamp.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                                                    </div>
+                                                </div>
+                                                <div style={{ fontWeight: 700, color: '#0f172a' }}>
+                                                    + {fmtVND(log.amount)}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div style={{ padding: '12px 0 4px', textAlign: 'center' }}>
+                                        <div style={{ color: '#10b981', fontSize: 13, fontWeight: 700, marginBottom: 4 }}>
+                                            No Surcharges Incurred
+                                        </div>
+                                        <div style={{ fontSize: 11, color: '#64748b', fontWeight: 500 }}>
+                                            You are parking within the valid schedule.
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
                             {/* Notice */}
                             <div className="notice-card s-in-3">
                                 <WarningIcon />
                                 <div>
-                                    <div className="notice-title">Important Notice</div>
+                                    <div className="notice-title">Fee Policy & Notice</div>
                                     <div className="notice-text">
-                                        Keep your QR code to present at the exit gate.
-                                        Please pay directly to the staff or pay online before retrieving your vehicle.
+                                        <strong>Early Arrival:</strong> Check-in is allowed up to 15 mins before booked time. Arriving earlier incurs surcharges.<br />
+                                        <strong>Late Departure:</strong> Surcharges apply immediately if parked past the booked exit time.
                                     </div>
                                 </div>
                             </div>
