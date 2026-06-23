@@ -2196,6 +2196,40 @@ const BookingPage = () => {
                             ];
                             const isCustomDur = !DURATION_OPTIONS.find(o => o.val === duration);
 
+                            // Pre-calculate blocks and cost
+                            const baseRate = vehicleType?.pricing?.dayBlockRate || TEMP_PRICES[vehicleType?.code?.toUpperCase()]?.dayBlockRate || (vehicleType?.pricing?.hourlyRate ? vehicleType.pricing.hourlyRate * 4 : 20000);
+                            const nightRate = vehicleType?.pricing?.nightBlockRate || baseRate * 1.5;
+
+                            const blockDetails = [];
+                            let totalEstCost = 0;
+                            let currentStart = new Date(entryDate);
+                            const totalExitTime = new Date(entryDate);
+                            totalExitTime.setHours(totalExitTime.getHours() + duration);
+
+                            while (currentStart < totalExitTime) {
+                                const blockEnd = new Date(Math.min(totalExitTime.getTime(), currentStart.getTime() + 4 * 60 * 60 * 1000));
+                                const effectiveEnd = new Date(blockEnd.getTime() - 1);
+
+                                const startHour = currentStart.getHours();
+                                const endHour = effectiveEnd.getHours();
+
+                                const isStartNight = startHour >= 18 || startHour < 6;
+                                const isEndNight = endHour >= 18 || endHour < 6;
+                                const isNightBlock = isStartNight || isEndNight;
+
+                                const blockCost = isNightBlock ? nightRate : baseRate;
+                                totalEstCost += blockCost;
+
+                                blockDetails.push({
+                                    start: fmtT(currentStart),
+                                    end: fmtT(blockEnd),
+                                    isNight: isNightBlock,
+                                    cost: blockCost
+                                });
+
+                                currentStart = new Date(currentStart.getTime() + 4 * 60 * 60 * 1000);
+                            }
+
                             return (
                                 <div className="bk-card">
                                     <div className="bk-step-header">
@@ -2331,6 +2365,26 @@ const BookingPage = () => {
                                                     style={{ width: 38, height: 52, border: 'none', background: 'transparent', fontSize: 20, fontWeight: 900, color: '#1e293b', cursor: 'pointer' }}>+</button>
                                             </div>
                                         </div>
+
+                                        {/* Block Visualizer */}
+                                        <div style={{ background: '#f8fafc', border: '1px dashed #cbd5e1', borderRadius: 12, padding: '12px 16px', marginTop: 16 }}>
+                                            <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', marginBottom: 8, letterSpacing: '0.04em' }}>BLOCK BREAKDOWN ({blockDetails.length} BLOCKS)</div>
+                                            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                                                {blockDetails.map((b, i) => (
+                                                    <div key={i} style={{ 
+                                                        display: 'flex', alignItems: 'center', gap: 6, 
+                                                        background: b.isNight ? '#1e293b' : '#fff', 
+                                                        color: b.isNight ? '#f8fafc' : '#334155', 
+                                                        border: b.isNight ? 'none' : '1px solid #e2e8f0', 
+                                                        padding: '6px 10px', borderRadius: 8, fontSize: 12, fontWeight: 600, 
+                                                        boxShadow: '0 1px 2px rgba(0,0,0,0.05)' 
+                                                    }}>
+                                                        <span style={{ fontSize: 14 }}>{b.isNight ? '🌙' : '☀️'}</span>
+                                                        <span>{b.start} - {b.end} <span style={{ opacity: 0.8, fontWeight: 500, fontSize: 11, marginLeft: 2 }}>({new Intl.NumberFormat('vi-VN').format(b.cost)}₫)</span></span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
                                     </div>
 
                                     {/* ── 4. SUMMARY CARD ── */}
@@ -2362,10 +2416,10 @@ const BookingPage = () => {
                                             <div style={{ textAlign: 'right', flexShrink: 0 }}>
                                                 <div style={{ fontSize: 10, color: '#475569', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Est. Cost</div>
                                                 <div style={{ fontSize: 20, fontWeight: 900, color: '#ea580c', letterSpacing: -0.5 }}>
-                                                    {new Intl.NumberFormat('vi-VN').format(Math.round((vehicleType.pricing?.dayBlockRate || TEMP_PRICES[vehicleType?.code?.toUpperCase()]?.dayBlockRate || (vehicleType.pricing?.hourlyRate ? vehicleType.pricing.hourlyRate * 4 : 0)) * Math.ceil(duration / 4)))}₫
+                                                    {new Intl.NumberFormat('vi-VN').format(Math.round(totalEstCost))}₫
                                                 </div>
                                                 <div style={{ fontSize: 10, color: '#64748b', fontWeight: 500, marginTop: 4, maxWidth: '120px' }}>
-                                                    Phí tính theo block 4h. {duration}h = {Math.ceil(duration / 4)} block(s).
+                                                    Phí tính theo block. {duration}h = {blockDetails.length} block(s).
                                                 </div>
                                             </div>
                                         )}
