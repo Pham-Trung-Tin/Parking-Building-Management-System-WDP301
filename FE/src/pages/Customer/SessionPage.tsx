@@ -808,31 +808,21 @@ const SessionPage = () => {
                             <div className="notice-card s-in-3">
                                 <WarningIcon />
                                 <div>
-                                    <div className="notice-title">Lưu Ý Quan Trọng</div>
+                                    <div className="notice-title">Important Notice</div>
                                     <div className="notice-text">
-                                        Giữ mã QR để xuất trình tại cổng ra.
-                                        Vui lòng thanh toán trực tiếp cho nhân viên hoặc thanh toán online trước khi lấy xe.
+                                        Keep your QR code to present at the exit gate.
+                                        Please pay directly to the staff or pay online before retrieving your vehicle.
                                     </div>
                                 </div>
                             </div>
 
                             {/* Actions */}
                             <div className="action-group s-in-3">
-                                {amountDue > 0 ? (
+                                {amountDue > 0 && (
                                     <button className="btn-primary" onClick={handlePayCheckout}>
-                                        <PayIcon /> Thanh Toán Online: {fmtVND(amountDue)}
-                                    </button>
-                                ) : (
-                                    <button className="btn-primary" style={{ cursor: 'default' }} disabled>
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline>
-                                        </svg>
-                                        Đã Thanh Toán Đủ
+                                        <PayIcon /> Thanh Toán Phụ Phí: {fmtVND(amountDue)}
                                     </button>
                                 )}
-                                <button className="btn-secondary" onClick={() => alert('🚩 Báo cáo đã được gửi. Nhân viên sẽ hỗ trợ bạn sớm nhất!')}>
-                                    <FlagIcon /> Báo Cáo
-                                </button>
                             </div>
 
                         </div>
@@ -870,6 +860,7 @@ const SessionPage = () => {
                         {qrValue && (
                             <div style={{ background: '#fff', padding: '16px', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
                                 <QRCodeSVG
+                                    id="session-qr-svg"
                                     value={qrValue}
                                     size={Math.min(window.innerWidth - 100, 320)}
                                     bgColor="#ffffff"
@@ -879,16 +870,39 @@ const SessionPage = () => {
                                 />
                             </div>
                         )}
-                        <p style={{ marginTop: '24px', color: '#64748b', fontSize: '14px', textAlign: 'center', maxWidth: '300px' }}>
+                        <p style={{ marginTop: '24px', color: '#64748b', fontSize: '14px', textAlign: 'center', maxWidth: '300px', marginBottom: '24px' }}>
                             Show this code to the staff or scan at the checkpoint to confirm the vehicle.
                         </p>
-                        <button
-                            className="btn-primary"
-                            style={{ marginTop: '24px', width: '100%', padding: '14px' }}
-                            onClick={() => setShowQrModal(false)}
-                        >
-                            Đóng Lại
-                        </button>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, width: '100%' }}>
+                            <button
+                                className="btn-secondary"
+                                style={{ width: '100%', padding: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', background: '#f8fafc', color: '#334155', border: '1px solid #e2e8f0' }}
+                                onClick={() => {
+                                    const svg = document.getElementById('session-qr-svg');
+                                    if (!svg) return;
+                                    const svgData = new XMLSerializer().serializeToString(svg);
+                                    const blob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+                                    const url = URL.createObjectURL(blob);
+                                    const a = document.createElement('a');
+                                    a.href = url;
+                                    a.download = `Parking_QR_${sessionCode || 'Checkout'}.svg`;
+                                    document.body.appendChild(a);
+                                    a.click();
+                                    document.body.removeChild(a);
+                                    URL.revokeObjectURL(url);
+                                }}
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
+                                Download QR
+                            </button>
+                            <button
+                                className="btn-primary"
+                                style={{ width: '100%', padding: '14px' }}
+                                onClick={() => setShowQrModal(false)}
+                            >
+                                Đóng Lại
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
