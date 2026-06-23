@@ -132,7 +132,7 @@ const FloatingSessionWidget: React.FC = () => {
                 <div className="flex justify-between items-center mb-3 relative z-10">
                     <div className="flex items-center gap-2">
                         <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse ring-2 ring-emerald-400/30"></div>
-                        <span className="text-[11px] font-bold tracking-widest text-blue-100 uppercase">Đang đỗ xe</span>
+                        <span className="text-[11px] font-bold tracking-widest text-blue-100 uppercase">parking</span>
                     </div>
                     <div className="bg-white/15 px-2 py-0.5 rounded-md text-xs font-mono font-semibold tracking-wider">
                         {licensePlate}
@@ -150,7 +150,7 @@ const FloatingSessionWidget: React.FC = () => {
                         </div>
                         <div className="flex items-center gap-1.5 text-[11px] text-blue-100 font-medium">
                             <CarIcon />
-                            <span className="truncate max-w-[120px]">Vị trí: {floorName} - {slotCode}</span>
+                            <span className="truncate max-w-[120px]">Position: {floorName} - {slotCode}</span>
                         </div>
                     </div>
 

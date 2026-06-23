@@ -83,7 +83,7 @@ const LiveSessionCard = ({ session, onClick }: { session: ParkingSession; onClic
                     {getVehicleEmoji(vtName)}
                 </div>
                 <div className="t-list-item-info">
-                    <h3 className="t-list-item-title">{parkingLotName || 'Bãi Đỗ Xe'}</h3>
+                    <h3 className="t-list-item-title">{parkingLotName || 'Parking Lot'}</h3>
                     <div className="t-list-item-subtitle">
                         <span>Plate: <strong style={{ color: '#334155' }}>{plate}</strong></span>
                         <span className="t-list-item-meta">{floorName} — {slotCode}</span>
@@ -102,7 +102,7 @@ const LiveSessionCard = ({ session, onClick }: { session: ParkingSession; onClic
                     </span>
                     <strong style={{ fontSize: 14, color: '#10b981' }}>{new Intl.NumberFormat('vi-VN').format(Math.round(currentFee))} ₫</strong>
                 </div>
-                <button className="t-list-item-btn" onClick={(e) => { e.stopPropagation(); onClick(); }}>Xem chi tiết</button>
+                <button className="t-list-item-btn" onClick={(e) => { e.stopPropagation(); onClick(); }}>View Details</button>
             </div>
         </div>
     );
@@ -380,7 +380,7 @@ const MyTicketsPage = () => {
         navigate('/session', {
             state: {
                 sessionId: session._id,
-                spot: { title: lotObj?.name ?? 'Bãi Đỗ Xe', _id: lotObj?._id },
+                spot: { title: lotObj?.name ?? 'Parking Lot', _id: lotObj?._id },
                 vehicleType: vtObj,
                 floor: floorObj,
                 zone: zoneObj,
@@ -863,7 +863,7 @@ const MyTicketsPage = () => {
 
                     {/* ── SECTION 1: Active Sessions ── */}
                     <div className="t-section-heading">
-                        <span className="t-section-title"> Đang Đỗ</span>
+                        <span className="t-section-title"> Active Sessions</span>
                         {hasActiveSessions && (
                             <span className="t-section-count live">{activeSessions.length} active</span>
                         )}
@@ -872,7 +872,7 @@ const MyTicketsPage = () => {
                     {sessionsLoading && (
                         <div className="ls-loading">
                             <div className="ls-spinner" />
-                            Đang kiểm tra phiên đỗ xe hiện tại...
+                            Checking active parking sessions...
                         </div>
                     )}
 
@@ -890,7 +890,7 @@ const MyTicketsPage = () => {
                             color: '#94a3b8', fontSize: 14, fontWeight: 600,
                         }}>
                             <span style={{ fontSize: 24 }}>🅿️</span>
-                            <span>Bạn hiện không có xe nào đang đỗ trong bãi.</span>
+                            <span>You currently have no vehicles parked.</span>
                         </div>
                     )}
 
@@ -906,16 +906,16 @@ const MyTicketsPage = () => {
 
                     {/* ── SECTION 2: Upcoming Bookings (localStorage tickets) ── */}
                     <div className="t-section-heading">
-                        <span className="t-section-title"> Vé Đặt Trước</span>
+                        <span className="t-section-title"> Upcoming Bookings</span>
                         {bookingsLoading && (
                             <div className="ls-loading" style={{ marginTop: 10 }}>
                                 <div className="ls-spinner" />
-                                Đang tải danh sách vé...
+                                Loading tickets...
                             </div>
                         )}
 
                         {!bookingsLoading && hasTickets && (
-                            <span className="t-section-count">{tickets.length} vé</span>
+                            <span className="t-section-count">{tickets.length} tickets</span>
                         )}
                     </div>
 
@@ -937,11 +937,11 @@ const MyTicketsPage = () => {
                                 color: '#94a3b8', fontSize: 14, fontWeight: 600,
                             }}>
                                 <span style={{ fontSize: 24 }}>📭</span>
-                                <span>Không có vé đặt trước nào.{' '}
+                                <span>No upcoming bookings.{' '}
                                     <span
                                         style={{ color: '#2563eb', cursor: 'pointer', textDecoration: 'underline' }}
                                         onClick={() => navigate('/booking')}
-                                    >Đặt ngay</span>
+                                    >Book now</span>
                                 </span>
                             </div>
                         )

@@ -423,7 +423,11 @@ const CheckoutSuccessPage = () => {
                         <AnimatedCheck />
                     </div>
                     <div className="cs-hero-title">Payment Successful! </div>
-                    <div className="cs-hero-sub">Your parking session has been checked out. Thank you!</div>
+                    <div className="cs-hero-sub">
+                        {data.isBooking
+                            ? "Your parking slot has been successfully booked. Thank you!"
+                            : "Your parking session has been checked out. Thank you!"}
+                    </div>
                 </div>
 
                 <div className="cs-content">
@@ -499,28 +503,10 @@ const CheckoutSuccessPage = () => {
                         </div>
                     </div>
 
-                    {/* Rating card */}
-                    <div className="cs-card cs-in-1">
-                        <div className="rating-section">
-                            <div className="rating-title">How was your parking experience?</div>
-                            <RatingStars />
-                        </div>
-                    </div>
+
 
                     {/* Actions */}
                     <div className="cs-in-2">
-                        <button
-                            className="cs-btn-secondary"
-                            onClick={() => alert('📄 Receipt downloaded successfully!')}
-                        >
-                            <DownloadIcon /> Download Receipt
-                        </button>
-                        <button
-                            className="cs-btn-secondary"
-                            onClick={() => alert('🔗 Receipt link copied to clipboard!')}
-                        >
-                            <ShareIcon /> Share Receipt
-                        </button>
                         <button
                             className="cs-btn-primary"
                             onClick={() => navigate('/')}

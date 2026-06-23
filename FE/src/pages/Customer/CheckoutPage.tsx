@@ -134,7 +134,8 @@ const CheckoutPage = () => {
             interval = setInterval(async () => {
                 try {
                     const status = await paymentService.checkBankTransferStatus(bankInfo.payment._id);
-                    if (status.isPaid) {
+                    // Match either isPaid (from backend logic) or matched (from webhook response format)
+                    if (status.isPaid || (status as any).matched) {
                         setPolling(false);
                         clearInterval(interval);
                         navigate('/checkoutsuccess', {
