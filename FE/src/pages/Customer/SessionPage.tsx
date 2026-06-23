@@ -285,8 +285,8 @@ const SessionPage = () => {
     const vtCode: string = (typeof session?.vehicleType === 'object' ? (session.vehicleType as any)?.code : '') || vehicleTypeData?.code || '';
     const isMotorbike = ['MOTORBIKE', 'MOTORCYCLE', 'ELECTRIC_BIKE', 'BICYCLE'].some(c => vtCode.includes(c));
 
-    const floorName: string = (typeof session?.floor === 'object' ? ((session.floor as any)?.name || `Tầng ${(session.floor as any)?.floorNumber}`) : '')
-        || (floorData ? (floorData.name || `Tầng ${floorData.floorNumber}`) : 'N/A');
+    const floorName: string = (typeof session?.floor === 'object' ? ((session.floor as any)?.name || `Floor ${(session.floor as any)?.floorNumber}`) : '')
+        || (floorData ? (floorData.name || `Floor ${floorData.floorNumber}`) : 'N/A');
 
     const zoneName: string = (typeof session?.zone === 'object' ? (session.zone as any)?.name : '') || zoneData?.name || 'N/A';
     const slotCode: string = (typeof session?.slot === 'object' ? (session.slot as any)?.slotCode : '') || slotData?.slotCode || 'N/A';
@@ -646,7 +646,7 @@ const SessionPage = () => {
                 {/* Back button */}
                 <div className="session-banner">
                     <button className="banner-back" onClick={() => navigate(-1)}>
-                        <ArrowLeftIcon /> Quay lại
+                        <ArrowLeftIcon /> Back
                     </button>
                 </div>
 
@@ -654,7 +654,7 @@ const SessionPage = () => {
                     {sessionLoading && (
                         <div className="session-loading">
                             <div className="spin" />
-                            Đang tải thông tin phiên đỗ...
+                            Loading session info...
                         </div>
                     )}
 
@@ -671,7 +671,7 @@ const SessionPage = () => {
                                 className="dt-qr-wrapper"
                                 onClick={() => qrValue && setShowQrModal(true)}
                                 style={{ cursor: qrValue ? 'pointer' : 'default' }}
-                                title="Click để phóng to mã QR"
+                                title="Click to enlarge QR code"
                             >
                                 {qrValue ? (
                                     <QRCodeSVG
@@ -723,25 +723,25 @@ const SessionPage = () => {
                                 <div className="stat-card blue">
                                     <div className="stat-label blue" style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
-                                            <TimerIcon /> Thời Gian Đỗ
+                                            <TimerIcon /> Parking Duration
                                         </div>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '9px', color: '#10b981', background: '#ecfdf5', padding: '4px 10px', borderRadius: '12px' }}>
                                             <div style={{ width: '6px', height: '6px', backgroundColor: '#10b981', borderRadius: '50%', animation: 'pulse 1.5s infinite' }} />
-                                            ĐANG TÍNH
+                                            ACTIVE
                                         </div>
                                     </div>
                                     <div className="stat-value blue">{formatHMS(Math.max(0, elapsed))}</div>
-                                    <div className="stat-sub blue">Giờ : Phút : Giây</div>
+                                    <div className="stat-sub blue">Hours : Mins : Secs</div>
                                 </div>
 
                                 <div className="stat-card green">
                                     <div className="stat-label green">
-                                        <CardIcon /> Phí Hiện Tại
+                                        <CardIcon /> Current Fee
                                     </div>
                                     <div className="stat-value green" style={{ color: '#059669' }}>
                                         {fmtVND(currentFee)}
                                     </div>
-                                    <div className="stat-sub green">{fmtVND(blockRate)} / block 4 tiếng</div>
+                                    <div className="stat-sub green">{fmtVND(blockRate)} / 4-hour block</div>
                                 </div>
                             </div>
 
@@ -752,29 +752,29 @@ const SessionPage = () => {
                                         <PinIcon />
                                     </div>
                                     <div>
-                                        <div className="location-label">Vị Trí Đỗ Xe</div>
+                                        <div className="location-label">Parking Spot</div>
                                         <div className="location-value">{floorName} — {slotCode}</div>
                                         {zoneName && zoneName !== 'N/A' && (
-                                            <div className="location-sub">Khu {zoneName}</div>
+                                            <div className="location-sub">Zone {zoneName}</div>
                                         )}
                                     </div>
                                 </div>
 
                                 <div className="details-grid">
                                     <div>
-                                        <div className="detail-item-label">Khu Vực Bãi</div>
+                                        <div className="detail-item-label">Parking Lot</div>
                                         <div className="detail-item-value">{spot.title}</div>
                                     </div>
                                     {spot.code && (
                                         <div>
-                                            <div className="detail-item-label">Mã Bãi Đỗ</div>
+                                            <div className="detail-item-label">Parking Code</div>
                                             <div className="detail-item-value">{spot.code}</div>
                                         </div>
                                     )}
                                     {slotData?.features?.hasEVCharger && (
                                         <div>
-                                            <div className="detail-item-label">Tính Năng</div>
-                                            <div className="detail-item-value" style={{ color: '#10b981' }}>⚡ Sạc EV</div>
+                                            <div className="detail-item-label">Features</div>
+                                            <div className="detail-item-value" style={{ color: '#10b981' }}>⚡ EV Charging</div>
                                         </div>
                                     )}
                                 </div>
@@ -782,20 +782,20 @@ const SessionPage = () => {
                                 {/* Pricing Summary */}
                                 <div className="pricing-details">
                                     <div className="pricing-row">
-                                        <span className="pricing-label">Phí phát sinh (Block 4 tiếng)</span>
+                                        <span className="pricing-label">Surcharge (4-hour block)</span>
                                         <span className="pricing-value" style={{ color: '#2563eb' }}>{fmtVND(blockRate)} / block</span>
                                     </div>
                                     {vehicleTypeData?.pricing?.dailyRate && (
                                         <div className="pricing-row">
-                                            <span className="pricing-label">Giá tối đa ngày</span>
+                                            <span className="pricing-label">Daily Max Rate</span>
                                             <span className="pricing-value" style={{ color: '#64748b', fontSize: '13px' }}>
-                                                {fmtVND(vehicleTypeData.pricing.dailyRate)} / ngày
+                                                {fmtVND(vehicleTypeData.pricing.dailyRate)} / day
                                             </span>
                                         </div>
                                     )}
                                     {advancePayment > 0 && (
                                         <div className="pricing-row">
-                                            <span className="pricing-label" style={{ color: '#10b981' }}>Đã thanh toán trước (Booking)</span>
+                                            <span className="pricing-label" style={{ color: '#10b981' }}>Prepaid (Booking)</span>
                                             <span className="pricing-value" style={{ color: '#10b981' }}>
                                                 - {fmtVND(advancePayment)}
                                             </span>
@@ -820,7 +820,7 @@ const SessionPage = () => {
                             <div className="action-group s-in-3">
                                 {amountDue > 0 && (
                                     <button className="btn-primary" onClick={handlePayCheckout}>
-                                        <PayIcon /> Thanh Toán Phụ Phí: {fmtVND(amountDue)}
+                                        <PayIcon /> Pay Surcharge: {fmtVND(amountDue)}
                                     </button>
                                 )}
                             </div>
@@ -900,7 +900,7 @@ const SessionPage = () => {
                                 style={{ width: '100%', padding: '14px' }}
                                 onClick={() => setShowQrModal(false)}
                             >
-                                Đóng Lại
+                                Close
                             </button>
                         </div>
                     </div>
