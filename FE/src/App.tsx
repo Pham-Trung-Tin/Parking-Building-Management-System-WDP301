@@ -23,7 +23,8 @@ import StaffLiveViewPage from './pages/Staff/StaffLiveViewPage';
 import StaffManageSlotPage from './pages/Staff/StaffManageSlotPage';
 import ManagerPortal from './pages/Manager/ManagerPortal';
 import { GuestRoute, CustomerRoute, RequireAuthRoute, AdminRoute } from './router/ProtectedRoute';
-import GlobalNotification from './components/GlobalNotification';
+import FloatingSessionWidget from './components/FloatingSessionWidget';
+
 
 // Dev-only floating toolbox — tree-shaken away in production builds
 const DevPanel = import.meta.env.DEV
@@ -33,7 +34,7 @@ const DevPanel = import.meta.env.DEV
 function App() {
     return (
         <Router>
-            <GlobalNotification />
+            <FloatingSessionWidget />
             <Routes>
                 {/* 1. Guest-only Routes (Redirects logged-in users out) */}
                 <Route element={<GuestRoute />}>
