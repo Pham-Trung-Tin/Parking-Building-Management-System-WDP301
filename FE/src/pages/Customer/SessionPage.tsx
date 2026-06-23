@@ -403,6 +403,8 @@ const SessionPage = () => {
         // Nếu không có cả _id lẫn sessionCode → để qrValue rỗng, UI sẽ hiện "Loading QR..."
     }, [session?._id, sessionCode, licensePlate, slotCode]);
 
+    const isMonthlyPassSession = !!session?.monthlyPass;
+
     const handlePayCheckout = () => {
         navigate('/checkout', {
             state: {
@@ -473,6 +475,10 @@ const SessionPage = () => {
                     .desktop-grid {
                         grid-template-columns: 380px 1fr;
                         align-items: stretch;
+                    }
+                    .desktop-grid.monthly-pass-mode {
+                        grid-template-columns: minmax(320px, 420px);
+                        justify-content: center;
                     }
                 }
 
@@ -757,7 +763,7 @@ const SessionPage = () => {
                         </div>
                     )}
 
-                    <div className="desktop-grid">
+                    <div className={`desktop-grid ${isMonthlyPassSession ? 'monthly-pass-mode' : ''}`}>
 
                         {/* LEFT COLUMN: DIGITAL TICKET */}
                         <div className="digital-ticket s-in">
@@ -797,6 +803,22 @@ const SessionPage = () => {
                                     {vehicleTypeName}
                                 </div>
                             </div>
+
+                            {isMonthlyPassSession && (
+                                <div style={{ width: '100%', background: 'rgba(16,185,129,0.05)', border: '1px solid rgba(16,185,129,0.2)', borderRadius: 16, padding: '20px 16px', textAlign: 'center', marginBottom: 24 }}>
+                                    <div style={{ fontSize: 11, color: '#10b981', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, fontWeight: 700 }}>Parking Location</div>
+                                    <div style={{ fontSize: 16, fontWeight: 800, color: '#f8fafc', marginBottom: 4 }}>
+                                        {spot.title || 'Parking Lot'}
+                                    </div>
+                                    <div style={{ fontSize: 14, color: '#cbd5e1' }}>
+                                        {floorName} {zoneName !== 'N/A' && `— Zone ${zoneName}`}
+                                    </div>
+                                    <div style={{ marginTop: 12, display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, background: 'rgba(16,185,129,0.15)', color: '#10b981', padding: '6px 12px', borderRadius: 8 }}>
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                                        Monthly Pass Member
+                                    </div>
+                                </div>
+                            )}
 
                             <div className="dt-info-row">
                                 <div className="dt-info-col">
@@ -869,7 +891,8 @@ const SessionPage = () => {
                         </div>
 
                         {/* RIGHT COLUMN: DASHBOARD */}
-                        <div className="dashboard-panel">
+                        {!isMonthlyPassSession && (
+                            <div className="dashboard-panel">
 
                             {/* Expiring Soon Alert (Floating Toast) */}
                             {isExpiringSoon && (
@@ -1066,6 +1089,7 @@ const SessionPage = () => {
                             </div>
 
                         </div>
+                        )}
                     </div>
                 </div>
             </div>

@@ -38,8 +38,12 @@ const FloatingSessionWidget: React.FC = () => {
 
     const fetchActiveSession = async () => {
         try {
-            const res = await parkingSessionService.getSessions({ status: 'active', limit: 1 });
-            const data = res.data?.data || res.data || [];
+            const res = await parkingSessionService.getSessions({ status: 'active' });
+            let data = res.data?.data || res.data || [];
+            
+            // Không hiển thị widget trôi nổi cho xe vé tháng
+            data = data.filter((s: any) => !s.monthlyPass);
+            
             if (data.length > 0) {
                 setActiveSession(data[0]);
             } else {

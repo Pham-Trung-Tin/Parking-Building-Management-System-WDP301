@@ -46,6 +46,8 @@ interface BookingData {
   spot: string;
   status: 'VALID' | 'INVALID';
   bookingId?: string;
+  monthlyPassCode?: string;
+  isMonthlyPass?: boolean;
 }
 
 const StaffPage = () => {
@@ -79,9 +81,9 @@ const StaffPage = () => {
         });
     } else {
       if (videoRefStandard.current && videoRefStandard.current.srcObject) {
-         const s = videoRefStandard.current.srcObject as MediaStream;
-         s.getTracks().forEach(t => t.stop());
-         videoRefStandard.current.srcObject = null;
+        const s = videoRefStandard.current.srcObject as MediaStream;
+        s.getTracks().forEach(t => t.stop());
+        videoRefStandard.current.srcObject = null;
       }
     }
     return () => {
@@ -94,7 +96,7 @@ const StaffPage = () => {
   const [vehicleTypesList, setVehicleTypesList] = useState<any[]>([]);
   const [selectedVehicle, setSelectedVehicle] = useState('');
   const [defaultLotId, setDefaultLotId] = useState('');
-  
+
   useEffect(() => {
     vehicleTypeService.getAll().then((res: any) => {
       const types = res.data || res;
@@ -125,19 +127,19 @@ const StaffPage = () => {
       floorService.getFloors({ status: 'active', parkingLot: lotId }).then(async (res: any) => {
         const fetchedFloors = res.data || res || [];
         setFloors(fetchedFloors);
-        
+
         const stats: Record<string, { total: number, occupied: number }> = {};
         for (const f of fetchedFloors.slice(0, 3)) {
-            try {
-                const slotsRes = await parkingSlotService.getFloorMap(f._id);
-                const slots = Array.isArray(slotsRes) ? slotsRes : (slotsRes as any)?.data || [];
-                const activeSlots = slots.filter((s: any) => !s.isDeleted);
-                const total = activeSlots.length;
-                const occupied = activeSlots.filter((s: any) => s.status === 'occupied').length;
-                stats[f._id] = { total, occupied };
-            } catch (err) {
-                console.error(err);
-            }
+          try {
+            const slotsRes = await parkingSlotService.getFloorMap(f._id);
+            const slots = Array.isArray(slotsRes) ? slotsRes : (slotsRes as any)?.data || [];
+            const activeSlots = slots.filter((s: any) => !s.isDeleted);
+            const total = activeSlots.length;
+            const occupied = activeSlots.filter((s: any) => s.status === 'occupied').length;
+            stats[f._id] = { total, occupied };
+          } catch (err) {
+            console.error(err);
+          }
         }
         setFloorStats(stats);
       }).catch(console.error);
@@ -276,7 +278,7 @@ const StaffPage = () => {
       });
 
       console.log('[DEBUG] checkIn res:', JSON.stringify(res));
-      
+
       // Upload evidence image
       console.log('[DEBUG] imageToUpload exists?', !!imageToUpload);
       if (imageToUpload) {
@@ -385,23 +387,48 @@ const StaffPage = () => {
       } catch (tokenErr: any) {
         // Fallback: Check if it's a plain JSON string from the mobile app
         try {
-          payload = JSON.parse(code);
+          // Clean up potential weird escapes from different scanners before parsing
+          let cleanCode = code.replace(/\\"/g, '"').replace(/\\'/g, "'").trim();
+          if (cleanCode.startsWith('"') && cleanCode.endsWith('"')) {
+            cleanCode = cleanCode.substring(1, cleanCode.length - 1);
+          }
+
+          payload = JSON.parse(cleanCode);
+          if (typeof payload === 'string') {
+            payload = JSON.parse(payload); // Handle double-encoded JSON
+          }
         } catch (jsonErr) {
-           // Fallback: Check if it's just a plain text booking ID
-           if (typeof code === 'string' && code.trim().length > 0) {
-             payload = { bookingId: code.trim(), id: code.trim(), type: 'checkin' };
-           } else {
-             throw tokenErr;
-           }
+          // Fallback: Check if it's just a plain text booking ID
+          if (typeof code === 'string' && code.trim().length > 0) {
+            payload = { bookingId: code.trim(), id: code.trim(), type: 'checkin' };
+          } else {
+            throw tokenErr;
+          }
         }
       }
 
-      if (payload.type && payload.type !== 'checkin') {
-        throw new Error('Mã QR không phải là loại Check-in hợp lệ');
+      if (payload.type && payload.type !== 'checkin' && payload.type !== 'monthly_pass') {
+        throw new Error('Mã QR không hợp lệ. Chỉ hỗ trợ Booking hoặc Vé Tháng.');
+      }
+
+      if (payload.type === 'monthly_pass') {
+        setIsLoadingQR(false);
+        const mockResult: BookingData = {
+          id: payload.passCode || code.substring(0, 8).toUpperCase(),
+          plate: payload.licensePlate || 'N/A',
+          customerName: 'Monthly Pass Member',
+          spot: 'Auto-assigned on Check-in',
+          status: 'VALID',
+          monthlyPassCode: payload.passCode,
+          isMonthlyPass: true
+        };
+        setModalData(mockResult);
+        setShowModal(true);
+        return;
       }
 
       const safeBookingId = String(payload.bookingId || payload.id || payload.receiptId || code || '');
-      
+
       try {
         const bookingRes = await bookingService.getById(safeBookingId);
         const booking = bookingRes.data || bookingRes;
@@ -460,8 +487,8 @@ const StaffPage = () => {
   };
 
   const handleConfirmCheckInQR = async () => {
-    if (!modalData?.bookingId) {
-      showNotification('Dữ liệu Booking không hợp lệ hoặc thiếu ID', 'error');
+    if (!modalData?.bookingId && !modalData?.monthlyPassCode) {
+      showNotification('Dữ liệu quét không hợp lệ hoặc thiếu ID', 'error');
       setIsProcessingQR(false);
       return;
     }
@@ -469,13 +496,21 @@ const StaffPage = () => {
     const lotId = (profile as any)?.assignedParkingLot?._id || (profile as any)?.assignedParkingLot || defaultLotId;
 
     try {
-      await parkingSessionService.checkIn({
-        bookingId: modalData.bookingId,
-        licensePlate: modalData.plate,
-        parkingLotId: lotId
-      });
+      if (modalData.monthlyPassCode) {
+        await parkingSessionService.checkIn({
+          monthlyPassCode: modalData.monthlyPassCode,
+          licensePlate: modalData.plate,
+          parkingLotId: lotId
+        });
+      } else {
+        await parkingSessionService.checkIn({
+          bookingId: modalData.bookingId,
+          licensePlate: modalData.plate,
+          parkingLotId: lotId
+        });
+      }
 
-      setToastMessageQR(`Check-in successful! Direct vehicle ${modalData?.plate} to ${modalData?.spot}!`);
+      setToastMessageQR(`Check-in successful! Direct vehicle ${modalData?.plate} to their spot.`);
       setShowModal(false);
       setModalData(null);
 
@@ -502,8 +537,8 @@ const StaffPage = () => {
       {/* --- NOTIFICATION TOAST FOR STANDARD ENTRY --- */}
       {notification && (
         <div className={`fixed top-6 right-6 px-6 py-4 rounded shadow-xl z-50 flex items-center animate-[fade-in-up_0.3s_ease-out] border ${notification.type === 'success' ? 'bg-green-50 border-green-200 text-green-800' :
-            notification.type === 'error' ? 'bg-red-50 border-red-200 text-red-800' :
-              'bg-blue-50 border-blue-200 text-blue-800'
+          notification.type === 'error' ? 'bg-red-50 border-red-200 text-red-800' :
+            'bg-blue-50 border-blue-200 text-blue-800'
           }`}>
           {notification.type === 'success' && <div className="w-2 h-2 rounded-full bg-green-500 mr-3 animate-pulse" />}
           {notification.type === 'error' && <AlertTriangle className="w-5 h-5 text-red-500 mr-3" />}
@@ -618,8 +653,8 @@ const StaffPage = () => {
               <button
                 onClick={() => setEntryMode('standard')}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${entryMode === 'standard'
-                    ? 'bg-white text-gray-900 shadow border border-gray-200'
-                    : 'text-gray-500 hover:text-gray-700'
+                  ? 'bg-white text-gray-900 shadow border border-gray-200'
+                  : 'text-gray-500 hover:text-gray-700'
                   }`}
               >
                 <ScanLine className="w-4 h-4" />
@@ -628,12 +663,12 @@ const StaffPage = () => {
               <button
                 onClick={() => setEntryMode('booking')}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${entryMode === 'booking'
-                    ? 'bg-white text-gray-900 shadow border border-gray-200'
-                    : 'text-gray-500 hover:text-gray-700'
+                  ? 'bg-white text-gray-900 shadow border border-gray-200'
+                  : 'text-gray-500 hover:text-gray-700'
                   }`}
               >
                 <QrCode className="w-4 h-4" />
-                Pre-booked
+                QR Scanner
               </button>
             </div>
           </div>
@@ -721,8 +756,8 @@ const StaffPage = () => {
                           key={type._id}
                           onClick={() => setSelectedVehicle(type._id)}
                           className={`flex flex-col items-center justify-center p-6 border rounded-xl transition-all ${isSelected
-                              ? 'border-gray-900 shadow-md bg-white'
-                              : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50 text-gray-400'
+                            ? 'border-gray-900 shadow-md bg-white'
+                            : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50 text-gray-400'
                             }`}
                         >
                           <Icon className={`w-8 h-8 mb-3 ${isSelected ? 'text-gray-900' : 'text-gray-400'}`} />
@@ -773,9 +808,8 @@ const StaffPage = () => {
                     <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Live Feed</h3>
                     <button
                       onClick={() => setIsStandardCamActive(!isStandardCamActive)}
-                      className={`text-[10px] px-2 py-1 rounded font-bold uppercase tracking-wider transition-colors ${
-                        isStandardCamActive ? 'bg-red-100 text-red-700 hover:bg-red-200' : 'bg-green-100 text-green-700 hover:bg-green-200'
-                      }`}
+                      className={`text-[10px] px-2 py-1 rounded font-bold uppercase tracking-wider transition-colors ${isStandardCamActive ? 'bg-red-100 text-red-700 hover:bg-red-200' : 'bg-green-100 text-green-700 hover:bg-green-200'
+                        }`}
                     >
                       {isStandardCamActive ? 'Turn Off Cam' : 'Turn On Cam'}
                     </button>
@@ -817,7 +851,7 @@ const StaffPage = () => {
                         const occupied = stat ? stat.occupied : (total - (floor.availableSlots || 0));
                         const percentage = total > 0 ? Math.round((occupied / total) * 100) : 0;
                         const floorLabel = floor.name || `Floor ${floor.floorNumber < 0 ? 'B' + Math.abs(floor.floorNumber) : floor.floorNumber}`;
-                        
+
                         return (
                           <div key={floor._id} className={`bg-white border border-gray-200 rounded-xl p-4 shadow-sm flex items-center justify-between ${idx > 0 ? 'opacity-60' : ''}`}>
                             <div>
@@ -873,7 +907,7 @@ const StaffPage = () => {
                 <div className="p-5 bg-white border-b border-gray-200 flex justify-between items-center z-10">
                   <div className="flex items-center gap-3">
                     <Camera className="w-6 h-6 text-gray-900" />
-                    <h2 className="font-bold text-gray-900 tracking-wide text-lg">PRE-BOOKED QR SCANNER</h2>
+                    <h2 className="font-bold text-gray-900 tracking-wide text-lg">QR SCANNER (BOOKING & MONTHLY PASS)</h2>
                   </div>
                 </div>
 
@@ -1009,18 +1043,25 @@ const StaffPage = () => {
                 <h3 className="text-[2.5rem] font-black text-slate-800 tracking-wider">{modalData.plate}</h3>
               </div>
 
-              <div className="space-y-4">
-                <div className="flex justify-between items-center border-b border-slate-100 pb-4">
-                  <span className="text-slate-500 font-medium">Customer Name:</span>
-                  <span className="font-extrabold text-slate-800 text-lg">{modalData.customerName}</span>
+              {modalData.isMonthlyPass ? (
+                <div className="bg-amber-50 rounded-2xl p-5 border border-amber-200 text-center shadow-sm">
+                  <h4 className="text-amber-800 font-black text-lg mb-1 uppercase tracking-wide">Monthly Pass Member</h4>
+                  <p className="text-amber-700 font-medium text-sm">Valid pass for this vehicle. Please proceed to park in any available spot in the designated zone.</p>
                 </div>
-                <div className="flex justify-between items-center pb-2">
-                  <span className="text-slate-500 font-medium">Allocated Spot:</span>
-                  <span className="font-extrabold text-blue-700 bg-blue-100 px-4 py-1.5 rounded-lg text-lg border border-blue-200">
-                    {modalData.spot}
-                  </span>
+              ) : (
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center border-b border-slate-100 pb-4">
+                    <span className="text-slate-500 font-medium">Customer Name:</span>
+                    <span className="font-extrabold text-slate-800 text-lg">{modalData.customerName}</span>
+                  </div>
+                  <div className="flex justify-between items-center pb-2">
+                    <span className="text-slate-500 font-medium">Allocated Spot:</span>
+                    <span className="font-extrabold text-blue-700 bg-blue-100 px-4 py-1.5 rounded-lg text-lg border border-blue-200">
+                      {modalData.spot}
+                    </span>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
 
             <div className="p-8 pt-0 flex gap-4">

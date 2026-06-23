@@ -115,6 +115,15 @@ const MyTicketsPage = () => {
     const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
     const [zoomedQr, setZoomedQr] = useState<string | null>(null);
 
+    // Custom Modal & Notification
+    const [cancelModalData, setCancelModalData] = useState<{receiptId: string, bookingId: string} | null>(null);
+    const [notification, setNotification] = useState<{message: string, type: 'success' | 'error'} | null>(null);
+
+    const showNotification = useCallback((message: string, type: 'success' | 'error') => {
+        setNotification({ message, type });
+        setTimeout(() => setNotification(null), 3500);
+    }, []);
+
     // ── DATA FETCHING ─────────────────────────────────────────────────────────
     const { socket } = useSocket();
     const [activeSessions, setActiveSessions] = useState<ParkingSession[]>([]);
@@ -143,9 +152,13 @@ const MyTicketsPage = () => {
     const fetchActiveSessions = useCallback(async () => {
         try {
             const res = await parkingSessionService.getSessions({ status: 'active', limit: 10 });
-            const list: ParkingSession[] = Array.isArray(res)
+            let list: ParkingSession[] = Array.isArray(res)
                 ? res
                 : (res?.data ?? res?.docs ?? []);
+            
+            // Lọc bỏ các xe vé tháng khỏi danh sách Live Sessions (hiển thị gọn bên MyVehiclesPage)
+            list = list.filter((s: any) => !s.monthlyPass);
+            
             setActiveSessions(list);
             setSessionsError(null);
         } catch (err: any) {
@@ -297,6 +310,7 @@ const MyTicketsPage = () => {
             const entries = await Promise.all(
                 tickets.map(async (t) => {
                     const token = await createQRToken({
+                        type: 'checkin',
                         bookingId: t.bookingId ?? t.receiptId,
                         receiptId: t.receiptId,
                         licensePlate: t.licensePlate,
@@ -310,18 +324,23 @@ const MyTicketsPage = () => {
         generateTokens();
     }, [tickets]);
 
-    const handleRemoveTicket = async (receiptId: string, bookingId?: string) => {
-        if (window.confirm('Do you want to cancel this booking? This action cannot be undone.')) {
-            if (bookingId) {
-                try {
-                    await bookingService.cancel(bookingId, 'Cancelled by user from My Tickets');
-                    setTickets(prev => prev.filter(t => t.receiptId !== receiptId));
-                    setSelectedTicket(null);
-                    alert('Booking cancelled successfully.');
-                } catch (e: any) {
-                    alert('Failed to cancel booking: ' + (e?.response?.data?.message || e.message));
-                }
-            }
+    const handleRemoveTicket = (receiptId: string, bookingId?: string) => {
+        if (!bookingId) return;
+        setCancelModalData({ receiptId, bookingId });
+    };
+
+    const confirmCancelBooking = async () => {
+        if (!cancelModalData) return;
+        const { receiptId, bookingId } = cancelModalData;
+        try {
+            await bookingService.cancel(bookingId, 'Cancelled by user from My Tickets');
+            setTickets(prev => prev.filter(t => t.receiptId !== receiptId));
+            setSelectedTicket(null);
+            setCancelModalData(null);
+            showNotification('Booking cancelled successfully.', 'success');
+        } catch (e: any) {
+            showNotification('Failed to cancel booking: ' + (e?.response?.data?.message || e.message), 'error');
+            setCancelModalData(null);
         }
     };
 
@@ -1044,10 +1063,10 @@ const MyTicketsPage = () => {
                                                         {qrTokens[ticket.receiptId] ? (
                                                             <QRCodeSVG
                                                                 value={qrTokens[ticket.receiptId]}
-                                                                size={148}
-                                                                level="M"
+                                                                size={160}
+                                                                level="L"
                                                                 includeMargin={false}
-                                                                style={{ display: 'block' }}
+                                                                style={{ display: 'block', margin: 'auto' }}
                                                             />
                                                         ) : (
                                                             <div style={{
@@ -1131,8 +1150,8 @@ const MyTicketsPage = () => {
                                 size={Math.min(window.innerWidth - 100, 320)}
                                 bgColor="#ffffff"
                                 fgColor="#0f172a"
-                                level="H"
-                                includeMargin={false}
+                                level="L"
+                                includeMargin={true}
                             />
                         </div>
                         <p style={{ marginTop: '24px', color: '#64748b', fontSize: '14px', textAlign: 'center' }}>
@@ -1146,6 +1165,109 @@ const MyTicketsPage = () => {
                             Close
                         </button>
                     </div>
+                </div>
+            )}
+
+            {/* ── Custom Cancel Confirmation Modal ── */}
+            {cancelModalData && (
+                <div
+                    style={{
+                        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                        backgroundColor: 'rgba(15, 23, 42, 0.6)',
+                        backdropFilter: 'blur(4px)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        zIndex: 9999, padding: '20px',
+                        animation: 'fadeIn 0.2s ease-out'
+                    }}
+                    onClick={() => setCancelModalData(null)}
+                >
+                    <div
+                        style={{
+                            background: '#fff', padding: '32px', borderRadius: '24px',
+                            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+                            maxWidth: '420px', width: '100%',
+                            animation: 'slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1)'
+                        }}
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <style>{`
+                            @keyframes slideUp {
+                                from { opacity: 0; transform: translateY(20px); }
+                                to { opacity: 1; transform: translateY(0); }
+                            }
+                            @keyframes fadeIn {
+                                from { opacity: 0; }
+                                to { opacity: 1; }
+                            }
+                        `}</style>
+                        <div style={{ display: 'flex', alignItems: 'center', marginBottom: '20px', color: '#ef4444' }}>
+                            <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: '#fef2f2', display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: '16px' }}>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+                                </svg>
+                            </div>
+                            <h3 style={{ margin: 0, color: '#0f172a', fontSize: '20px', fontWeight: 800 }}>Cancel Booking?</h3>
+                        </div>
+                        <p style={{ color: '#475569', fontSize: '15px', lineHeight: '1.6', marginBottom: '32px' }}>
+                            Are you sure you want to cancel this booking? This action cannot be undone and your reserved slot will be released.
+                        </p>
+                        <div style={{ display: 'flex', gap: '12px' }}>
+                            <button
+                                style={{
+                                    flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid #e2e8f0',
+                                    background: '#fff', color: '#475569', fontSize: '15px', fontWeight: 700,
+                                    cursor: 'pointer', transition: 'all 0.2s'
+                                }}
+                                onClick={() => setCancelModalData(null)}
+                                onMouseOver={(e) => (e.currentTarget.style.background = '#f8fafc')}
+                                onMouseOut={(e) => (e.currentTarget.style.background = '#fff')}
+                            >
+                                Keep Booking
+                            </button>
+                            <button
+                                style={{
+                                    flex: 1, padding: '14px', borderRadius: '12px', border: 'none',
+                                    background: '#ef4444', color: '#fff', fontSize: '15px', fontWeight: 700,
+                                    cursor: 'pointer', transition: 'all 0.2s'
+                                }}
+                                onClick={confirmCancelBooking}
+                                onMouseOver={(e) => (e.currentTarget.style.background = '#dc2626')}
+                                onMouseOut={(e) => (e.currentTarget.style.background = '#ef4444')}
+                            >
+                                Yes, Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ── Custom Toast Notification ── */}
+            {notification && (
+                <div style={{
+                    position: 'fixed', top: '24px', right: '24px', zIndex: 10000,
+                    background: notification.type === 'success' ? '#f0fdf4' : '#fef2f2',
+                    border: `1px solid ${notification.type === 'success' ? '#bbf7d0' : '#fecaca'}`,
+                    padding: '16px 24px', borderRadius: '12px',
+                    display: 'flex', alignItems: 'center', gap: '12px',
+                    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+                    animation: 'slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1)'
+                }}>
+                    <style>{`
+                        @keyframes slideInRight {
+                            from { opacity: 0; transform: translateX(50px); }
+                            to { opacity: 1; transform: translateX(0); }
+                        }
+                    `}</style>
+                    {notification.type === 'success' ? (
+                        <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#22c55e', animation: 'lsPulse 1.5s infinite' }} />
+                    ) : (
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line>
+                        </svg>
+                    )}
+                    <span style={{ color: notification.type === 'success' ? '#166534' : '#991b1b', fontWeight: 700, fontSize: '14px' }}>
+                        {notification.message}
+                    </span>
                 </div>
             )}
         </>
