@@ -152,11 +152,26 @@ const ParkingFinderMap = ({ onDataLoad, selectedParkingId, onSelectParking }) =>
   const fetchParkings = async (lat, lng) => {
     setLoading(true);
 
-    // Câu lệnh OverpassQL: 
-    // - Tìm các node, way, relation có tag "amenity"="parking"
-    // - (around:1500, lat, lng): Bán kính 1500m (1.5km) xung quanh tọa độ hiện tại
-    // - [out:json]: Định dạng trả về là JSON
-    // - out center: Trả về tọa độ trung tâm cho các dạng way và relation để có thể đặt Marker
+    const cacheKey = `osm_parking_${Math.round(lat * 100)}_${Math.round(lng * 100)}`;
+    const cachedData = localStorage.getItem(cacheKey);
+
+    if (cachedData) {
+      try {
+        const parsedCache = JSON.parse(cachedData);
+        // Only use cache if it's less than 24 hours old
+        if (Date.now() - parsedCache.timestamp < 24 * 60 * 60 * 1000) {
+          const sysParkings = await fetchSystemParkings();
+          const allParkings = [...sysParkings, ...parsedCache.elements];
+          setParkings(allParkings);
+          if (onDataLoad) onDataLoad(allParkings);
+          setLoading(false);
+          return;
+        }
+      } catch (e) {
+        // invalid cache, ignore
+      }
+    }
+
     const query = `
       [out:json];
       (
@@ -167,28 +182,29 @@ const ParkingFinderMap = ({ onDataLoad, selectedParkingId, onSelectParking }) =>
       out center;
     `;
 
-    // Danh sách các Overpass API endpoint dự phòng để thử nếu endpoint chính bị lỗi (như lỗi 504)
     const endpoints = [
       'https://overpass-api.de/api/interpreter',
       'https://lz4.overpass-api.de/api/interpreter',
       'https://z.overpass-api.de/api/interpreter',
-      'https://overpass.kumi.systems/api/interpreter',
-      'https://overpass.osm.ch/api/interpreter'
     ];
 
     let success = false;
 
     for (const endpoint of endpoints) {
       try {
-        // Overpass API ưu tiên nhận POST request định dạng x-www-form-urlencoded hoặc text thô
         const response = await axios.post(endpoint, query, {
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded'
-          },
-          timeout: 15000 // Đặt timeout 15s để thử server khác nếu phản hồi quá lâu
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          timeout: 4000 // Giảm timeout xuống 4s để không bắt người dùng đợi quá lâu
         });
 
         const elements = response.data.elements || [];
+        
+        // Save to cache
+        localStorage.setItem(cacheKey, JSON.stringify({
+          timestamp: Date.now(),
+          elements: elements
+        }));
+
         const sysParkings = await fetchSystemParkings();
         const allParkings = [...sysParkings, ...elements];
         
@@ -196,16 +212,14 @@ const ParkingFinderMap = ({ onDataLoad, selectedParkingId, onSelectParking }) =>
         if (onDataLoad) onDataLoad(allParkings);
 
         success = true;
-        break; // Nếu gọi thành công thì thoát vòng lặp
+        break;
       } catch (error) {
         console.warn(`Lỗi khi gọi endpoint ${endpoint}:`, error.message);
-        // Tiếp tục vòng lặp để thử endpoint tiếp theo
       }
     }
 
     if (!success) {
-      console.error("Tất cả các Overpass API endpoints đều không khả dụng tại thời điểm này.");
-      // Fallback: Just load system parkings if OSM fails
+      console.warn("Tất cả các Overpass API endpoints đều không khả dụng tại thời điểm này.");
       const sysParkings = await fetchSystemParkings();
       setParkings(sysParkings);
       if (onDataLoad) onDataLoad(sysParkings);

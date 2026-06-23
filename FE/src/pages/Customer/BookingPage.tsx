@@ -739,9 +739,6 @@ const BookingPage = () => {
 
     // ── Compatibility for TicketsPage & Header ──
     const saveToMyTickets = (backendData: any) => {
-        const blockRate = vehicleType?.pricing?.dayBlockRate || (TEMP_PRICES[vehicleType?.code?.toUpperCase()]?.dayBlockRate) || (vehicleType?.pricing?.hourlyRate ? vehicleType.pricing.hourlyRate * 4 : 20000);
-        const estimatedBlocks = Math.ceil(duration / 4);
-        const estimatedPrice = blockRate * estimatedBlocks;
         const grandTotal = Math.round(estimatedPrice);
         const rawExit = exitTime;
 
@@ -779,21 +776,31 @@ const BookingPage = () => {
                 try {
                     const res = await paymentService.checkBankTransferStatus(bankInfo.payment._id);
                     const statusInfo = (res as any).data || res;
-                    if (statusInfo.isPaid) {
+                    if (statusInfo.isPaid || statusInfo.matched) {
                         setPolling(false);
                         clearInterval(interval);
 
                         saveToMyTickets(successBooking);
-                        setShowSuccessToast(true);
+                        
+                        navigate('/checkoutsuccess', {
+                            state: {
+                                isBooking: true,
+                                spot: parkingSpot,
+                                vehicleType: vehicleType,
+                                floor: selectedFloor,
+                                slot: selectedSlot,
+                                licensePlate: formatPlate(licensePlate),
+                                entryDate: new Date(entryDate).toISOString(),
+                                exitTime: exitTime.toISOString(),
+                                elapsed: duration * 3600,
+                                totalAmount: estimatedPrice,
+                                payMethod: payMethod,
+                                transactionId: `REC-${Math.floor(100000 + Math.random() * 900000)}`
+                            }
+                        });
+
                         setCheckoutProcessing(false);
                         setShowConfirmModal(false);
-
-                        // Reset states
-                        setLicensePlate('');
-                        setSelectedFloor(null);
-                        setSelectedZone(null);
-                        setSelectedSlot(null);
-                        setCurrentStep(1);
                     }
                 } catch (err) {
                     console.error('Polling error:', err);
@@ -842,15 +849,26 @@ const BookingPage = () => {
             } else {
                 // Cash/Momo (Mock for now): directly show success
                 saveToMyTickets(bookingRes.data || bookingRes);
-                setShowSuccessToast(true);
+                
+                navigate('/checkoutsuccess', {
+                    state: {
+                        isBooking: true,
+                        spot: parkingSpot,
+                        vehicleType: vehicleType,
+                        floor: selectedFloor,
+                        slot: selectedSlot,
+                        licensePlate: formatPlate(licensePlate),
+                        entryDate: new Date(entryDate).toISOString(),
+                        exitTime: exitTime.toISOString(),
+                        elapsed: duration * 3600,
+                        totalAmount: estimatedPrice,
+                        payMethod: payMethod,
+                        transactionId: `REC-${Math.floor(100000 + Math.random() * 900000)}`
+                    }
+                });
+
                 setCheckoutProcessing(false);
                 setShowConfirmModal(false);
-                // Reset states
-                setLicensePlate('');
-                setSelectedFloor(null);
-                setSelectedZone(null);
-                setSelectedSlot(null);
-                setCurrentStep(1);
             }
         } catch (error: any) {
             let formMsg = error.response?.data?.message || 'Failed to create booking';
@@ -950,9 +968,26 @@ const BookingPage = () => {
     }, [floorSlots, selectedZone]);
 
     const exitTime = new Date(new Date(entryDate).getTime() + duration * 3600000);
-    const blockRate = vehicleType?.pricing?.dayBlockRate || (TEMP_PRICES[vehicleType?.code?.toUpperCase()]?.dayBlockRate) || (vehicleType?.pricing?.hourlyRate ? vehicleType.pricing.hourlyRate * 4 : 0);
-    const estimatedBlocks = Math.ceil(duration / 4);
-    const estimatedPrice = blockRate * estimatedBlocks;
+    const baseRate = vehicleType?.pricing?.dayBlockRate || (TEMP_PRICES[vehicleType?.code?.toUpperCase()]?.dayBlockRate) || (vehicleType?.pricing?.hourlyRate ? vehicleType.pricing.hourlyRate * 4 : 20000);
+    const nightRate = vehicleType?.pricing?.nightBlockRate || baseRate * 1.5;
+    
+    let calculatedEstCost = 0;
+    let tempStart = new Date(entryDate);
+    const tempExit = new Date(exitTime);
+    
+    while (tempStart < tempExit) {
+        const blockEnd = new Date(Math.min(tempExit.getTime(), tempStart.getTime() + 4 * 60 * 60 * 1000));
+        const effectiveEnd = new Date(blockEnd.getTime() - 1);
+        const startHour = tempStart.getHours();
+        const endHour = effectiveEnd.getHours();
+        const isStartNight = startHour >= 18 || startHour < 6;
+        const isEndNight = endHour >= 18 || endHour < 6;
+        const isNightBlock = isStartNight || isEndNight;
+        calculatedEstCost += isNightBlock ? nightRate : baseRate;
+        tempStart = new Date(tempStart.getTime() + 4 * 60 * 60 * 1000);
+    }
+    
+    const estimatedPrice = calculatedEstCost;
 
     // ─── Navigation ─────────────────────────────────────────────────────────
     const canProceed = (step: number): boolean => {
@@ -998,7 +1033,7 @@ const BookingPage = () => {
                 entryDate,
                 duration,
                 estimatedPrice,
-                blockRate,  // Truyền thẳng giá 1 block để SessionPage dùng
+                blockRate: baseRate,  // Truyền thẳng giá 1 block để SessionPage dùng
             }
         });
     };
@@ -2745,7 +2780,7 @@ const BookingPage = () => {
                                         </div>
                                         <div className="modal-row">
                                             <span className="modal-row-label">Rate</span>
-                                            <span className="modal-row-value">{fmtVND(blockRate)}/4h</span>
+                                            <span className="modal-row-value">{fmtVND(baseRate)}/4h</span>
                                         </div>
                                     </div>
 
