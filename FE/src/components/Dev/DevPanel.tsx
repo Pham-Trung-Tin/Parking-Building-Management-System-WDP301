@@ -459,6 +459,11 @@ const DevPanel: React.FC = () => {
                                 <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'center' }}>
                                     <button 
                                         className="dev-util-btn" 
+                                        style={{ background: '#fef3c7', color: '#92400e', border: 'none' }}
+                                        onClick={() => updateDevTimeOffset(60 * 1000)}
+                                    >+ 1 Phút</button>
+                                    <button 
+                                        className="dev-util-btn" 
                                         style={{ background: '#f1f5f9', color: '#334155', border: 'none' }}
                                         onClick={() => updateDevTimeOffset(15 * 60 * 1000)}
                                     >+ 15 Phút</button>

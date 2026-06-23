@@ -248,28 +248,24 @@ const SessionPage = () => {
         const now = new Date(Date.now() + devTimeOffset);
 
         if (now > scheduledEnd) {
-            const otHours = (now.getTime() - scheduledEnd.getTime()) / (1000 * 60 * 60);
-            // 15 mins grace period
-            if (otHours > (15 / 60)) {
-                let tempStart = new Date(scheduledEnd.getTime());
-                let calculatedOtFee = 0;
-                while (tempStart < now) {
-                    const blockEnd = new Date(tempStart.getTime() + 4 * 60 * 60 * 1000);
-                    const effectiveEnd = new Date(blockEnd.getTime() - 1);
-                    const startHour = tempStart.getHours();
-                    const endHour = effectiveEnd.getHours();
-                    const isNightBlock = startHour >= 18 || startHour < 6 || endHour >= 18 || endHour < 6;
-                    
-                    calculatedOtFee += isNightBlock ? resolvedNightBlockRate : blockRate;
-                    tempStart = new Date(tempStart.getTime() + 4 * 60 * 60 * 1000);
-                }
-                overtimeFee = calculatedOtFee;
+            let tempStart = new Date(scheduledEnd.getTime());
+            let calculatedOtFee = 0;
+            while (tempStart < now) {
+                const blockEnd = new Date(tempStart.getTime() + 4 * 60 * 60 * 1000);
+                const effectiveEnd = new Date(blockEnd.getTime() - 1);
+                const startHour = tempStart.getHours();
+                const endHour = effectiveEnd.getHours();
+                const isNightBlock = startHour >= 18 || startHour < 6 || endHour >= 18 || endHour < 6;
+                
+                calculatedOtFee += isNightBlock ? resolvedNightBlockRate : blockRate;
+                tempStart = new Date(tempStart.getTime() + 4 * 60 * 60 * 1000);
             }
+            overtimeFee = calculatedOtFee;
         }
     } else {
         // Fallback: Nếu không có dữ liệu booking từ API, giả định user đã mua 1 block 4 tiếng tính từ entryTime
         const elapsedHours = elapsed / 3600;
-        if (elapsedHours > 4.25) { // Đã lố qua 4h + 15p (grace period)
+        if (elapsedHours > 4) { // Đã lố qua 4h
             const scheduledEnd = new Date(sessionStart.current + 4 * 60 * 60 * 1000);
             const now = new Date(Date.now() + devTimeOffset);
             
