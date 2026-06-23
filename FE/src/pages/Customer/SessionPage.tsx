@@ -125,7 +125,7 @@ const SessionPage = () => {
                     setFetchedVTPricing(vt.pricing as VehicleTypePricing);
                 }
             })
-            .catch(() => {}); // Fail silently — sẽ dùng fallback
+            .catch(() => { }); // Fail silently — sẽ dùng fallback
     }, [vehicleTypeData?._id, state.vehicleTypeId]);
 
     useEffect(() => {
@@ -188,10 +188,10 @@ const SessionPage = () => {
     // ── Phí ước tính thực tế (Pre-booked Overtime logic) ────────────────────
     let overtimeFee = 0;
     const bookingInfo = typeof session?.booking === 'object' ? session.booking : null;
-    
+
     const vtCodeForPricing = (typeof session?.vehicleType === 'object' ? (session.vehicleType as any)?.code : '') || vehicleTypeData?.code || '';
     const isMotorbikeType = ['MOTORBIKE', 'MOTORCYCLE', 'ELECTRIC_BIKE', 'BICYCLE'].some(c => vtCodeForPricing.toUpperCase().includes(c));
-    
+
     // Rút trích đúng giá tiền từ API thay vì fallback cứng
     const vehicleTypePricing = (typeof session?.vehicleType === 'object' ? (session.vehicleType as any)?.pricing : null) || vehicleTypeData?.pricing;
     const hourlyRate = vehicleTypePricing?.hourlyRate ?? spot.price ?? 20000;
@@ -223,7 +223,7 @@ const SessionPage = () => {
         const scheduledDateStr = (bookingInfo as any).scheduledDate.split('T')[0];
         const scheduledEnd = new Date(`${scheduledDateStr}T${(bookingInfo as any).endTime}:00`);
         const now = new Date(Date.now() + devTimeOffset);
-        
+
         if (now > scheduledEnd) {
             const otHours = (now.getTime() - scheduledEnd.getTime()) / (1000 * 60 * 60);
             // 15 mins grace period
@@ -659,7 +659,7 @@ const SessionPage = () => {
                     )}
 
                     <div className="desktop-grid">
-                        
+
                         {/* LEFT COLUMN: DIGITAL TICKET */}
                         <div className="digital-ticket s-in">
                             <div className="dt-header">
@@ -667,8 +667,8 @@ const SessionPage = () => {
                                 {sessionCode && <div className="dt-session-id">#{sessionCode}</div>}
                             </div>
 
-                            <div 
-                                className="dt-qr-wrapper" 
+                            <div
+                                className="dt-qr-wrapper"
                                 onClick={() => qrValue && setShowQrModal(true)}
                                 style={{ cursor: qrValue ? 'pointer' : 'default' }}
                                 title="Click để phóng to mã QR"
@@ -717,7 +717,7 @@ const SessionPage = () => {
 
                         {/* RIGHT COLUMN: DASHBOARD */}
                         <div className="dashboard-panel">
-                            
+
                             {/* Stats Grid */}
                             <div className="stat-grid s-in-1">
                                 <div className="stat-card blue">
@@ -733,7 +733,7 @@ const SessionPage = () => {
                                     <div className="stat-value blue">{formatHMS(Math.max(0, elapsed))}</div>
                                     <div className="stat-sub blue">Giờ : Phút : Giây</div>
                                 </div>
-                                
+
                                 <div className="stat-card green">
                                     <div className="stat-label green">
                                         <CardIcon /> Phí Hiện Tại
@@ -810,7 +810,7 @@ const SessionPage = () => {
                                 <div>
                                     <div className="notice-title">Lưu Ý Quan Trọng</div>
                                     <div className="notice-text">
-                                        Giữ mã QR để xuất trình tại cổng ra. 
+                                        Giữ mã QR để xuất trình tại cổng ra.
                                         Vui lòng thanh toán trực tiếp cho nhân viên hoặc thanh toán online trước khi lấy xe.
                                     </div>
                                 </div>
@@ -841,7 +841,7 @@ const SessionPage = () => {
             </div>
             {/* ── Modal Phóng To QR ── */}
             {showQrModal && (
-                <div 
+                <div
                     style={{
                         position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
                         backgroundColor: 'rgba(0, 0, 0, 0.75)',
@@ -851,7 +851,7 @@ const SessionPage = () => {
                     }}
                     onClick={() => setShowQrModal(false)}
                 >
-                    <div 
+                    <div
                         style={{
                             background: '#fff', padding: '32px', borderRadius: '24px',
                             display: 'flex', flexDirection: 'column', alignItems: 'center',
@@ -866,7 +866,7 @@ const SessionPage = () => {
                                 to { opacity: 1; transform: scale(1); }
                             }
                         `}</style>
-                        <h3 style={{ margin: '0 0 24px 0', color: '#0f172a', fontSize: '20px', fontWeight: 800 }}>Mã QR Chuyến Đi</h3>
+                        <h3 style={{ margin: '0 0 24px 0', color: '#0f172a', fontSize: '20px', fontWeight: 800 }}>QR Checkout</h3>
                         {qrValue && (
                             <div style={{ background: '#fff', padding: '16px', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
                                 <QRCodeSVG
@@ -880,10 +880,10 @@ const SessionPage = () => {
                             </div>
                         )}
                         <p style={{ marginTop: '24px', color: '#64748b', fontSize: '14px', textAlign: 'center', maxWidth: '300px' }}>
-                            Đưa mã này cho nhân viên hoặc quét tại trạm kiểm soát để xác nhận xe.
+                            Show this code to the staff or scan at the checkpoint to confirm the vehicle.
                         </p>
-                        <button 
-                            className="btn-primary" 
+                        <button
+                            className="btn-primary"
                             style={{ marginTop: '24px', width: '100%', padding: '14px' }}
                             onClick={() => setShowQrModal(false)}
                         >

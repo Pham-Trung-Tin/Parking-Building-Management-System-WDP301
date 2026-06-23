@@ -2976,7 +2976,7 @@ const BookingPage = () => {
                     animation: 'toastSlideIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) both',
                     fontFamily: "'Inter', sans-serif",
                 }}>
-                    <span style={{ fontSize: '24px', flexShrink: 0 }}>🎉</span>
+                    {/* <span style={{ fontSize: '24px', flexShrink: 0 }}>🎉</span> */}
                     <div style={{ flex: 1 }}>
                         <div style={{ fontSize: '13px', fontWeight: 800, color: '#15803d', marginBottom: '3px' }}>
                             Payment Successful!

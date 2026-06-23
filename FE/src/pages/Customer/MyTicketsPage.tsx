@@ -1028,7 +1028,7 @@ const MyTicketsPage = () => {
                                                 </div>
 
                                                 <div className="t-card-bottom">
-                                                    <p className="t-qr-label">🔏 Scan to Enter</p>
+                                                    <p className="t-qr-label"> Scan to Enter</p>
                                                     <div className="t-qr-container" id={`qr-svg-${ticket.receiptId}`}>
                                                         {qrTokens[ticket.receiptId] ? (
                                                             <QRCodeSVG
