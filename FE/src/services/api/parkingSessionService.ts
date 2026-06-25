@@ -18,6 +18,7 @@ export interface ParkingSession {
     sessionCode: string;
     user?: { _id: string; fullName: string; email: string; phone?: string } | string;
     booking?: { _id: string; bookingCode: string } | string;
+    monthlyPass?: any;
     parkingLot: { _id: string; name: string; code: string; address?: any } | string;
     floor: { _id: string; name: string; floorNumber: number } | string;
     zone?: { _id: string; name: string; code: string } | string;
@@ -73,7 +74,7 @@ const parkingSessionService = {
     },
 
     /** POST /parking-sessions/check-in — Check-in a vehicle */
-    checkIn: (data: { bookingId?: string; licensePlate?: string; vehicleTypeId?: string; parkingLotId: string; slotId?: string; }): Promise<any> => {
+    checkIn: (data: { bookingId?: string; monthlyPassCode?: string; licensePlate?: string; vehicleTypeId?: string; parkingLotId: string; slotId?: string; }): Promise<any> => {
         return axiosClient.post('/parking-sessions/check-in', data);
     },
 

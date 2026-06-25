@@ -61,12 +61,9 @@ const ZaloPayIcon = () => (
         <text x="12" y="15" textAnchor="middle" fill="white" fontSize="6" fontWeight="900" fontFamily="sans-serif">ZaloPay</text>
     </svg>
 );
-const BankIcon = ({ size = 24 }) => (
+const QrCodeIcon = ({ size = 24 }: { size?: number }) => (
     <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <rect width="20" height="14" x="2" y="6" rx="2" />
-        <path d="M2 10h20" />
-        <path d="M7 15h.01" />
-        <path d="M12 15h.01" />
+        <rect width="5" height="5" x="3" y="3" rx="1" /><rect width="5" height="5" x="16" y="3" rx="1" /><rect width="5" height="5" x="3" y="16" rx="1" /><path d="M21 16h-3a2 2 0 0 0-2 2v3" /><path d="M21 21v.01" /><path d="M12 7v3a2 2 0 0 1-2 2H7" /><path d="M3 12h.01" /><path d="M12 3h.01" /><path d="M12 16v.01" /><path d="M16 12h1" /><path d="M21 12v.01" /><path d="M12 21v-1" />
     </svg>
 );
 const CashIcon = ({ size = 24 }) => (
@@ -122,6 +119,8 @@ const CheckoutPage = () => {
     const [errors, setErrors] = useState<Record<string, string>>({});
     
     const sessionId = data.sessionId || data.session?._id;
+    const bookingId = data.bookingId;
+    const monthlyPassId = data.monthlyPassId;
     
     // Bank Transfer State
     const [bankInfo, setBankInfo] = useState<PaymentInitiateBankTransferResponse | null>(null);
@@ -133,19 +132,17 @@ const CheckoutPage = () => {
         if (polling && bankInfo?.payment?._id) {
             interval = setInterval(async () => {
                 try {
-                    const status = await paymentService.checkBankTransferStatus(bankInfo.payment._id);
-                    // Match either isPaid (from backend logic) or matched (from webhook response format)
-                    if (status.isPaid || (status as any).matched) {
+                    const res: any = await paymentService.checkBankTransferStatus(bankInfo.payment._id);
+                    // axios interceptor unwraps response.data, but ApiResponse wraps in .data again
+                    const statusData = res?.data || res;
+                    if (statusData.isPaid || statusData.matched) {
                         setPolling(false);
                         clearInterval(interval);
                         navigate('/checkoutsuccess', {
                             state: {
-                                spot, vehicleType, floor: data.floor, zone: data.zone, slot: data.slot, slotCode, sessionId,
-                                licensePlate, entryDate: entryDate.toISOString(),
-                                exitTime: exitTime.toISOString(),
-                                elapsed, totalAmount: amountDue,
-                                hourlyRate: data.hourlyRate, payMethod,
-                                transactionId: status.invoiceCode
+                                ...data,
+                                transactionId: statusData.invoiceCode,
+                                payMethod
                             }
                         });
                     }
@@ -176,19 +173,31 @@ const CheckoutPage = () => {
         setErrors({});
         
         if (payMethod === 'bank_transfer') {
-            if (!sessionId) {
-                setPollingError('No active parking session found to pay for.');
+            if (!sessionId && !bookingId && !monthlyPassId) {
+                setPollingError('No active parking session, booking, or pass found to pay for.');
                 return;
             }
             setProcessing(true);
             setPollingError('');
             try {
-                const res = await paymentService.initiateBankTransfer(sessionId);
-                setBankInfo(res);
+                let res: any;
+                if (data.isMonthlyPass && monthlyPassId) {
+                    res = await paymentService.initiateMonthlyPassBankTransfer(monthlyPassId);
+                } else if (data.isBooking && bookingId) {
+                    res = await paymentService.initiateBookingBankTransfer(bookingId);
+                } else if (sessionId) {
+                    res = await paymentService.initiateBankTransfer(sessionId);
+                } else {
+                    setPollingError('Invalid payment data.');
+                    setProcessing(false);
+                    return;
+                }
+                const bankData = res?.data || res;
+                setBankInfo(bankData);
                 setPolling(true);
             } catch (error: any) {
                 console.error(error);
-                setPollingError(error.response?.data?.message || 'Failed to generate QR code. Session might not be completed.');
+                setPollingError(error.response?.data?.message || 'Failed to generate QR code.');
             } finally {
                 setProcessing(false);
             }
@@ -200,10 +209,7 @@ const CheckoutPage = () => {
             setProcessing(false);
             navigate('/checkoutsuccess', {
                 state: {
-                    spot, vehicleType, floor: floorObj, slot: slotObj, slotCode,
-                    licensePlate, entryDate: entryDate.toISOString(),
-                    exitTime: exitTime.toISOString(),
-                    elapsed, totalAmount: amountDue,
+                    ...data,
                     payMethod,
                     cardLast4: payMethod === 'card' ? cardNumber.replace(/\s/g, '').slice(-4) : null,
                 }
@@ -217,14 +223,11 @@ const CheckoutPage = () => {
         return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
     };
 
-    const serviceFee = Math.round(amountDue * 0.05);
-    const grandTotal = Math.round(amountDue) + serviceFee;
+    const grandTotal = Math.round(amountDue);
 
     const payMethods = [
-        { id: 'bank_transfer', label: 'Bank Transfer (QR)', icon: <BankIcon size={22} />, color: '#0ea5e9' },
-        { id: 'card', label: 'Credit / Debit Card', icon: <CreditCardIcon size={22} />, color: '#2563eb' },
+        { id: 'bank_transfer', label: 'Bank Transfer (VietQR)', icon: <QrCodeIcon size={22} />, color: '#0ea5e9' },
         { id: 'momo', label: 'MoMo Wallet', icon: <MomoIcon />, color: '#ae2070' },
-        { id: 'zalopay', label: 'ZaloPay', icon: <ZaloPayIcon />, color: '#0068ff' },
         { id: 'cash', label: 'Pay at Counter', icon: <CashIcon size={22} />, color: '#10b981' },
     ];
 
@@ -777,20 +780,20 @@ const CheckoutPage = () => {
                                     <div style={{ marginTop: 20, padding: '12px', background: '#eff6ff', borderRadius: 10, border: '1px solid #bfdbfe', textAlign: 'left' }}>
                                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 12px', fontSize: 13 }}>
                                             <div style={{ color: '#64748b', fontWeight: 600 }}>Bank:</div>
-                                            <div style={{ fontWeight: 700, color: '#1e3a8a' }}>{bankInfo.bankInfo.bankName}</div>
+                                            <div style={{ fontWeight: 700, color: '#1e3a8a' }}>{bankInfo.bankInfo?.bankName || bankInfo.bankName || 'N/A'}</div>
                                             
                                             <div style={{ color: '#64748b', fontWeight: 600 }}>Account Name:</div>
-                                            <div style={{ fontWeight: 700, color: '#1e3a8a' }}>{bankInfo.bankInfo.accountName}</div>
+                                            <div style={{ fontWeight: 700, color: '#1e3a8a' }}>{bankInfo.bankInfo?.accountName || bankInfo.accountName || 'N/A'}</div>
                                             
                                             <div style={{ color: '#64748b', fontWeight: 600 }}>Account No:</div>
-                                            <div style={{ fontWeight: 800, color: '#1d4ed8', fontFamily: 'monospace', fontSize: 14 }}>{bankInfo.bankInfo.accountNumber}</div>
+                                            <div style={{ fontWeight: 800, color: '#1d4ed8', fontFamily: 'monospace', fontSize: 14 }}>{bankInfo.bankInfo?.accountNumber || bankInfo.accountNumber || 'N/A'}</div>
                                             
                                             <div style={{ color: '#64748b', fontWeight: 600 }}>Amount:</div>
-                                            <div style={{ fontWeight: 800, color: '#ef4444', fontSize: 15 }}>{bankInfo.amount.toLocaleString('vi-VN')} ₫</div>
+                                            <div style={{ fontWeight: 800, color: '#ef4444', fontSize: 15 }}>{(bankInfo.amount || 0).toLocaleString('vi-VN')} ₫</div>
                                             
                                             <div style={{ color: '#64748b', fontWeight: 600 }}>Content:</div>
                                             <div style={{ fontWeight: 800, color: '#0f172a', fontFamily: 'monospace', fontSize: 14, background: '#f1f5f9', padding: '2px 6px', borderRadius: 4, display: 'inline-block' }}>
-                                                {bankInfo.transferContent}
+                                                {bankInfo.transferContent || 'N/A'}
                                             </div>
                                         </div>
                                     </div>
@@ -818,53 +821,87 @@ const CheckoutPage = () => {
 
                             <div style={{ marginBottom: 16, padding: '10px 14px', background: '#f8fafc', borderRadius: 10, border: '1px solid #f1f5f9' }}>
                                 <div style={{ fontSize: 12, color: '#94a3b8', fontWeight: 600, marginBottom: 3 }}>Parking Facility</div>
-                                <div style={{ fontSize: 14, fontWeight: 700, color: '#1d4ed8' }}>{spot.title}</div>
+                                <div style={{ fontSize: 14, fontWeight: 700, color: '#1d4ed8' }}>{data.isMonthlyPass ? data.parkingLotName : spot.title}</div>
                             </div>
 
-                            <div className="co-row">
-                                <span className="co-row-label">License Plate</span>
-                                <span className="co-row-value" style={{ fontFamily: 'monospace', letterSpacing: '0.06em' }}>{licensePlate}</span>
-                            </div>
-                            <div className="co-row">
-                                <span className="co-row-label">Floor / Slot</span>
-                                <span className="co-row-value">{floorName} - {slotCode}</span>
-                            </div>
-                            <div className="co-row">
-                                <span className="co-row-label">Vehicle Type</span>
-                                <span className="co-row-value" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                    {isMoto ? <MotoIcon /> : <CarIcon />}
-                                    {vehicleTypeName}
-                                </span>
-                            </div>
-                            <div className="co-row">
-                                <span className="co-row-label">Entry</span>
-                                <span className="co-row-value" style={{ fontSize: 12 }}>{formatTime(entryDate)}</span>
-                            </div>
-                            <div className="co-row">
-                                <span className="co-row-label">Exit</span>
-                                <span className="co-row-value" style={{ fontSize: 12 }}>{formatTime(exitTime)}</span>
-                            </div>
-                            <div className="co-row">
-                                <span className="co-row-label">Duration</span>
-                                <span className="co-row-value">{Math.floor(elapsed / 3600)}h {Math.floor((elapsed % 3600) / 60)}m</span>
-                            </div>
-                            <div className="co-row">
-                                <span className="co-row-label">Total Parking Fee</span>
-                                <span className="co-row-value">{Math.round(currentFee).toLocaleString('vi-VN')} ₫</span>
-                            </div>
-                            {advancePayment > 0 && (
-                                <div className="co-row" style={{ color: '#10b981' }}>
-                                    <span className="co-row-label">Prepaid (Booking)</span>
-                                    <span className="co-row-value">- {Math.round(advancePayment).toLocaleString('vi-VN')} ₫</span>
-                                </div>
+                            {data.isMonthlyPass ? (
+                                <>
+                                    <div className="co-row">
+                                        <span className="co-row-label">License Plate</span>
+                                        <span className="co-row-value" style={{ fontFamily: 'monospace', letterSpacing: '0.06em' }}>{data.licensePlate}</span>
+                                    </div>
+                                    <div className="co-row">
+                                        <span className="co-row-label">Pass Code</span>
+                                        <span className="co-row-value" style={{ fontFamily: 'monospace', letterSpacing: '0.06em' }}>{data.passCode}</span>
+                                    </div>
+                                    <div className="co-row">
+                                        <span className="co-row-label">Vehicle Type</span>
+                                        <span className="co-row-value" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                            {isMoto ? <MotoIcon /> : <CarIcon />}
+                                            {data.vehicleTypeName}
+                                        </span>
+                                    </div>
+                                    <div className="co-row">
+                                        <span className="co-row-label">Valid From</span>
+                                        <span className="co-row-value">{new Date(data.startDate).toLocaleDateString('en-GB')}</span>
+                                    </div>
+                                    <div className="co-row">
+                                        <span className="co-row-label">Valid To</span>
+                                        <span className="co-row-value">{new Date(data.endDate).toLocaleDateString('en-GB')}</span>
+                                    </div>
+                                    <div className="co-row">
+                                        <span className="co-row-label">Duration</span>
+                                        <span className="co-row-value">{data.durationMonths} Month{data.durationMonths > 1 ? 's' : ''}</span>
+                                    </div>
+                                    <div className="co-row">
+                                        <span className="co-row-label">Monthly Rate</span>
+                                        <span className="co-row-value">{Math.round(amountDue / data.durationMonths).toLocaleString('vi-VN')} ₫ / month</span>
+                                    </div>
+                                </>
+                            ) : (
+                                <>
+                                    <div className="co-row">
+                                        <span className="co-row-label">License Plate</span>
+                                        <span className="co-row-value" style={{ fontFamily: 'monospace', letterSpacing: '0.06em' }}>{licensePlate}</span>
+                                    </div>
+                                    <div className="co-row">
+                                        <span className="co-row-label">Floor / Slot</span>
+                                        <span className="co-row-value">{floorName} - {slotCode}</span>
+                                    </div>
+                                    <div className="co-row">
+                                        <span className="co-row-label">Vehicle Type</span>
+                                        <span className="co-row-value" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                            {isMoto ? <MotoIcon /> : <CarIcon />}
+                                            {vehicleTypeName}
+                                        </span>
+                                    </div>
+                                    <div className="co-row">
+                                        <span className="co-row-label">Entry</span>
+                                        <span className="co-row-value" style={{ fontSize: 12 }}>{formatTime(entryDate)}</span>
+                                    </div>
+                                    <div className="co-row">
+                                        <span className="co-row-label">Exit</span>
+                                        <span className="co-row-value" style={{ fontSize: 12 }}>{formatTime(exitTime)}</span>
+                                    </div>
+                                    <div className="co-row">
+                                        <span className="co-row-label">Duration</span>
+                                        <span className="co-row-value">{Math.floor(elapsed / 3600)}h {Math.floor((elapsed % 3600) / 60)}m</span>
+                                    </div>
+                                    <div className="co-row">
+                                        <span className="co-row-label">Total Parking Fee</span>
+                                        <span className="co-row-value">{Math.round(currentFee).toLocaleString('vi-VN')} ₫</span>
+                                    </div>
+                                    {advancePayment > 0 && (
+                                        <div className="co-row" style={{ color: '#10b981' }}>
+                                            <span className="co-row-label">Prepaid (Booking)</span>
+                                            <span className="co-row-value">- {Math.round(advancePayment).toLocaleString('vi-VN')} ₫</span>
+                                        </div>
+                                    )}
+                                </>
                             )}
                             <div className="co-row">
                                 <span className="co-row-label">Amount Due</span>
                                 <span className="co-row-value">{Math.round(amountDue).toLocaleString('vi-VN')} ₫</span>
-                            </div>
-                            <div className="co-row">
-                                <span className="co-row-label">Service Fee (5%)</span>
-                                <span className="co-row-value">{serviceFee.toLocaleString('vi-VN')} ₫</span>
                             </div>
 
                             <div className="co-total-row">
@@ -893,7 +930,7 @@ const CheckoutPage = () => {
                                     </>
                                 ) : payMethod === 'bank_transfer' ? (
                                     <>
-                                        <BankIcon />
+                                        <QrCodeIcon />
                                         Generate QR Code
                                     </>
                                 ) : (

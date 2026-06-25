@@ -10,6 +10,7 @@ import type { Vehicle } from '../../services/api/vehicleService';
 import bookingService from '../../services/api/bookingService';
 import paymentService from '../../services/api/paymentService';
 import parkingLotService from '../../services/api/parkingLotService';
+import monthlyPassService, { MonthlyPass } from '../../services/api/monthlyPassService';
 import { useSocket } from '../../contexts/SocketContext';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -539,6 +540,7 @@ const BookingPage = () => {
     const [licensePlate, setLicensePlate] = useState('');
     const [plateError, setPlateError] = useState('');
     const [savedVehicles, setSavedVehicles] = useState<Vehicle[]>([]);
+    const [myMonthlyPasses, setMyMonthlyPasses] = useState<MonthlyPass[]>([]);
     const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
 
     // ── Step 2: Vehicle Type ──
@@ -954,6 +956,14 @@ const BookingPage = () => {
                 setSavedVehicles(list);
             })
             .catch(() => { /* not logged in or no vehicles */ });
+
+        // Fetch monthly passes to prevent booking if already has a pass
+        monthlyPassService.getMyMonthlyPasses()
+            .then((res: any) => {
+                const passes = Array.isArray(res?.data) ? res.data : (res?.data?.docs || res?.docs || (Array.isArray(res) ? res : []));
+                setMyMonthlyPasses(passes);
+            })
+            .catch(() => { /* ignore */ });
     }, []);
 
     useEffect(() => {
@@ -1052,6 +1062,19 @@ const BookingPage = () => {
             const cleaned = formatPlate(licensePlate);
             setLicensePlate(cleaned);
             if (cleaned.length < 4) { setPlateError('Please enter a valid license plate number'); return; }
+            
+            // Check if entered plate has active pass for this lot
+            const activePass = myMonthlyPasses.find(p => {
+                const pLotId = typeof p.parkingLot === 'object' ? p.parkingLot._id : p.parkingLot;
+                return p.licensePlate === cleaned && 
+                       ['active', 'pending'].includes(p.status) &&
+                       pLotId === parkingSpot._id;
+            });
+            if (activePass) {
+                setPlateError('This vehicle already has a Monthly Pass for this location. You can park without booking.');
+                return;
+            }
+            
             setPlateError('');
         }
         if (currentStep < 6) setCurrentStep(s => s + 1);
@@ -2120,11 +2143,22 @@ const BookingPage = () => {
                                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                                                     {matching.map(v => {
                                                         const isSelected = selectedVehicleId === v._id;
+                                                        // Check if vehicle has an active monthly pass for this parking lot
+                                                        const activePass = myMonthlyPasses.find(p => {
+                                                            const pLotId = typeof p.parkingLot === 'object' ? p.parkingLot._id : p.parkingLot;
+                                                            return p.licensePlate === v.licensePlate && 
+                                                                   ['active', 'pending'].includes(p.status) &&
+                                                                   pLotId === parkingSpot._id;
+                                                        });
+                                                        const isDisabled = !!activePass;
+
                                                         return (
                                                             <button
                                                                 key={v._id}
                                                                 type="button"
+                                                                disabled={isDisabled}
                                                                 onClick={() => {
+                                                                    if (isDisabled) return;
                                                                     setLicensePlate(v.licensePlate);
                                                                     setSelectedVehicleId(v._id);
                                                                     setPlateError('');
@@ -2134,12 +2168,13 @@ const BookingPage = () => {
                                                                     padding: '12px 16px',
                                                                     borderRadius: 14,
                                                                     border: isSelected ? '2px solid #2563eb' : '1.5px solid #e2e8f0',
-                                                                    background: isSelected ? '#eff6ff' : '#ffffff',
-                                                                    cursor: 'pointer',
+                                                                    background: isDisabled ? '#f8fafc' : (isSelected ? '#eff6ff' : '#ffffff'),
+                                                                    cursor: isDisabled ? 'not-allowed' : 'pointer',
                                                                     transition: 'all 0.15s',
                                                                     textAlign: 'left',
                                                                     width: '100%',
                                                                     boxShadow: isSelected ? '0 2px 8px rgba(37,99,235,0.15)' : '0 1px 3px rgba(0,0,0,0.04)',
+                                                                    opacity: isDisabled ? 0.6 : 1,
                                                                 }}
                                                             >
                                                                 <div style={{
@@ -2151,8 +2186,16 @@ const BookingPage = () => {
                                                                     <VehicleSvgIcon code={vehicleType?.code ?? 'CAR'} size={26} />
                                                                 </div>
                                                                 <div style={{ flex: 1, minWidth: 0 }}>
-                                                                    <div style={{ fontWeight: 800, fontSize: 14, color: '#1e293b', letterSpacing: 0.5 }}>
+                                                                    <div style={{ fontWeight: 800, fontSize: 14, color: '#1e293b', letterSpacing: 0.5, display: 'flex', alignItems: 'center', gap: '8px' }}>
                                                                         {v.licensePlate}
+                                                                        {isDisabled && (
+                                                                            <span style={{
+                                                                                fontSize: 10, fontWeight: 700, color: '#047857', background: '#d1fae5', 
+                                                                                padding: '2px 6px', borderRadius: 6, letterSpacing: 0
+                                                                            }}>
+                                                                                Has Monthly Pass
+                                                                            </span>
+                                                                        )}
                                                                     </div>
                                                                     <div style={{ fontSize: 12, color: '#64748b', fontWeight: 500 }}>
                                                                         {[v.vehicleBrand, v.vehicleModel].filter(Boolean).join(' ') || 'No details'}
@@ -2163,7 +2206,7 @@ const BookingPage = () => {
                                                                 {isSelected && (
                                                                     <div style={{ color: '#2563eb', fontWeight: 800, fontSize: 16 }}>✓</div>
                                                                 )}
-                                                                {v.isDefault && !isSelected && (
+                                                                {v.isDefault && !isSelected && !isDisabled && (
                                                                     <div style={{ fontSize: 10, fontWeight: 700, color: '#2563eb', background: '#dbeafe', padding: '2px 8px', borderRadius: 6 }}>Default</div>
                                                                 )}
                                                             </button>

@@ -147,8 +147,15 @@ const StaffExitPage = () => {
   }, [isExitCamActive, profile]);
   // Estimated Fee Calculation — Block-based pricing (4h blocks)
   const estimatedFees = useMemo(() => {
-    if (!activeSession || !activeSession.entryTime || !activeSession.vehicleType?.pricing) {
-      return { baseFee: activeSession?.baseFee || 0, overtimeFee: activeSession?.overtimeFee || 0, totalFee: activeSession?.totalFee || 0 };
+    if (!activeSession) return { baseFee: 0, overtimeFee: 0, totalFee: 0 };
+    
+    // Vé tháng thì không tính phí checkout
+    if (activeSession.monthlyPass) {
+      return { baseFee: 0, overtimeFee: 0, totalFee: 0 };
+    }
+
+    if (!activeSession.entryTime || !activeSession.vehicleType?.pricing) {
+      return { baseFee: activeSession.baseFee || 0, overtimeFee: activeSession.overtimeFee || 0, totalFee: activeSession.totalFee || 0 };
     }
 
     const now = new Date();
@@ -173,13 +180,13 @@ const StaffExitPage = () => {
       return fee;
     };
 
-    const baseFee = countBlockFee(entryTime, now);
-
-    // Overtime: if session was from a booking and now > scheduledEnd
+    let baseFee = 0;
     let overtimeFee = 0;
 
     // Has Booking
     if (activeSession.booking?.endTime && activeSession.booking?.scheduledDate) {
+      baseFee = activeSession.baseFee || activeSession.advancePayment || 0;
+      
       const scheduledDateStr = typeof activeSession.booking.scheduledDate === 'string'
         ? activeSession.booking.scheduledDate.split('T')[0]
         : new Date(activeSession.booking.scheduledDate).toISOString().split('T')[0];
@@ -192,6 +199,8 @@ const StaffExitPage = () => {
           overtimeFee = countBlockFee(scheduledEnd, now);
         }
       }
+    } else {
+      baseFee = countBlockFee(entryTime, now);
     }
 
     const totalFee = baseFee + overtimeFee;
@@ -253,7 +262,14 @@ const StaffExitPage = () => {
             payload = await verifyQRToken(query);
           } catch (tokenErr) {
             try {
-              payload = JSON.parse(query);
+              let cleanCode = query.replace(/\\"/g, '"').replace(/\\'/g, "'").trim();
+              if (cleanCode.startsWith('"') && cleanCode.endsWith('"')) {
+                cleanCode = cleanCode.substring(1, cleanCode.length - 1);
+              }
+              payload = JSON.parse(cleanCode);
+              if (typeof payload === 'string') {
+                payload = JSON.parse(payload);
+              }
             } catch (jsonErr) {
               if (typeof query === 'string' && query.trim().length > 0) {
                 if (query.includes('.')) throw new Error('Mã QR Checkout không hợp lệ hoặc đã hết hạn.');
@@ -262,6 +278,18 @@ const StaffExitPage = () => {
                 throw new Error('Định dạng QR không được hỗ trợ.');
               }
             }
+          }
+
+          if (payload.type === 'monthly_pass' || payload.passCode) {
+            const sessionRes = await parkingSessionService.findActive({ licensePlate: payload.licensePlate, parkingLotId: lotId });
+            if (sessionRes.data) {
+              setActiveSession(sessionRes.data);
+              setSessionFound(true);
+              showNotification(`Session found from Monthly Pass QR for plate: ${sessionRes.data.vehicleInfo?.licensePlate}`, 'success');
+            } else {
+              throw new Error("Xe chưa Check-in (không tìm thấy phiên đỗ xe).");
+            }
+            return;
           }
 
           // Trường hợp QR chứa sessionCode
@@ -358,7 +386,14 @@ const StaffExitPage = () => {
         payload = await verifyQRToken(qrValue);
       } catch (tokenErr: any) {
         try {
-          payload = JSON.parse(qrValue);
+          let cleanCode = qrValue.replace(/\\"/g, '"').replace(/\\'/g, "'").trim();
+          if (cleanCode.startsWith('"') && cleanCode.endsWith('"')) {
+            cleanCode = cleanCode.substring(1, cleanCode.length - 1);
+          }
+          payload = JSON.parse(cleanCode);
+          if (typeof payload === 'string') {
+            payload = JSON.parse(payload);
+          }
         } catch (jsonErr) {
           if (typeof qrValue === 'string' && qrValue.trim().length > 0) {
             const trimmed = qrValue.trim();
@@ -375,6 +410,21 @@ const StaffExitPage = () => {
             throw new Error('Định dạng QR không được hỗ trợ.');
           }
         }
+      }
+
+      if (payload.type === 'monthly_pass' || payload.passCode) {
+        const lotId = (profile?.assignedParkingLot as any)?._id || (profile?.assignedParkingLot as any);
+        const sessionRes = await parkingSessionService.findActive({ licensePlate: payload.licensePlate, parkingLotId: lotId });
+        if (sessionRes.data) {
+          setActiveSession(sessionRes.data);
+          setSessionFound(true);
+          setSearchQuery(sessionRes.data.vehicleInfo?.licensePlate || '');
+          showNotification(`Session found from Monthly Pass QR for plate: ${sessionRes.data.vehicleInfo?.licensePlate}`, 'success');
+        } else {
+          throw new Error("Xe chưa Check-in (không tìm thấy phiên đỗ xe).");
+        }
+        setTimeout(() => setIsProcessingQR(false), 2000);
+        return;
       }
 
       // Trường hợp QR chứa sessionCode thay vì sessionId
@@ -644,7 +694,11 @@ const StaffExitPage = () => {
                       <div>
                         <p className="text-xs text-gray-500 mb-1">Session Type</p>
                         <p className={`font-bold text-lg ${sessionFound ? 'text-gray-900' : 'text-gray-300'}`}>
-                          {sessionFound ? (activeSession?.booking ? 'Pre-booked' : (activeSession?.user ? 'Registered' : 'Guest')) : '---'}
+                          {sessionFound ? (
+                            activeSession?.monthlyPass ? 'Monthly Pass' :
+                            activeSession?.booking ? 'Pre-booked' :
+                            (activeSession?.user ? 'Registered' : 'Guest')
+                          ) : '---'}
                         </p>
                       </div>
                       <div>
@@ -683,9 +737,9 @@ const StaffExitPage = () => {
                     <div className="border-t border-gray-100 pt-4 flex items-center justify-between">
                       <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Payment Status</span>
                       {sessionFound ? (
-                        <div className={`flex items-center text-sm font-bold ${activeSession?.paymentStatus === 'paid' ? 'text-green-600' : 'text-orange-500'}`}>
-                          {activeSession?.paymentStatus === 'paid' ? (
-                            <><CheckCircle2 className="w-4 h-4 mr-2" /> Paid</>
+                        <div className={`flex items-center text-sm font-bold ${(activeSession?.paymentStatus === 'paid' || activeSession?.monthlyPass) ? 'text-green-600' : 'text-orange-500'}`}>
+                          {(activeSession?.paymentStatus === 'paid' || activeSession?.monthlyPass) ? (
+                            <><CheckCircle2 className="w-4 h-4 mr-2" /> {activeSession?.monthlyPass ? 'Paid (Monthly Pass)' : 'Paid'}</>
                           ) : (
                             <><AlertTriangle className="w-4 h-4 mr-2" /> Pending Payment</>
                           )}

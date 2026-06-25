@@ -99,13 +99,15 @@ const CheckoutSuccessPage = () => {
     const location = useLocation();
     const data = location.state || {};
 
+    const isMonthlyPass = data.isMonthlyPass === true;
+
     const spot = data.spot || { title: 'Bitexco Financial Tower Parking', price: 20000 };
     const vehicleType = data.vehicleType || 'car';
     const floorObj = data.floor;
     const slotObj = data.slot;
 
     const isMoto = typeof vehicleType === 'object' ? vehicleType.code === 'motorcycle' : vehicleType === 'motorcycle';
-    const vehicleTypeName = typeof vehicleType === 'object' ? vehicleType.name : (isMoto ? 'Motorcycle' : 'Car');
+    const vehicleTypeName = data.vehicleTypeName || (typeof vehicleType === 'object' ? vehicleType.name : (isMoto ? 'Motorcycle' : 'Car'));
 
     const floorName = typeof floorObj === 'object' && floorObj !== null ? (floorObj.name || `Floor ${floorObj.floorNumber}`) : `Floor ${floorObj || 3}`;
     const slotCode = data.slotCode || (typeof slotObj === 'object' && slotObj !== null ? slotObj.slotCode : `${String.fromCharCode(64 + Number(floorObj || 3))}-${floorObj || 3}05`);
@@ -422,11 +424,13 @@ const CheckoutSuccessPage = () => {
                     <div className="cs-check-wrap">
                         <AnimatedCheck />
                     </div>
-                    <div className="cs-hero-title">Payment Successful! </div>
+                    <div className="cs-hero-title">{isMonthlyPass ? 'Purchase Successful!' : 'Payment Successful!'} </div>
                     <div className="cs-hero-sub">
-                        {data.isBooking
-                            ? "Your parking slot has been successfully booked. Thank you!"
-                            : "Your parking session has been checked out. Thank you!"}
+                        {isMonthlyPass
+                            ? "Your monthly pass has been successfully registered. Thank you!"
+                            : data.isBooking
+                                ? "Your parking slot has been successfully booked. Thank you!"
+                                : "Your parking session has been checked out. Thank you!"}
                     </div>
                 </div>
 
@@ -435,20 +439,22 @@ const CheckoutSuccessPage = () => {
                     <div className="cs-card cs-in">
                         <div className="receipt-id-bar">
                             <div>
-                                <div className="receipt-id-label">Receipt ID</div>
-                                <div className="receipt-id-value">{receiptId}</div>
+                                <div className="receipt-id-label">{isMonthlyPass ? 'Pass Code' : 'Receipt ID'}</div>
+                                <div className="receipt-id-value">{isMonthlyPass ? data.passCode : receiptId}</div>
                             </div>
                             <div className="pay-chip">
                                 <span className="pay-chip-dot"></span>
-                                Paid
+                                {isMonthlyPass ? 'Pending Payment / Active' : 'Paid'}
                             </div>
                         </div>
 
                         {/* Parking info */}
-                        <div className="r-section-title"> Parking Details</div>
+                        <div className="r-section-title"> {isMonthlyPass ? 'Pass Details' : 'Parking Details'}</div>
                         <div className="r-row">
                             <span className="r-label">Facility</span>
-                            <span className="r-value" style={{ maxWidth: '55%', textAlign: 'right', fontSize: 12 }}>{spot.title}</span>
+                            <span className="r-value" style={{ maxWidth: '55%', textAlign: 'right', fontSize: 12 }}>
+                                {isMonthlyPass ? data.parkingLotName : spot.title}
+                            </span>
                         </div>
                         <div className="r-row">
                             <span className="r-label">Vehicle</span>
@@ -461,57 +467,94 @@ const CheckoutSuccessPage = () => {
                             <span className="r-label">License Plate</span>
                             <span className="r-value" style={{ fontFamily: 'monospace', letterSpacing: '0.06em' }}>{licensePlate}</span>
                         </div>
-                        <div className="r-row">
-                            <span className="r-label">Floor / Slot</span>
-                            <span className="r-value">{floorName} — {slotCode}</span>
-                        </div>
+                        
+                        {!isMonthlyPass ? (
+                            <div className="r-row">
+                                <span className="r-label">Floor / Slot</span>
+                                <span className="r-value">{floorName} — {slotCode}</span>
+                            </div>
+                        ) : null}
 
                         <div className="r-divider"></div>
 
                         {/* Time info */}
-                        <div className="r-section-title"> Time Details</div>
-                        <div className="r-row">
-                            <span className="r-label">Entry</span>
-                            <span className="r-value" style={{ fontSize: 12 }}>{formatTime(entryDate)}</span>
-                        </div>
-                        <div className="r-row">
-                            <span className="r-label">Exit</span>
-                            <span className="r-value" style={{ fontSize: 12 }}>{formatTime(exitTime)}</span>
-                        </div>
-                        <div className="r-row">
-                            <span className="r-label">Total Duration</span>
-                            <span className="r-value">{Math.floor(elapsed / 3600)}h {Math.floor((elapsed % 3600) / 60)}m</span>
-                        </div>
+                        {!isMonthlyPass ? (
+                            <>
+                                <div className="r-section-title"> Time Details</div>
+                                <div className="r-row">
+                                    <span className="r-label">Entry</span>
+                                    <span className="r-value" style={{ fontSize: 12 }}>{formatTime(entryDate)}</span>
+                                </div>
+                                <div className="r-row">
+                                    <span className="r-label">Exit</span>
+                                    <span className="r-value" style={{ fontSize: 12 }}>{formatTime(exitTime)}</span>
+                                </div>
+                                <div className="r-row">
+                                    <span className="r-label">Total Duration</span>
+                                    <span className="r-value">{Math.floor(elapsed / 3600)}h {Math.floor((elapsed % 3600) / 60)}m</span>
+                                </div>
+                            </>
+                        ) : (
+                            <>
+                                <div className="r-section-title">Validity Period</div>
+                                <div className="r-row">
+                                    <span className="r-label">Start Date</span>
+                                    <span className="r-value" style={{ fontSize: 12 }}>{new Date(data.startDate).toLocaleDateString('en-GB')}</span>
+                                </div>
+                                <div className="r-row">
+                                    <span className="r-label">End Date</span>
+                                    <span className="r-value" style={{ fontSize: 12 }}>{new Date(data.endDate).toLocaleDateString('en-GB')}</span>
+                                </div>
+                                <div className="r-row">
+                                    <span className="r-label">Duration</span>
+                                    <span className="r-value">{data.durationMonths} Month{data.durationMonths > 1 ? 's' : ''}</span>
+                                </div>
+                            </>
+                        )}
 
                         <div className="r-divider"></div>
 
                         {/* Payment info */}
                         <div className="r-section-title"> Payment</div>
-                        <div className="r-row">
-                            <span className="r-label">Parking Fee</span>
-                            <span className="r-value">{Math.round(totalAmount).toLocaleString('vi-VN')} ₫</span>
-                        </div>
+                        {!isMonthlyPass ? (
+                            <>
+                                <div className="r-row">
+                                    <span className="r-label">Parking Fee</span>
+                                    <span className="r-value">{Math.round(totalAmount).toLocaleString('vi-VN')} ₫</span>
+                                </div>
 
-                        <div className="r-row">
-                            <span className="r-label">Payment Method</span>
-                            <span className="r-value">{payMethodLabel}</span>
-                        </div>
+                                <div className="r-row">
+                                    <span className="r-label">Payment Method</span>
+                                    <span className="r-value">{payMethodLabel}</span>
+                                </div>
 
-                        <div className="r-total">
-                            <span className="r-total-label">Total Paid</span>
-                            <span className="r-total-amount">{grandTotal.toLocaleString('vi-VN')} ₫</span>
-                        </div>
+                                <div className="r-total">
+                                    <span className="r-total-label">Total Paid</span>
+                                    <span className="r-total-amount">{grandTotal.toLocaleString('vi-VN')} ₫</span>
+                                </div>
+                            </>
+                        ) : (
+                            <>
+                                <div className="r-row">
+                                    <span className="r-label">Monthly Rate</span>
+                                    <span className="r-value">{Math.round(data.price / data.durationMonths).toLocaleString('vi-VN')} ₫ / month</span>
+                                </div>
+                                <div className="r-total">
+                                    <span className="r-total-label">Total Fee</span>
+                                    <span className="r-total-amount">{Math.round(data.price).toLocaleString('vi-VN')} ₫</span>
+                                </div>
+                            </>
+                        )}
                     </div>
 
 
 
-                    {/* Actions */}
                     <div className="cs-in-2">
                         <button
                             className="cs-btn-primary"
-                            onClick={() => navigate('/')}
+                            onClick={() => navigate(isMonthlyPass ? '/my-vehicles' : '/')}
                         >
-                            <HomeIcon /> Back to Home
+                            <HomeIcon /> {isMonthlyPass ? 'Back to My Vehicles' : 'Back to Home'}
                         </button>
                     </div>
                 </div>
