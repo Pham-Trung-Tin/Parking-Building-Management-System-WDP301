@@ -96,6 +96,7 @@ const MyVehiclesPage: React.FC = () => {
   const [success, setSuccess] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [plateError, setPlateError] = useState<string | null>(null);
+  const [editHasActivePass, setEditHasActivePass] = useState(false);
 
   // Vehicle form
   const emptyForm: VehiclePayload = { vehicleType: '', licensePlate: '', vehicleModel: '', vehicleColor: '', vehicleBrand: '', nickname: '' };
@@ -163,13 +164,16 @@ const MyVehiclesPage: React.FC = () => {
 
   const clearMessages = () => { setError(null); setSuccess(null); };
 
-  const openAdd = () => { clearMessages(); setForm(emptyForm); setEditingId(null); setShowForm(true); };
+  const openAdd = () => { clearMessages(); setForm(emptyForm); setEditingId(null); setEditHasActivePass(false); setShowForm(true); };
 
   const openEdit = (v: Vehicle) => {
     clearMessages();
     const vtId = typeof v.vehicleType === 'object' ? v.vehicleType._id : v.vehicleType;
     setForm({ vehicleType: vtId, licensePlate: v.licensePlate, vehicleModel: v.vehicleModel || '', vehicleColor: v.vehicleColor || '', vehicleBrand: v.vehicleBrand || '', nickname: v.nickname || '' });
     setEditingId(v._id);
+    // Check if this vehicle has an active/pending monthly pass → lock vehicleType
+    const hasPass = monthlyPasses.some(p => p.licensePlate === v.licensePlate && ['active', 'pending'].includes(p.status));
+    setEditHasActivePass(hasPass);
     setShowForm(true);
   };
 
@@ -301,10 +305,22 @@ const MyVehiclesPage: React.FC = () => {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="sm:col-span-2">
                       <label className={labelCls}>Vehicle Type *</label>
-                      <select value={form.vehicleType} onChange={e => setForm({ ...form, vehicleType: e.target.value })} className={inputCls} required>
+                      <select
+                        value={form.vehicleType}
+                        onChange={e => setForm({ ...form, vehicleType: e.target.value })}
+                        className={`${inputCls} ${editHasActivePass ? 'opacity-60 cursor-not-allowed bg-slate-100' : ''}`}
+                        required
+                        disabled={editHasActivePass}
+                      >
                         <option value="">-- Select type --</option>
                         {vehicleTypes.map(vt => <option key={vt._id} value={vt._id}>{vt.name}</option>)}
                       </select>
+                      {editHasActivePass && (
+                        <p className="text-xs text-amber-600 mt-1.5 font-medium flex items-center gap-1.5">
+                          <svg className="w-3.5 h-3.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" /></svg>
+                          Cannot change vehicle type — this vehicle has an active monthly pass
+                        </p>
+                      )}
                     </div>
                     <div>
                       <label className={labelCls}>License Plate *</label>
