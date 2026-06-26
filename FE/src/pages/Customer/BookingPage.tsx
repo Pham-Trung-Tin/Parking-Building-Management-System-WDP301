@@ -657,12 +657,14 @@ const BookingPage = () => {
 
     const openCalendar = (mode: 'from' | 'to') => {
         const fromDate = new Date(entryDate.slice(0, 10));
-        const toDate = new Date(exitDate);
+        const toDate = new Date(exitDate.slice(0, 10));
 
         setTempFromDate(fromDate);
         setTempToDate(toDate);
-        setCalMonth(fromDate.getMonth());
-        setCalYear(fromDate.getFullYear());
+        
+        const targetDate = mode === 'from' ? fromDate : toDate;
+        setCalMonth(targetDate.getMonth());
+        setCalYear(targetDate.getFullYear());
         setActiveInput(mode);
         setShowCalendar(true);
     };
@@ -2386,13 +2388,13 @@ const BookingPage = () => {
                                                 <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}> Booking Date</div>
                                                 <button
                                                     onClick={() => {
-                                                        if (showCalendar) setShowCalendar(false);
+                                                        if (showCalendar && activeInput === 'from') setShowCalendar(false);
                                                         else openCalendar('from');
                                                     }}
                                                     style={{
                                                         width: '100%',
                                                         background: 'white',
-                                                        border: showCalendar ? '1.5px solid #2563eb' : '1.5px solid #e2e8f0',
+                                                        border: (showCalendar && activeInput === 'from') ? '1.5px solid #2563eb' : '1.5px solid #e2e8f0',
                                                         borderRadius: 14,
                                                         padding: '14px 18px',
                                                         fontSize: 15,
@@ -2402,13 +2404,61 @@ const BookingPage = () => {
                                                         alignItems: 'center',
                                                         justifyContent: 'space-between',
                                                         cursor: 'pointer',
-                                                        boxShadow: showCalendar ? '0 0 0 3px rgba(37,99,235,0.15)' : '0 1px 3px rgba(0,0,0,0.05)',
+                                                        boxShadow: (showCalendar && activeInput === 'from') ? '0 0 0 3px rgba(37,99,235,0.15)' : '0 1px 3px rgba(0,0,0,0.05)',
                                                         transition: 'all 0.2s',
                                                     }}
                                                 >
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                                                         {/* <span style={{ fontSize: 16 }}>📅</span> */}
                                                         <span>{fmtCalBtnDate(fromDt)}</span>
+                                                    </div>
+                                                    <span style={{ color: '#94a3b8', fontSize: 10 }}>▼</span>
+                                                </button>                                            </div>
+                                        );
+                                    })()}
+
+                                    {/* ── 1.5 EXIT DATE ── */}
+                                    {(() => {
+                                        const MONTH_NAMES = [
+                                            'January', 'February', 'March', 'April', 'May', 'June',
+                                            'July', 'August', 'September', 'October', 'November', 'December'
+                                        ];
+                                        const toDt = new Date(exitDate.slice(0, 10));
+                                        
+                                        const fmtCalBtnDate = (d: Date) => {
+                                            const day = String(d.getDate()).padStart(2, '0');
+                                            const month = MONTH_NAMES[d.getMonth()];
+                                            const year = d.getFullYear();
+                                            return `${day} ${month}, ${year}`;
+                                        };
+
+                                        return (
+                                            <div style={{ position: 'relative', marginBottom: 28 }}>
+                                                <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}> Exit Date</div>
+                                                <button
+                                                    onClick={() => {
+                                                        if (showCalendar && activeInput === 'to') setShowCalendar(false);
+                                                        else openCalendar('to');
+                                                    }}
+                                                    style={{
+                                                        width: '100%',
+                                                        background: 'white',
+                                                        border: (showCalendar && activeInput === 'to') ? '1.5px solid #2563eb' : '1.5px solid #e2e8f0',
+                                                        borderRadius: 14,
+                                                        padding: '14px 18px',
+                                                        fontSize: 15,
+                                                        fontWeight: 700,
+                                                        color: '#334155',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'space-between',
+                                                        cursor: 'pointer',
+                                                        boxShadow: (showCalendar && activeInput === 'to') ? '0 0 0 3px rgba(37,99,235,0.15)' : '0 1px 3px rgba(0,0,0,0.05)',
+                                                        transition: 'all 0.2s',
+                                                    }}
+                                                >
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                                        <span>{fmtCalBtnDate(toDt)}</span>
                                                     </div>
                                                     <span style={{ color: '#94a3b8', fontSize: 10 }}>▼</span>
                                                 </button>                                            </div>
@@ -3157,7 +3207,7 @@ const BookingPage = () => {
                         <div className="cal-modal-content" onClick={e => e.stopPropagation()}>
                             {/* Title inside Modal */}
                             <div style={{ textAlign: 'center', marginBottom: 16, fontSize: 16, fontWeight: 800, color: '#1e293b' }}>
-                                Select Booking Date
+                                Select {activeInput === 'from' ? 'Booking Date' : 'Exit Date'}
                             </div>
 
                             <div className="cal-popover-header">
@@ -3201,7 +3251,7 @@ const BookingPage = () => {
                                     const cellDate = new Date(cell.year, cell.month, cell.day);
                                     const isPast = isBeforeDay(cellDate, todayOnly);
 
-                                    const isSelected = isSameDay(cellDate, tempFromDate);
+                                    const isSelected = isSameDay(cellDate, activeInput === 'from' ? tempFromDate : tempToDate);
 
                                     let cellClass = 'cal-day-cell';
                                     if (!cell.isCurrentMonth) cellClass += ' other-month';
@@ -3214,13 +3264,35 @@ const BookingPage = () => {
                                             className={cellClass}
                                             onClick={() => {
                                                 if (isPast) return;
-                                                const selHour = parseInt(entryDate.slice(11, 13)) || 0;
-                                                const selMin = parseInt(entryDate.slice(14, 16)) || 0;
                                                 const dateStr = `${cellDate.getFullYear()}-${String(cellDate.getMonth() + 1).padStart(2, '0')}-${String(cellDate.getDate()).padStart(2, '0')}`;
-                                                handleSetEntryDate(dateStr, selHour, selMin);
 
-                                                setTempFromDate(cellDate);
-                                                setTempToDate(cellDate);
+                                                if (activeInput === 'from') {
+                                                    const selHour = parseInt(entryDate.slice(11, 13)) || 0;
+                                                    const selMin = parseInt(entryDate.slice(14, 16)) || 0;
+                                                    handleSetEntryDate(dateStr, selHour, selMin);
+                                                    setTempFromDate(cellDate);
+                                                    
+                                                    // Ensure exit date shifts if entry passes it
+                                                    const proposedEntry = new Date(`${dateStr}T${String(selHour).padStart(2, '0')}:${String(selMin).padStart(2, '0')}`);
+                                                    const currentExit = new Date(exitDate);
+                                                    if (proposedEntry >= currentExit) {
+                                                        const nextExit = new Date(proposedEntry.getTime() + 4 * 3600000);
+                                                        const iso = nextExit.toISOString();
+                                                        setExitDate(`${iso.slice(0,10)}T${String(nextExit.getHours()).padStart(2,'0')}:${String(nextExit.getMinutes()).padStart(2,'0')}`);
+                                                        setTempToDate(nextExit);
+                                                    }
+                                                } else {
+                                                    const exitSelHour = parseInt(exitDate.slice(11, 13)) || 0;
+                                                    const exitSelMin = parseInt(exitDate.slice(14, 16)) || 0;
+                                                    const newExitDate = `${dateStr}T${String(exitSelHour).padStart(2, '0')}:${String(exitSelMin).padStart(2, '0')}`;
+                                                    
+                                                    if (new Date(newExitDate) <= new Date(entryDate)) {
+                                                        alert("Exit date/time must be after arrival date/time.");
+                                                        return;
+                                                    }
+                                                    setExitDate(newExitDate);
+                                                    setTempToDate(cellDate);
+                                                }
                                                 setShowCalendar(false);
                                             }}
                                         >
