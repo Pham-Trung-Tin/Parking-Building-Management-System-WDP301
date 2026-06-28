@@ -251,9 +251,16 @@ const SessionPage = () => {
 
     if (bookingInfo && (bookingInfo as any).endTime && (bookingInfo as any).scheduledDate) {
         const scheduledDateStr = (bookingInfo as any).scheduledDate.split('T')[0];
-        const scheduledEnd = new Date(`${scheduledDateStr}T${(bookingInfo as any).endTime}:00`);
-        const now = new Date(Date.now() + devTimeOffset);
         const scheduledStart = new Date(`${scheduledDateStr}T${(bookingInfo as any).startTime}:00`);
+        let scheduledEnd = new Date(`${scheduledDateStr}T${(bookingInfo as any).endTime}:00`);
+
+        // ── Fix cross-midnight: nếu endTime < startTime (ví dụ 22:00 → 01:03)
+        //    thì scheduledEnd thực ra là ngày hôm sau ─────────────────────────
+        if (scheduledEnd <= scheduledStart) {
+            scheduledEnd = new Date(scheduledEnd.getTime() + 24 * 60 * 60 * 1000);
+        }
+
+        const now = new Date(Date.now() + devTimeOffset);
 
         if (now > scheduledEnd) {
             isOvertime = true;
