@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import Header from '../../components/Header/Header';
 
@@ -110,6 +110,7 @@ const LiveSessionCard = ({ session, onClick }: { session: ParkingSession; onClic
 
 const MyTicketsPage = () => {
     const navigate = useNavigate();
+    const location = useLocation();
     const [tickets, setTickets] = useState<Ticket[]>([]);
     const [qrTokens, setQrTokens] = useState<Record<string, string>>({});
     const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
@@ -123,6 +124,14 @@ const MyTicketsPage = () => {
         setNotification({ message, type });
         setTimeout(() => setNotification(null), 3500);
     }, []);
+
+    useEffect(() => {
+        if (location.state?.showToast) {
+            showNotification(location.state.showToast, 'success');
+            // Xóa state để không hiện lại nếu reload trang
+            window.history.replaceState({}, document.title);
+        }
+    }, [location.state, showNotification]);
 
     // ── DATA FETCHING ─────────────────────────────────────────────────────────
     const { socket } = useSocket();

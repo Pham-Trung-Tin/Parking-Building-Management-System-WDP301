@@ -829,20 +829,9 @@ const BookingPage = () => {
 
                         saveToMyTickets(successBooking);
                         
-                        navigate('/checkoutsuccess', {
+                        navigate('/tickets', {
                             state: {
-                                isBooking: true,
-                                spot: parkingSpot,
-                                vehicleType: vehicleType,
-                                floor: selectedFloor,
-                                slot: selectedSlot,
-                                licensePlate: formatPlate(licensePlate),
-                                entryDate: new Date(entryDate).toISOString(),
-                                exitTime: exitTime.toISOString(),
-                                elapsed: new Date(exitDate).getTime() - new Date(entryDate).getTime(),
-                                totalAmount: estimatedPrice,
-                                payMethod: payMethod,
-                                transactionId: `REC-${Math.floor(100000 + Math.random() * 900000)}`
+                                showToast: 'Booking successful! Your ticket has been saved here.'
                             }
                         });
 
@@ -897,20 +886,9 @@ const BookingPage = () => {
                 // Cash/Momo (Mock for now): directly show success
                 saveToMyTickets(bookingRes.data || bookingRes);
                 
-                navigate('/checkoutsuccess', {
+                navigate('/tickets', {
                     state: {
-                        isBooking: true,
-                        spot: parkingSpot,
-                        vehicleType: vehicleType,
-                        floor: selectedFloor,
-                        slot: selectedSlot,
-                        licensePlate: formatPlate(licensePlate),
-                        entryDate: new Date(entryDate).toISOString(),
-                        exitTime: exitTime.toISOString(),
-                        elapsed: new Date(exitDate).getTime() - new Date(entryDate).getTime(),
-                        totalAmount: estimatedPrice,
-                        payMethod: payMethod,
-                        transactionId: `REC-${Math.floor(100000 + Math.random() * 900000)}`
+                        showToast: 'Booking successful! Your ticket has been saved here.'
                     }
                 });
 

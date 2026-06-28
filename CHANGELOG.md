@@ -48,6 +48,12 @@ Tài liệu này lưu trữ lại tất cả những thay đổi đã được t
 - **Sửa Lỗi Tính Phí Phụ Thu Qua Đêm (Cross-Midnight Surcharge Bug)**:
   - Khắc phục triệt để lỗi logic nghiêm trọng trên `SessionPage.tsx` khiến hệ thống tự động báo "Overtime" và sinh ra hàng tá "Surcharge logs" ảo ngay khi người dùng vừa Check-in vào bãi đỗ xe.
   - *Nguyên nhân & Giải pháp*: Khi người dùng đặt vé qua đêm (ví dụ vào 22:00, ra 01:00 sáng hôm sau), `endTime` (01:00) vô tình bị hiểu là nhỏ hơn `startTime` (22:00) trên cùng một mốc ngày giờ, dẫn tới thời gian hết hạn bị lùi về quá khứ 20 tiếng. Đã bổ sung logic phát hiện nếu `endTime <= startTime` thì sẽ tự động cộng thêm một ngày (`24 * 60 * 60 * 1000` ms) vào `scheduledEnd`, trả lại sự chính xác tuyệt đối cho bộ máy tính phí.
+- **Sửa Lỗi Reactivity Cho Floating Session Widget**:
+  - Khắc phục tình trạng Widget không hiển thị ngay lập tức sau khi đăng nhập mà phải reload trang (`FloatingSessionWidget.tsx`).
+  - Giải pháp: Bổ sung luồng phát sự kiện Custom Event (`window.dispatchEvent(new Event('authChange'))`) ngay sau khi lưu/xóa dữ liệu user trong `localStorage` tại các trang `LoginPage.tsx`, `Header.tsx` và `HomePage.tsx`. Widget giờ đây tự động render lại ngay lập tức (real-time).
+- **Sửa Lỗi Lệch Múi Giờ (Timezone Bug) Tính Phụ Thu Sai Ngay Lúc Check-in**:
+  - Cập nhật lại cách parse ngày tháng `scheduledDate` trên giao diện `SessionPage.tsx`.
+  - Loại bỏ phương pháp cắt chuỗi thô sơ `.split('T')[0]` (gây ra tình trạng lấy nhầm ngày UTC quốc tế, khiến cho giờ kết thúc bị lùi lại 1 ngày về quá khứ). Thay vào đó, khởi tạo và bóc tách trực tiếp bằng Object `Date` (`getFullYear()`, `getMonth()`, `getDate()`) để bảo toàn múi giờ local của trình duyệt (GMT+7). Nhờ đó, loại bỏ hoàn toàn số tiền phụ thu ảo xuất hiện ngay khi vừa check-in.
 
 ## 2. Hệ Thống Backend & Database (Seeder)
 - **Hỗ trợ Slot Locking**:
@@ -72,3 +78,9 @@ Tài liệu này lưu trữ lại tất cả những thay đổi đã được t
 - Hỗ trợ làm mới toàn bộ môi trường kiểm thử: Bất cứ khi nào cần cập nhật lại cấu trúc hệ thống, chỉ cần chạy lệnh `node src/seeders/index.js --clear` để reset toàn bộ Database về trạng thái ổn định nhất.
 - Bàn giao chức năng cho bộ phận Staff App: Khởi tạo và bàn giao file **`Task_Staff_QR_Checkout.md`** mô tả cực kỳ chi tiết về kiến trúc payload, luồng xử lý quét JWT Token, cũng như hướng dẫn catch lỗi phục vụ cho team Staff triển khai máy quét Barcode/Camera tích hợp tại Cổng Ra (`StaffExitPage`).
 - Bổ sung tài liệu chuẩn hóa luồng nghiệp vụ: Tạo tệp tài liệu ghi chú tổng hợp `parking_workflow_documentation.md` ghi chép luồng dữ liệu của Hệ thống Booking, sinh mã QR, quá trình Check-in và Checkout dành riêng cho cổng nhân viên.
+- Khởi tạo tài liệu `fee_calculation_logic.md` tại thư mục FE mô tả rất chi tiết bằng chữ và hình ảnh các khối logic tính tiền đỗ xe/phụ thu (Day/Night Block-based) của hệ thống.
+- **Nâng Cấp Database Hỗ Trợ Lưu Lịch Sử Phụ Thu & Số Lượng Block (Block-based Tracking)**:
+  - Cập nhật `parkingSession.model.js`: Thêm các trường `totalBlocks`, `dayBlocksCount`, `nightBlocksCount` và mảng đối tượng `surchargeLogs` để lưu vết chi tiết từng loại phụ thu (early, late, fallback).
+  - Cập nhật `payment.model.js`: Bổ sung thêm trường `surchargeLogs`.
+  - Cải tiến Utils Tính Phí (`src/utils/helpers.js`): Viết lại logic trong hàm `calculateParkingFee` để không chỉ đếm tổng tiền mà còn theo dõi và đếm số block ngày/đêm. Hàm `calculateOvertimeFee` giờ đây tự động sinh ra mảng chi tiết Log tính tiền định dạng `{ type, timestamp, amount, label }`.
+  - Cập nhật `parkingSession.service.js`: Gắn chặt mảng Log chi tiết và số đếm Block này vào `Session` ngay khi tiến hành thao tác Checkout, lưu vĩnh viễn vào Database làm nguồn dữ liệu chuẩn (Single Source of Truth) thay vì để FE tự biên tự diễn.
