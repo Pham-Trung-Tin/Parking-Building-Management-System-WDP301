@@ -841,7 +841,7 @@ const SessionPage = () => {
                                         size={200}
                                         bgColor="#ffffff"
                                         fgColor="#0f172a"
-                                        level="H"
+                                        level="L"
                                         includeMargin={false}
                                     />
                                 ) : (
@@ -1186,7 +1186,7 @@ const SessionPage = () => {
                                     size={Math.min(window.innerWidth - 100, 320)}
                                     bgColor="#ffffff"
                                     fgColor="#0f172a"
-                                    level="H"
+                                    level="L"
                                     includeMargin={false}
                                 />
                             </div>

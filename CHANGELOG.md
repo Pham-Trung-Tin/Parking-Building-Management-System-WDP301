@@ -45,6 +45,7 @@ Tài liệu này lưu trữ lại tất cả những thay đổi đã được t
   - Thay thế hoàn toàn cơ chế tạo mã QR bằng chuỗi Base64 HMAC-SHA256 dài (~150-250 ký tự) bằng các chuỗi định danh ngắn gọn: `ci_<bookingId>` (cho Check-in) và `co_<sessionId>` (cho Check-out) dài khoảng 27 ký tự. 
   - Việc này làm giảm mạnh mật độ điểm ảnh (version) của mã QR, giúp Camera của thiết bị nhân viên quét siêu tốc, nhạy và chính xác hơn ngay cả trong điều kiện chói sáng hay trầy xước màn hình.
   - Cập nhật lại toàn bộ logic trong `StaffPage.tsx` và `StaffExitPage.tsx` (bao gồm cả máy quét cầm tay và camera nhận diện) để ưu tiên đọc luồng QR mới này, nhưng vẫn đảm bảo tính tương thích ngược (backward compatibility) với các token HMAC cũ.
+  - **Sửa thêm mức Error Correction của mã QR Checkout** (`SessionPage.tsx`): Phát hiện và hạ cấp `level` từ `"H"` (High — 30% overhead, thiết kế cho vật liệu in vật lý dễ xước/bẩn) xuống `"L"` (Low — 7% overhead, phù hợp cho màn hình điện thoại) ở cả 2 vị trí render QR trên trang (QR chính và QR modal phóng to). Đây chính là nguyên nhân khiến mã QR check-out vẫn còn dày sau khi đã rút gọn nội dung chuỗi. Thay đổi này không ảnh hưởng gì đến khả năng quét vì QR hiển thị trên màn hình luôn sắc nét 100%.
 - **Sửa Lỗi Tính Phí Phụ Thu Qua Đêm (Cross-Midnight Surcharge Bug)**:
   - Khắc phục triệt để lỗi logic nghiêm trọng trên `SessionPage.tsx` khiến hệ thống tự động báo "Overtime" và sinh ra hàng tá "Surcharge logs" ảo ngay khi người dùng vừa Check-in vào bãi đỗ xe.
   - *Nguyên nhân & Giải pháp*: Khi người dùng đặt vé qua đêm (ví dụ vào 22:00, ra 01:00 sáng hôm sau), `endTime` (01:00) vô tình bị hiểu là nhỏ hơn `startTime` (22:00) trên cùng một mốc ngày giờ, dẫn tới thời gian hết hạn bị lùi về quá khứ 20 tiếng. Đã bổ sung logic phát hiện nếu `endTime <= startTime` thì sẽ tự động cộng thêm một ngày (`24 * 60 * 60 * 1000` ms) vào `scheduledEnd`, trả lại sự chính xác tuyệt đối cho bộ máy tính phí.
@@ -84,3 +85,52 @@ Tài liệu này lưu trữ lại tất cả những thay đổi đã được t
   - Cập nhật `payment.model.js`: Bổ sung thêm trường `surchargeLogs`.
   - Cải tiến Utils Tính Phí (`src/utils/helpers.js`): Viết lại logic trong hàm `calculateParkingFee` để không chỉ đếm tổng tiền mà còn theo dõi và đếm số block ngày/đêm. Hàm `calculateOvertimeFee` giờ đây tự động sinh ra mảng chi tiết Log tính tiền định dạng `{ type, timestamp, amount, label }`.
   - Cập nhật `parkingSession.service.js`: Gắn chặt mảng Log chi tiết và số đếm Block này vào `Session` ngay khi tiến hành thao tác Checkout, lưu vĩnh viễn vào Database làm nguồn dữ liệu chuẩn (Single Source of Truth) thay vì để FE tự biên tự diễn.
+
+---
+
+## Phiên Làm Việc Ngày 29/06/2026
+
+### Frontend (FE)
+
+#### `FE/src/pages/Customer/SessionPage.tsx`
+- **Thêm import `paymentService`**: Tích hợp service thanh toán vào trang Session để hỗ trợ gọi API nội tuyến.
+- **Thêm các state mới cho Surcharge Payment Modal**: `showSurchargeModal`, `surchargePhase` (`'method' | 'qr'`), `surchargePayMethod`, `surchargeBankInfo`, `surchargePolling`, `surchargeProcessing`, `showPaySuccessToast`.
+- **Thay thế `handlePayCheckout` — bỏ điều hướng sang `/checkout`**: Khi bấm "Pay Surcharge", thay vì navigate sang trang Checkout riêng, hệ thống nay mở một **popup thanh toán nội tuyến** (inline modal) ngay trên trang Session.
+- **Popup thanh toán 2 giai đoạn** (giống luồng Booking):
+  - **Giai đoạn 1 — Chọn phương thức**: Hiển thị 3 tùy chọn (Bank Transfer/VietQR, MoMo, Pay at Counter) kèm tóm tắt số tiền phụ thu cần thanh toán.
+  - **Giai đoạn 2 — QR Code**: Sau khi bấm "Confirm Payment" với Bank Transfer, gọi `paymentService.initiateBankTransfer(session._id)`, chuyển sang màn hình QR VietQR (ảnh từ img.vietqr.io) kèm nội dung chuyển khoản SEPay.
+- **Thêm polling tự động**: Mỗi 3 giây gọi `paymentService.checkBankTransferStatus()` để kiểm tra trạng thái. Khi ngân hàng xác nhận thanh toán → đóng modal, hiển thị toast "Payment successful!", refresh lại dữ liệu session.
+- **Toast thông báo thành công**: Hiển thị 4 giây với animation `fadeSlideIn`, màu xanh `#10b981`.
+
+#### `FE/src/pages/Customer/BookingPage.tsx`
+- **Thay đổi điều hướng sau khi đặt vé thành công**: Bỏ điều hướng sang `/checkoutsuccess`. Thay bằng navigate đến `/tickets` (trang My QR/My Tickets) kèm `state.showToast`.
+- **Cập nhật nội dung toast thông báo từ tiếng Việt sang tiếng Anh**: `"Booking successful! Your ticket has been saved here."`.
+
+#### `FE/src/pages/Customer/MyTicketsPage.tsx`
+- **Thêm `useLocation`**: Đọc `location.state.showToast` khi trang được navigate tới.
+- **Thêm `useEffect` xử lý toast**: Khi trang được điều hướng từ Booking thành công, tự động hiển thị toast thông báo rồi xóa state để toast không hiện lại khi reload.
+
+---
+
+### Backend (parking-backend)
+
+#### `src/modules/bookings/booking.service.js`
+- **Bỏ tham số `assignedSlot` trong hàm `create()`**: Xóa logic cho phép FE truyền thẳng `assignedSlot` cụ thể.
+- **Thay thế bằng AI Suggestion thuần túy**: Toàn bộ logic chọn slot giờ đây chỉ sử dụng hàm `suggestOptimalSlot()` với bộ lọc theo `floorId`/`zoneId` (nếu có), đảm bảo hệ thống luôn tự động phân bổ slot tối ưu thay vì để FE can thiệp trực tiếp.
+- **Loại bỏ lỗi booking sai slot**: Trước đây, do dữ liệu `assignedSlot` gửi lên có thể không khớp với logic filter, dẫn đến ticket in ra slot khác với slot user chọn trên UI. Thay đổi này giải quyết triệt để lỗi đó bằng cách tập trung hóa logic phân bổ slot tại backend.
+- **Dọn dẹp code**: Xóa các comment thừa, trailing whitespace trong các block code xử lý thời gian đặt chỗ.
+
+---
+
+### Phân Tích & Kiểm Tra
+
+#### Trang `CheckoutSuccessPage.tsx` — Kiểm tra phạm vi sử dụng
+Kết quả rà soát: Trang này vẫn còn được tham chiếu ở các vị trí sau:
+| File | Vị trí | Mô tả |
+|------|---------|-------|
+| `CheckoutPage.tsx` | Line 141, 210 | Navigate sau khi thanh toán surcharge qua checkout page cũ |
+| `SessionPage.tsx` | Line 367 | Socket event khi **Staff** thực hiện checkout xe qua máy quét |
+| `App.tsx` | Line 14, 60 | Import component + khai báo route `/checkoutsuccess` |
+
+> **Ghi chú**: Luồng Booking không còn đi qua `CheckoutSuccessPage` nữa (đã đổi sang `/tickets`). Trang này vẫn được giữ lại cho luồng Staff checkout qua socket.
+
