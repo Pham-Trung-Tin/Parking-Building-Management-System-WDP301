@@ -48,6 +48,7 @@ const Header = () => {
   const handleLogout = () => {
     localStorage.removeItem('accessToken');
     localStorage.removeItem('user');
+    window.dispatchEvent(new Event('authChange'));
     setUser(null);
     setShowDropdown(false);
     navigate('/');

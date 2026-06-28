@@ -41,6 +41,13 @@ Tài liệu này lưu trữ lại tất cả những thay đổi đã được t
     - Kích hoạt **thông báo dạng nổi (Floating Toast)** nhảy từ cạnh trên màn hình xuống (kèm animation và đổ bóng viền cam) báo hiệu người dùng chuẩn bị đưa xe ra ngoài.
   - Nâng cấp **Dev Tools**: Bổ sung các nút "+ 1 Phút", "+ 15 Phút" để phục vụ việc tua nhanh thời gian (Fast Forward) và kiểm tra các kịch bản phụ thu một cách linh hoạt.
   - Đồng bộ hoá UI các thẻ nội dung (Notice Card): Tinh chỉnh `border-radius`, `box-shadow` và `background` để đồng bộ tuyệt đối với phong cách thiết kế "glass/white card" chung của toàn trang.
+- **Tối Ưu Hóa Kích Thước Mã QR (QR Slimming)**:
+  - Thay thế hoàn toàn cơ chế tạo mã QR bằng chuỗi Base64 HMAC-SHA256 dài (~150-250 ký tự) bằng các chuỗi định danh ngắn gọn: `ci_<bookingId>` (cho Check-in) và `co_<sessionId>` (cho Check-out) dài khoảng 27 ký tự. 
+  - Việc này làm giảm mạnh mật độ điểm ảnh (version) của mã QR, giúp Camera của thiết bị nhân viên quét siêu tốc, nhạy và chính xác hơn ngay cả trong điều kiện chói sáng hay trầy xước màn hình.
+  - Cập nhật lại toàn bộ logic trong `StaffPage.tsx` và `StaffExitPage.tsx` (bao gồm cả máy quét cầm tay và camera nhận diện) để ưu tiên đọc luồng QR mới này, nhưng vẫn đảm bảo tính tương thích ngược (backward compatibility) với các token HMAC cũ.
+- **Sửa Lỗi Tính Phí Phụ Thu Qua Đêm (Cross-Midnight Surcharge Bug)**:
+  - Khắc phục triệt để lỗi logic nghiêm trọng trên `SessionPage.tsx` khiến hệ thống tự động báo "Overtime" và sinh ra hàng tá "Surcharge logs" ảo ngay khi người dùng vừa Check-in vào bãi đỗ xe.
+  - *Nguyên nhân & Giải pháp*: Khi người dùng đặt vé qua đêm (ví dụ vào 22:00, ra 01:00 sáng hôm sau), `endTime` (01:00) vô tình bị hiểu là nhỏ hơn `startTime` (22:00) trên cùng một mốc ngày giờ, dẫn tới thời gian hết hạn bị lùi về quá khứ 20 tiếng. Đã bổ sung logic phát hiện nếu `endTime <= startTime` thì sẽ tự động cộng thêm một ngày (`24 * 60 * 60 * 1000` ms) vào `scheduledEnd`, trả lại sự chính xác tuyệt đối cho bộ máy tính phí.
 
 ## 2. Hệ Thống Backend & Database (Seeder)
 - **Hỗ trợ Slot Locking**:

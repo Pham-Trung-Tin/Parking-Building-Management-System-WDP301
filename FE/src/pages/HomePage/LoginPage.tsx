@@ -57,6 +57,7 @@ const LoginPage = () => {
         // Lưu thông tin user (tuỳ chọn — dùng cho hiển thị header, avatar, v.v.)
         if (res?.data?.user) {
           localStorage.setItem('user', JSON.stringify(res.data.user));
+          window.dispatchEvent(new Event('authChange'));
         }
 
         // Chuyển hướng tuỳ theo role

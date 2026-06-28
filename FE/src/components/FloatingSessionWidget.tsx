@@ -32,9 +32,21 @@ const FloatingSessionWidget: React.FC = () => {
     const location = useLocation();
 
     // ── Check Role ──
-    const userStr = localStorage.getItem('user');
-    const role = userStr ? JSON.parse(userStr)?.role : null;
-    const isCustomer = role === 'parking_user';
+    const checkIsCustomer = () => {
+        const userStr = localStorage.getItem('user');
+        const role = userStr ? JSON.parse(userStr)?.role : null;
+        return role === 'parking_user';
+    };
+    
+    const [isCustomer, setIsCustomer] = useState(checkIsCustomer());
+
+    useEffect(() => {
+        const handleAuthChange = () => {
+            setIsCustomer(checkIsCustomer());
+        };
+        window.addEventListener('authChange', handleAuthChange);
+        return () => window.removeEventListener('authChange', handleAuthChange);
+    }, []);
 
     const fetchActiveSession = async () => {
         try {
