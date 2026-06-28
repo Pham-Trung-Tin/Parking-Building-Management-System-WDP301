@@ -382,27 +382,34 @@ const StaffPage = () => {
     setIsLoadingQR(true);
     try {
       let payload: any;
-      try {
-        payload = await verifyQRToken(code);
-      } catch (tokenErr: any) {
-        // Fallback: Check if it's a plain JSON string from the mobile app
-        try {
-          // Clean up potential weird escapes from different scanners before parsing
-          let cleanCode = code.replace(/\\"/g, '"').replace(/\\'/g, "'").trim();
-          if (cleanCode.startsWith('"') && cleanCode.endsWith('"')) {
-            cleanCode = cleanCode.substring(1, cleanCode.length - 1);
-          }
 
-          payload = JSON.parse(cleanCode);
-          if (typeof payload === 'string') {
-            payload = JSON.parse(payload); // Handle double-encoded JSON
-          }
-        } catch (jsonErr) {
-          // Fallback: Check if it's just a plain text booking ID
-          if (typeof code === 'string' && code.trim().length > 0) {
-            payload = { bookingId: code.trim(), id: code.trim(), type: 'checkin' };
-          } else {
-            throw tokenErr;
+      // ── Ưu tiên 1: QR mới — plain prefix "ci_<bookingId>" ──────────────────
+      if (code.startsWith('ci_')) {
+        payload = { bookingId: code.slice(3).trim(), type: 'checkin' };
+      } else {
+        // ── Ưu tiên 2: HMAC token cũ (dạng <base64>.<sig>) ─────────────────
+        try {
+          payload = await verifyQRToken(code);
+        } catch (tokenErr: any) {
+          // Fallback: Check if it's a plain JSON string from the mobile app
+          try {
+            // Clean up potential weird escapes from different scanners before parsing
+            let cleanCode = code.replace(/\\\"/g, '"').replace(/\\'/g, "'").trim();
+            if (cleanCode.startsWith('"') && cleanCode.endsWith('"')) {
+              cleanCode = cleanCode.substring(1, cleanCode.length - 1);
+            }
+
+            payload = JSON.parse(cleanCode);
+            if (typeof payload === 'string') {
+              payload = JSON.parse(payload); // Handle double-encoded JSON
+            }
+          } catch (jsonErr) {
+            // Fallback: Check if it's just a plain text booking ID
+            if (typeof code === 'string' && code.trim().length > 0) {
+              payload = { bookingId: code.trim(), id: code.trim(), type: 'checkin' };
+            } else {
+              throw tokenErr;
+            }
           }
         }
       }

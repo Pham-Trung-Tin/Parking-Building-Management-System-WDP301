@@ -254,15 +254,26 @@ const StaffExitPage = () => {
       const query = searchQuery.trim();
       const lotId = (profile?.assignedParkingLot as any)?._id || (profile?.assignedParkingLot as any);
 
-      if (query.includes('.') || query.startsWith('{')) {
-        // QR Code flow (JWT token hoặc JSON)
+      // ── Ưu tiên 1: QR mới — plain prefix "co_<sessionId>" ─────────────────
+      if (query.startsWith('co_')) {
+        const sessionId = query.slice(3).trim();
+        const sessionRes = await parkingSessionService.getById(sessionId);
+        if (sessionRes.data) {
+          setActiveSession(sessionRes.data);
+          setSessionFound(true);
+          showNotification(`Session found from QR for plate: ${sessionRes.data.vehicleInfo?.licensePlate}`, 'success');
+        } else {
+          throw new Error('Không tìm thấy phiên đỗ xe.');
+        }
+      } else if (query.includes('.') || query.startsWith('{')) {
+        // ── Ưu tiên 2: HMAC token cũ (dạng <base64>.<sig>) hoặc JSON ────────
         try {
           let payload: any;
           try {
             payload = await verifyQRToken(query);
           } catch (tokenErr) {
             try {
-              let cleanCode = query.replace(/\\"/g, '"').replace(/\\'/g, "'").trim();
+              let cleanCode = query.replace(/\\\"/g, '"').replace(/\\'/g, "'").trim();
               if (cleanCode.startsWith('"') && cleanCode.endsWith('"')) {
                 cleanCode = cleanCode.substring(1, cleanCode.length - 1);
               }
@@ -338,7 +349,7 @@ const StaffExitPage = () => {
           throw new Error(qrErr?.message || "Mã QR không hợp lệ hoặc đã hết hạn");
         }
       } else {
-        // License plate or Session Code flow
+        // ── License plate or Session Code flow ────────────────────────────────
         const isSessionCode = query.toUpperCase().startsWith('PS-');
         const params: any = { parkingLotId: lotId };
         if (isSessionCode) {
@@ -382,11 +393,29 @@ const StaffExitPage = () => {
 
     try {
       let payload: any;
+
+      // ── Ưu tiên 1: QR mới — plain prefix "co_<sessionId>" ─────────────────
+      if (qrValue.startsWith('co_')) {
+        const sessionId = qrValue.slice(3).trim();
+        const sessionRes = await parkingSessionService.getById(sessionId);
+        if (sessionRes.data) {
+          setActiveSession(sessionRes.data);
+          setSessionFound(true);
+          setSearchQuery(sessionRes.data.vehicleInfo?.licensePlate || '');
+          showNotification(`Session found from QR for plate: ${sessionRes.data.vehicleInfo?.licensePlate}`, 'success');
+        } else {
+          throw new Error('Không tìm thấy phiên đỗ xe.');
+        }
+        setTimeout(() => setIsProcessingQR(false), 2000);
+        return;
+      }
+
+      // ── Ưu tiên 2: HMAC token cũ (dạng <base64>.<sig>) ─────────────────
       try {
         payload = await verifyQRToken(qrValue);
       } catch (tokenErr: any) {
         try {
-          let cleanCode = qrValue.replace(/\\"/g, '"').replace(/\\'/g, "'").trim();
+          let cleanCode = qrValue.replace(/\\\"/g, '"').replace(/\\'/g, "'").trim();
           if (cleanCode.startsWith('"') && cleanCode.endsWith('"')) {
             cleanCode = cleanCode.substring(1, cleanCode.length - 1);
           }

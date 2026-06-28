@@ -8,7 +8,7 @@ import vehicleTypeService, { VehicleType, VehicleTypePricing } from '../../servi
 import { Floor } from '../../services/api/floorService';
 import { Zone } from '../../services/api/zoneService';
 import { ParkingSlot } from '../../services/api/parkingSlotService';
-import { createQRToken } from '../../utils/qrToken';
+
 import { QRCodeSVG } from 'qrcode.react';
 
 // ── Icons ─────────────────────────────────────────────────────────────────────
@@ -388,20 +388,14 @@ const SessionPage = () => {
     const [qrValue, setQrValue] = useState<string>('');
     useEffect(() => {
         if (session?._id) {
-            // Có session._id → tạo JWT token có chữ ký HMAC
-            createQRToken({
-                type: 'checkout',
-                sessionId: session._id,
-                licensePlate,
-                slotCode,
-                receiptId: sessionCode
-            }).then(setQrValue).catch(err => console.error("Failed to generate QR token", err));
+            // Dùng plain prefix string thay vì HMAC token để giảm mật độ QR
+            setQrValue(`co_${session._id}`);
         } else if (sessionCode) {
             // Fallback: dùng sessionCode (PS-XXXXX) — staff có thể tìm theo mã này
             setQrValue(sessionCode);
         }
         // Nếu không có cả _id lẫn sessionCode → để qrValue rỗng, UI sẽ hiện "Loading QR..."
-    }, [session?._id, sessionCode, licensePlate, slotCode]);
+    }, [session?._id, sessionCode]);
 
     const isMonthlyPassSession = !!session?.monthlyPass;
 
