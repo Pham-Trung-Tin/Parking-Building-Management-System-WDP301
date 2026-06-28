@@ -250,9 +250,12 @@ const SessionPage = () => {
     const feeLogs: { type: 'early' | 'late' | 'fallback', timestamp: Date, amount: number, label: string }[] = [];
 
     if (bookingInfo && (bookingInfo as any).endTime && (bookingInfo as any).scheduledDate) {
-        const scheduledDateStr = (bookingInfo as any).scheduledDate.split('T')[0];
-        const scheduledStart = new Date(`${scheduledDateStr}T${(bookingInfo as any).startTime}:00`);
-        let scheduledEnd = new Date(`${scheduledDateStr}T${(bookingInfo as any).endTime}:00`);
+        const scheduledDateObj = new Date((bookingInfo as any).scheduledDate);
+        const [startH, startM] = (bookingInfo as any).startTime.split(':').map(Number);
+        const [endH, endM] = (bookingInfo as any).endTime.split(':').map(Number);
+
+        const scheduledStart = new Date(scheduledDateObj.getFullYear(), scheduledDateObj.getMonth(), scheduledDateObj.getDate(), startH, startM, 0, 0);
+        let scheduledEnd = new Date(scheduledDateObj.getFullYear(), scheduledDateObj.getMonth(), scheduledDateObj.getDate(), endH, endM, 0, 0);
 
         // ── Fix cross-midnight: nếu endTime < startTime (ví dụ 22:00 → 01:03)
         //    thì scheduledEnd thực ra là ngày hôm sau ─────────────────────────
