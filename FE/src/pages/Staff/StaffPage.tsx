@@ -227,6 +227,10 @@ const StaffPage = () => {
         setIsPlateRegistered(!!data.isRegistered);
         setIsPlateMonthlyPass(!!data.isMonthlyPass);
 
+        if (data.predictedVehicleTypeId) {
+          setSelectedVehicle(data.predictedVehicleTypeId);
+        }
+
         let typeStr = data.isMonthlyPass ? ' [MONTHLY PASS]' : (data.isRegistered ? ' [REGISTERED GUEST]' : ' [GUEST]');
 
         showNotification(
