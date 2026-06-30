@@ -419,6 +419,23 @@ const StaffPage = () => {
       }
 
       if (payload.type === 'monthly_pass') {
+        // --- Prevent duplicate check-in at scan time ---
+        const plate = payload.licensePlate;
+        if (plate) {
+          try {
+            const activeRes = await parkingSessionService.findActive({ licensePlate: plate });
+            if (activeRes && (activeRes.data || activeRes._id)) {
+              throw new Error(`Vehicle ${plate} is already checked in.`);
+            }
+          } catch (err: any) {
+            if (err.message === `Vehicle ${plate} is already checked in.`) {
+              throw err;
+            }
+            // 404 means no active session found (which is good)
+          }
+        }
+        // -----------------------------------------------
+
         setIsLoadingQR(false);
         const mockResult: BookingData = {
           id: payload.passCode || code.substring(0, 8).toUpperCase(),
@@ -440,6 +457,23 @@ const StaffPage = () => {
         const bookingRes = await bookingService.getById(safeBookingId);
         const booking = bookingRes.data || bookingRes;
 
+        // --- Prevent duplicate check-in at scan time ---
+        const plate = booking.vehicleInfo?.licensePlate || payload.licensePlate;
+        if (plate) {
+          try {
+            const activeRes = await parkingSessionService.findActive({ licensePlate: plate });
+            if (activeRes && (activeRes.data || activeRes._id)) {
+              throw new Error(`Vehicle ${plate} is already checked in.`);
+            }
+          } catch (err: any) {
+            if (err.message === `Vehicle ${plate} is already checked in.`) {
+              throw err;
+            }
+            // 404 means no active session found (which is good)
+          }
+        }
+        // -----------------------------------------------
+
         setIsLoadingQR(false);
         const mockResult: BookingData = {
           id: booking.bookingCode || safeBookingId.substring(0, 8).toUpperCase(),
@@ -452,6 +486,9 @@ const StaffPage = () => {
         setModalData(mockResult);
         setShowModal(true);
       } catch (fetchErr: any) {
+        if (fetchErr.message && fetchErr.message.includes('already checked in')) {
+          throw fetchErr;
+        }
         throw new Error('Không tìm thấy thông tin Booking từ mã QR này.');
       }
     } catch (error: any) {
