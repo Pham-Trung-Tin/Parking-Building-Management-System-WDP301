@@ -109,22 +109,22 @@ const MyVehiclesPage: React.FC = () => {
       durationMonths: 1
   });
 
-  // License plate format: 29A-12345 (2 digits + 1 letter + dash + 4-5 digits)
-  const LICENSE_PLATE_REGEX = /^[0-9]{2}[A-Z]-[0-9]{4,5}$/;
+  // License plate format: 29A-12345 (2 digits + 1 letter + dash + 4-6 chars)
+  const LICENSE_PLATE_REGEX = /^[0-9]{2}[A-Z]-[A-Z0-9]{4,6}$/;
 
   const handleLicensePlateChange = (rawValue: string) => {
     let v = rawValue.toUpperCase().replace(/[^A-Z0-9]/g, '');
     if (v.length > 3) {
       v = v.slice(0, 3) + '-' + v.slice(3);
     }
-    if (v.length > 9) v = v.slice(0, 9);
+    if (v.length > 10) v = v.slice(0, 10);
     setForm(prev => ({ ...prev, licensePlate: v }));
     if (plateError) setPlateError(null);
   };
 
   const validatePlate = (plate: string): boolean => {
     if (!LICENSE_PLATE_REGEX.test(plate)) {
-      setPlateError('Format: 29A-12345 (2 số + 1 chữ + dấu - + 4-5 số)');
+      setPlateError('Format: 29A-12345 (2 số + 1 chữ + dấu - + 4-6 số/chữ)');
       return false;
     }
     setPlateError(null);
@@ -329,7 +329,7 @@ const MyVehiclesPage: React.FC = () => {
                         onChange={e => handleLicensePlateChange(e.target.value)}
                         className={`${inputCls} ${plateError ? 'ring-2 ring-red-400 border-red-300' : ''}`}
                         placeholder="e.g. 29A-12345"
-                        maxLength={9}
+                        maxLength={10}
                         required
                       />
                       {plateError && <p className="text-xs text-red-500 mt-1 font-medium">{plateError}</p>}
