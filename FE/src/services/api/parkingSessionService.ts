@@ -83,6 +83,11 @@ const parkingSessionService = {
         return axiosClient.patch(`/parking-sessions/${String(id).trim()}/check-out`);
     },
 
+    /** PATCH /parking-sessions/:id/license-plate — Update license plate */
+    updateLicensePlate: (id: string, licensePlate: string): Promise<any> => {
+        return axiosClient.patch(`/parking-sessions/${String(id).trim()}/license-plate`, { licensePlate });
+    },
+
     /** POST /parking-sessions/:id/evidence — Upload evidence images */
     uploadEvidence: (id: string, formData: FormData): Promise<any> => {
         return axiosClient.post(`/parking-sessions/${String(id).trim()}/evidence`, formData);

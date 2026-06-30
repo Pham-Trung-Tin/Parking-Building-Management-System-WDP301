@@ -24,13 +24,7 @@ import parkingSessionService from '../../services/api/parkingSessionService';
 const INCIDENT_TYPES = [
   { value: 'lost_ticket', label: 'Lost Ticket' },
   { value: 'wrong_license_plate', label: 'LPR Mismatch' },
-  { value: 'overdue', label: 'Overdue' },
-  { value: 'wrong_zone', label: 'Wrong Zone' },
-  { value: 'slot_occupied', label: 'Slot Occupied' },
-  { value: 'slot_damaged', label: 'Slot Damaged' },
-  { value: 'vehicle_damage', label: 'Vehicle Damage' },
-  { value: 'theft', label: 'Theft' },
-  { value: 'other', label: 'Other' }
+  { value: 'theft', label: 'Theft' }
 ];
 
 const StaffExceptionsPage = () => {
@@ -52,8 +46,8 @@ const StaffExceptionsPage = () => {
 
   // Report Form State
   const [reportData, setReportData] = useState<Partial<IncidentCreateData>>({
-    type: 'other',
-    title: '',
+    type: 'lost_ticket',
+    title: 'Lost Ticket',
     description: '',
     severity: 'medium'
   });
@@ -149,7 +143,7 @@ const StaffExceptionsPage = () => {
         severity: reportData.severity as any
       });
       showNotification('Exception reported successfully.', 'success');
-      setReportData({ type: 'other', title: '', description: '', severity: 'medium' });
+      setReportData({ type: 'lost_ticket', title: 'Lost Ticket', description: '', severity: 'medium' });
       fetchIncidents();
     } catch (error: any) {
       showNotification(error?.response?.data?.message || 'Failed to report exception', 'error');
@@ -263,8 +257,9 @@ const StaffExceptionsPage = () => {
       formData.append('description', desc);
       formData.append('extraCharge', String(Number(resolveCharge) || 0));
 
-      await incidentService.resolve(resolveModal.incident._id, formData);
+      await parkingSessionService.updateLicensePlate(foundSession._id, mismatchData.actualPlate.toUpperCase());
       await parkingSessionService.checkOut(foundSession._id);
+      await incidentService.resolve(resolveModal.incident._id, formData);
 
       showNotification('Vehicle information updated and released.', 'success');
       setResolveModal({ isOpen: false, incident: null });
@@ -924,20 +919,6 @@ const StaffExceptionsPage = () => {
                       />
                     </div>
 
-                    <div>
-                      <label className="block text-xs font-bold text-gray-500 mb-2">Severity</label>
-                      <div className="flex gap-2">
-                        {(['low', 'medium', 'high', 'critical'] as const).map(sev => (
-                          <button
-                            key={sev}
-                            onClick={() => setReportData({ ...reportData, severity: sev })}
-                            className={`flex-1 py-2 text-xs font-bold uppercase tracking-wider rounded ${reportData.severity === sev ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
-                          >
-                            {sev}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
 
                     <button
                       onClick={handleSubmitReport}
