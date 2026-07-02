@@ -1095,7 +1095,8 @@ const BookingPage = () => {
                         return;
                     }
                 } catch (e: any) {
-                    if (e?.response?.status !== 404) {
+                    const status = e?.status || e?.response?.status;
+                    if (status !== 404) {
                         console.error('Check active error', e);
                     }
                 }
