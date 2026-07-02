@@ -10,3 +10,4 @@ export { default as parkingSessionService } from './parkingSessionService';
 export { default as lprService } from './lprService';
 export { default as vehicleService } from './vehicleService';
 export { default as monthlyPassService } from './monthlyPassService';
+export { default as reportService } from './reportService';

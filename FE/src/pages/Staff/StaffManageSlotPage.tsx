@@ -435,18 +435,126 @@ const StaffManageSlotPage = () => {
                                 </div>
                             )}
 
-                            {/* Grid Map */}
-                            <div className="p-8 overflow-x-auto bg-[#fafafa]">
-                                {loading ? (
-                                    <div className="flex justify-center items-center h-64 text-gray-400">
-                                        <RefreshCw className="w-8 h-8 animate-spin" />
+                            {/* Grid Map and Side Panel */}
+                            <div className="flex">
+                                <div className="flex-1 p-8 overflow-x-auto bg-[#fafafa]">
+                                    {loading ? (
+                                        <div className="flex justify-center items-center h-64 text-gray-400">
+                                            <RefreshCw className="w-8 h-8 animate-spin" />
+                                        </div>
+                                    ) : (
+                                        <SlotMapGrid
+                                            slots={displaySlots}
+                                            selectedSlot={selectedSlot}
+                                            onSelect={setSelectedSlot}
+                                        />
+                                    )}
+                                </div>
+
+                                {/* Slot Details Panel */}
+                                {selectedSlot && (
+                                    <div className="w-80 border-l border-gray-200 bg-white p-6 shrink-0 flex flex-col">
+                                       <div className="flex justify-between items-center mb-6">
+                                           <h3 className="text-lg font-bold text-gray-900">Slot {selectedSlot.slotCode}</h3>
+                                           <span className={`px-2 py-1 text-[10px] font-bold uppercase rounded ${
+                                               selectedSlot.status === 'available' ? 'bg-green-100 text-green-700' :
+                                               selectedSlot.status === 'occupied' ? 'bg-red-100 text-red-700' :
+                                               'bg-gray-100 text-gray-700'
+                                           }`}>
+                                               {selectedSlot.status}
+                                           </span>
+                                       </div>
+                                       
+                                       {selectedSlot.status === 'occupied' && selectedSlot.currentSession ? (
+                                           <div className="flex flex-col space-y-4 text-sm">
+                                               <div>
+                                                   <p className="text-xs text-gray-500 font-semibold mb-1 uppercase tracking-wider">Vehicle Info</p>
+                                                   <p className="font-bold text-gray-900 text-lg">
+                                                       {(selectedSlot.currentSession as any)?.vehicleInfo?.licensePlate || 'N/A'}
+                                                   </p>
+                                                   <p className="text-gray-600 mt-1">
+                                                       {(selectedSlot.currentSession as any)?.vehicleInfo?.vehicleModel || (selectedSlot.vehicleType as any)?.name || 'Unknown'} 
+                                                       {(selectedSlot.currentSession as any)?.vehicleInfo?.vehicleColor ? ` - ${(selectedSlot.currentSession as any).vehicleInfo.vehicleColor}` : ''}
+                                                   </p>
+                                               </div>
+                                               
+                                               <div className="pt-4 border-t border-gray-100">
+                                                   <p className="text-xs text-gray-500 font-semibold mb-2 uppercase tracking-wider">Owner / Driver Info</p>
+                                                   {(selectedSlot.currentSession as any)?.user ? (
+                                                       <>
+                                                           <p className="font-semibold text-gray-900 flex items-center gap-2">
+                                                               <User className="w-4 h-4 text-gray-400" />
+                                                               {(selectedSlot.currentSession as any).user.fullName}
+                                                           </p>
+                                                           <p className="text-gray-600 mt-2 flex items-center gap-2">
+                                                               <span className="text-gray-400">📞</span>
+                                                               {(selectedSlot.currentSession as any).user.phone || 'N/A'}
+                                                           </p>
+                                                       </>
+                                                   ) : (
+                                                       <p className="text-gray-500 italic">Guest (No info available)</p>
+                                                   )}
+                                               </div>
+                                               
+                                               <div className="pt-4 border-t border-gray-100">
+                                                   <p className="text-xs text-gray-500 font-semibold mb-2 uppercase tracking-wider">Entry Time</p>
+                                                   <p className="text-gray-900">
+                                                       {new Date((selectedSlot.currentSession as any)?.entryTime).toLocaleString()}
+                                                   </p>
+                                               </div>
+                                           </div>
+                                       ) : selectedSlot.status === 'reserved' && selectedSlot.currentBooking ? (
+                                           <div className="flex flex-col space-y-4 text-sm">
+                                               <div>
+                                                   <p className="text-xs text-gray-500 font-semibold mb-1 uppercase tracking-wider">Booking Info</p>
+                                                   <p className="font-bold text-gray-900 text-lg">
+                                                       {(selectedSlot.currentBooking as any)?.vehicleInfo?.licensePlate || 'N/A'}
+                                                   </p>
+                                                   <p className="text-gray-600 mt-1">
+                                                       {(selectedSlot.currentBooking as any)?.vehicleInfo?.vehicleModel || (selectedSlot.vehicleType as any)?.name || 'Unknown'} 
+                                                       {(selectedSlot.currentBooking as any)?.vehicleInfo?.vehicleColor ? ` - ${(selectedSlot.currentBooking as any).vehicleInfo.vehicleColor}` : ''}
+                                                   </p>
+                                                   {(selectedSlot.currentBooking as any)?.bookingCode && (
+                                                       <p className="text-blue-600 mt-2 font-mono text-xs">
+                                                           Ref: {(selectedSlot.currentBooking as any).bookingCode}
+                                                       </p>
+                                                   )}
+                                               </div>
+                                               
+                                               <div className="pt-4 border-t border-gray-100">
+                                                   <p className="text-xs text-gray-500 font-semibold mb-2 uppercase tracking-wider">Customer Info</p>
+                                                   {(selectedSlot.currentBooking as any)?.user ? (
+                                                       <>
+                                                           <p className="font-semibold text-gray-900 flex items-center gap-2">
+                                                               <User className="w-4 h-4 text-gray-400" />
+                                                               {(selectedSlot.currentBooking as any).user.fullName}
+                                                           </p>
+                                                           <p className="text-gray-600 mt-2 flex items-center gap-2">
+                                                               <span className="text-gray-400">📞</span>
+                                                               {(selectedSlot.currentBooking as any).user.phone || 'N/A'}
+                                                           </p>
+                                                       </>
+                                                   ) : (
+                                                       <p className="text-gray-500 italic">No user info available</p>
+                                                   )}
+                                               </div>
+                                               
+                                               <div className="pt-4 border-t border-gray-100">
+                                                   <p className="text-xs text-gray-500 font-semibold mb-2 uppercase tracking-wider">Scheduled Time</p>
+                                                   <p className="text-gray-900 font-medium">
+                                                       {new Date((selectedSlot.currentBooking as any)?.scheduledDate).toLocaleDateString()}
+                                                   </p>
+                                                   <p className="text-gray-600">
+                                                       {(selectedSlot.currentBooking as any)?.startTime} - {(selectedSlot.currentBooking as any)?.endTime}
+                                                   </p>
+                                               </div>
+                                           </div>
+                                       ) : (
+                                           <div className="text-sm text-gray-500 italic mt-2">
+                                               {selectedSlot.status === 'available' ? 'This slot is currently empty.' : 'No session details available.'}
+                                           </div>
+                                       )}
                                     </div>
-                                ) : (
-                                    <SlotMapGrid
-                                        slots={displaySlots}
-                                        selectedSlot={selectedSlot}
-                                        onSelect={setSelectedSlot}
-                                    />
                                 )}
                             </div>
                         </div>

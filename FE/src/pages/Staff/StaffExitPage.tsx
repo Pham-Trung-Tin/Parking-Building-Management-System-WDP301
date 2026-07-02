@@ -254,15 +254,26 @@ const StaffExitPage = () => {
       const query = searchQuery.trim();
       const lotId = (profile?.assignedParkingLot as any)?._id || (profile?.assignedParkingLot as any);
 
-      if (query.includes('.') || query.startsWith('{')) {
-        // QR Code flow (JWT token hoặc JSON)
+      // ── Ưu tiên 1: QR mới — plain prefix "co_<sessionId>" ─────────────────
+      if (query.startsWith('co_')) {
+        const sessionId = query.slice(3).trim();
+        const sessionRes = await parkingSessionService.getById(sessionId);
+        if (sessionRes.data) {
+          setActiveSession(sessionRes.data);
+          setSessionFound(true);
+          showNotification(`Session found from QR for plate: ${sessionRes.data.vehicleInfo?.licensePlate}`, 'success');
+        } else {
+          throw new Error('Session not found.');
+        }
+      } else if (query.includes('.') || query.startsWith('{')) {
+        // ── Ưu tiên 2: HMAC token cũ (dạng <base64>.<sig>) hoặc JSON ────────
         try {
           let payload: any;
           try {
             payload = await verifyQRToken(query);
           } catch (tokenErr) {
             try {
-              let cleanCode = query.replace(/\\"/g, '"').replace(/\\'/g, "'").trim();
+              let cleanCode = query.replace(/\\\"/g, '"').replace(/\\'/g, "'").trim();
               if (cleanCode.startsWith('"') && cleanCode.endsWith('"')) {
                 cleanCode = cleanCode.substring(1, cleanCode.length - 1);
               }
@@ -272,10 +283,10 @@ const StaffExitPage = () => {
               }
             } catch (jsonErr) {
               if (typeof query === 'string' && query.trim().length > 0) {
-                if (query.includes('.')) throw new Error('Mã QR Checkout không hợp lệ hoặc đã hết hạn.');
+                if (query.includes('.')) throw new Error('Invalid or expired Checkout QR Code.');
                 payload = { id: query.trim() };
               } else {
-                throw new Error('Định dạng QR không được hỗ trợ.');
+                throw new Error('Unsupported QR format.');
               }
             }
           }
@@ -287,7 +298,7 @@ const StaffExitPage = () => {
               setSessionFound(true);
               showNotification(`Session found from Monthly Pass QR for plate: ${sessionRes.data.vehicleInfo?.licensePlate}`, 'success');
             } else {
-              throw new Error("Xe chưa Check-in (không tìm thấy phiên đỗ xe).");
+              throw new Error("Vehicle not checked in (session not found).");
             }
             return;
           }
@@ -300,7 +311,7 @@ const StaffExitPage = () => {
               setSessionFound(true);
               showNotification(`Session found from QR for plate: ${sessionRes.data.vehicleInfo?.licensePlate}`, 'success');
             } else {
-              throw new Error("Không tìm thấy phiên đỗ xe theo mã QR.");
+              throw new Error("Session not found for this QR code.");
             }
             return;
           }
@@ -315,10 +326,10 @@ const StaffExitPage = () => {
               if (booking.parkingSession) {
                 sessionId = typeof booking.parkingSession === 'string' ? booking.parkingSession : booking.parkingSession._id;
               } else {
-                throw new Error("Xe này chưa Check-in (không tìm thấy phiên đỗ xe).");
+                throw new Error("Vehicle not checked in (session not found).");
               }
             } catch (err: any) {
-              throw new Error(err.message || "Không tìm thấy thông tin Booking từ mã QR.");
+              throw new Error(err.message || "Could not find Booking info for this QR code.");
             }
           }
 
@@ -329,16 +340,16 @@ const StaffExitPage = () => {
               setSessionFound(true);
               showNotification(`Session found from QR for plate: ${sessionRes.data.vehicleInfo?.licensePlate}`, 'success');
             } else {
-              throw new Error("Không tìm thấy phiên đỗ xe.");
+              throw new Error("Session not found.");
             }
           } else {
-            throw new Error("Mã QR không chứa thông tin Checkout hợp lệ");
+            throw new Error("QR code does not contain valid Checkout information.");
           }
         } catch (qrErr: any) {
-          throw new Error(qrErr?.message || "Mã QR không hợp lệ hoặc đã hết hạn");
+          throw new Error(qrErr?.message || "Invalid or expired QR code.");
         }
       } else {
-        // License plate or Session Code flow
+        // ── License plate or Session Code flow ────────────────────────────────
         const isSessionCode = query.toUpperCase().startsWith('PS-');
         const params: any = { parkingLotId: lotId };
         if (isSessionCode) {
@@ -382,11 +393,29 @@ const StaffExitPage = () => {
 
     try {
       let payload: any;
+
+      // ── Ưu tiên 1: QR mới — plain prefix "co_<sessionId>" ─────────────────
+      if (qrValue.startsWith('co_')) {
+        const sessionId = qrValue.slice(3).trim();
+        const sessionRes = await parkingSessionService.getById(sessionId);
+        if (sessionRes.data) {
+          setActiveSession(sessionRes.data);
+          setSessionFound(true);
+          setSearchQuery(sessionRes.data.vehicleInfo?.licensePlate || '');
+          showNotification(`Session found from QR for plate: ${sessionRes.data.vehicleInfo?.licensePlate}`, 'success');
+        } else {
+          throw new Error('Session not found.');
+        }
+        setTimeout(() => setIsProcessingQR(false), 2000);
+        return;
+      }
+
+      // ── Ưu tiên 2: HMAC token cũ (dạng <base64>.<sig>) ─────────────────
       try {
         payload = await verifyQRToken(qrValue);
       } catch (tokenErr: any) {
         try {
-          let cleanCode = qrValue.replace(/\\"/g, '"').replace(/\\'/g, "'").trim();
+          let cleanCode = qrValue.replace(/\\\"/g, '"').replace(/\\'/g, "'").trim();
           if (cleanCode.startsWith('"') && cleanCode.endsWith('"')) {
             cleanCode = cleanCode.substring(1, cleanCode.length - 1);
           }
@@ -401,13 +430,13 @@ const StaffExitPage = () => {
             if (trimmed.toUpperCase().startsWith('PS-')) {
               payload = { sessionCode: trimmed, type: 'checkout' };
             } else if (trimmed.includes('.')) {
-              throw new Error('Mã QR Checkout không hợp lệ hoặc đã hết hạn.');
+              throw new Error('Invalid or expired Checkout QR Code.');
             } else {
               // Giả định là MongoDB _id
               payload = { sessionId: trimmed, type: 'checkout' };
             }
           } else {
-            throw new Error('Định dạng QR không được hỗ trợ.');
+            throw new Error('Unsupported QR format.');
           }
         }
       }
@@ -421,7 +450,7 @@ const StaffExitPage = () => {
           setSearchQuery(sessionRes.data.vehicleInfo?.licensePlate || '');
           showNotification(`Session found from Monthly Pass QR for plate: ${sessionRes.data.vehicleInfo?.licensePlate}`, 'success');
         } else {
-          throw new Error("Xe chưa Check-in (không tìm thấy phiên đỗ xe).");
+          throw new Error("Vehicle not checked in (session not found).");
         }
         setTimeout(() => setIsProcessingQR(false), 2000);
         return;
@@ -437,7 +466,7 @@ const StaffExitPage = () => {
           setSearchQuery(sessionRes.data.vehicleInfo?.licensePlate || '');
           showNotification(`Session found from QR for plate: ${sessionRes.data.vehicleInfo?.licensePlate}`, 'success');
         } else {
-          throw new Error("Không tìm thấy phiên đỗ xe theo mã QR.");
+          throw new Error("Session not found for this QR code.");
         }
         setTimeout(() => setIsProcessingQR(false), 2000);
         return;
@@ -453,10 +482,10 @@ const StaffExitPage = () => {
           if (booking.parkingSession) {
             sessionId = typeof booking.parkingSession === 'string' ? booking.parkingSession : booking.parkingSession._id;
           } else {
-            throw new Error("Xe này chưa Check-in (không tìm thấy phiên đỗ xe).");
+            throw new Error("Vehicle not checked in (session not found).");
           }
         } catch (err: any) {
-          throw new Error(err.message || "Không tìm thấy thông tin Booking từ mã QR.");
+          throw new Error(err.message || "Could not find Booking info for this QR code.");
         }
       }
 
@@ -468,16 +497,16 @@ const StaffExitPage = () => {
           setSearchQuery(sessionRes.data.vehicleInfo?.licensePlate || '');
           showNotification(`Session found from QR for plate: ${sessionRes.data.vehicleInfo?.licensePlate}`, 'success');
         } else {
-          throw new Error("Không tìm thấy phiên đỗ xe.");
+          throw new Error("Session not found.");
         }
       } else {
-        throw new Error("Mã QR không chứa thông tin Checkout hợp lệ");
+        throw new Error("QR code does not contain valid Checkout information.");
       }
     } catch (error: any) {
       setActiveSession(null);
       setSessionFound(false);
       setSearchQuery('');
-      showNotification(error?.message || "Mã QR không hợp lệ hoặc đã hết hạn", 'error');
+      showNotification(error?.message || "Invalid or expired QR code.", 'error');
       setTimeout(() => setIsProcessingQR(false), 3000);
       return;
     }
@@ -700,6 +729,11 @@ const StaffExitPage = () => {
                             (activeSession?.user ? 'Registered' : 'Guest')
                           ) : '---'}
                         </p>
+                        {sessionFound && activeSession?.user?.fullName && (
+                          <p className="text-xs text-gray-500 font-semibold mt-0.5">
+                            {activeSession.user.fullName}
+                          </p>
+                        )}
                       </div>
                       <div>
                         <p className="text-xs text-gray-500 mb-1">License Plate</p>

@@ -8,7 +8,8 @@ import vehicleTypeService, { VehicleType, VehicleTypePricing } from '../../servi
 import { Floor } from '../../services/api/floorService';
 import { Zone } from '../../services/api/zoneService';
 import { ParkingSlot } from '../../services/api/parkingSlotService';
-import { createQRToken } from '../../utils/qrToken';
+import paymentService from '../../services/api/paymentService';
+
 import { QRCodeSVG } from 'qrcode.react';
 
 // ── Icons ─────────────────────────────────────────────────────────────────────
@@ -112,6 +113,15 @@ const SessionPage = () => {
     const [session, setSession] = useState<ParkingSession | null>(initialSession);
     const [sessionLoading, setSessionLoading] = useState(true);
     const [showQrModal, setShowQrModal] = useState(false);
+
+    // ── Surcharge payment modal states ────────────────────────────────────────
+    const [showSurchargeModal, setShowSurchargeModal] = useState(false);
+    const [surchargePhase, setSurchargePhase] = useState<'method' | 'qr'>('method');
+    const [surchargePayMethod, setSurchargePayMethod] = useState<'bank_transfer' | 'momo' | 'cash'>('bank_transfer');
+    const [surchargeBankInfo, setSurchargeBankInfo] = useState<any>(null);
+    const [surchargePolling, setSurchargePolling] = useState(false);
+    const [surchargeProcessing, setSurchargeProcessing] = useState(false);
+    const [showPaySuccessToast, setShowPaySuccessToast] = useState(false);
 
     // ── Booking data từ API (nếu có bookingId) ────────────────────────────────
     const [fullBooking, setFullBooking] = useState<any>(null);
@@ -250,10 +260,20 @@ const SessionPage = () => {
     const feeLogs: { type: 'early' | 'late' | 'fallback', timestamp: Date, amount: number, label: string }[] = [];
 
     if (bookingInfo && (bookingInfo as any).endTime && (bookingInfo as any).scheduledDate) {
-        const scheduledDateStr = (bookingInfo as any).scheduledDate.split('T')[0];
-        const scheduledEnd = new Date(`${scheduledDateStr}T${(bookingInfo as any).endTime}:00`);
+        const scheduledDateObj = new Date((bookingInfo as any).scheduledDate);
+        const [startH, startM] = (bookingInfo as any).startTime.split(':').map(Number);
+        const [endH, endM] = (bookingInfo as any).endTime.split(':').map(Number);
+
+        const scheduledStart = new Date(scheduledDateObj.getFullYear(), scheduledDateObj.getMonth(), scheduledDateObj.getDate(), startH, startM, 0, 0);
+        let scheduledEnd = new Date(scheduledDateObj.getFullYear(), scheduledDateObj.getMonth(), scheduledDateObj.getDate(), endH, endM, 0, 0);
+
+        // ── Fix cross-midnight: nếu endTime < startTime (ví dụ 22:00 → 01:03)
+        //    thì scheduledEnd thực ra là ngày hôm sau ─────────────────────────
+        if (scheduledEnd <= scheduledStart) {
+            scheduledEnd = new Date(scheduledEnd.getTime() + 24 * 60 * 60 * 1000);
+        }
+
         const now = new Date(Date.now() + devTimeOffset);
-        const scheduledStart = new Date(`${scheduledDateStr}T${(bookingInfo as any).startTime}:00`);
 
         if (now > scheduledEnd) {
             isOvertime = true;
@@ -388,42 +408,79 @@ const SessionPage = () => {
     const [qrValue, setQrValue] = useState<string>('');
     useEffect(() => {
         if (session?._id) {
-            // Có session._id → tạo JWT token có chữ ký HMAC
-            createQRToken({
-                type: 'checkout',
-                sessionId: session._id,
-                licensePlate,
-                slotCode,
-                receiptId: sessionCode
-            }).then(setQrValue).catch(err => console.error("Failed to generate QR token", err));
+            // Dùng plain prefix string thay vì HMAC token để giảm mật độ QR
+            setQrValue(`co_${session._id}`);
         } else if (sessionCode) {
             // Fallback: dùng sessionCode (PS-XXXXX) — staff có thể tìm theo mã này
             setQrValue(sessionCode);
         }
         // Nếu không có cả _id lẫn sessionCode → để qrValue rỗng, UI sẽ hiện "Loading QR..."
-    }, [session?._id, sessionCode, licensePlate, slotCode]);
+    }, [session?._id, sessionCode]);
 
     const isMonthlyPassSession = !!session?.monthlyPass;
 
+    // ── Surcharge payment polling ──────────────────────────────────────────────
+    useEffect(() => {
+        let interval: ReturnType<typeof setInterval>;
+        if (surchargePolling && surchargeBankInfo?.payment?._id) {
+            interval = setInterval(async () => {
+                try {
+                    const res = await paymentService.checkBankTransferStatus(surchargeBankInfo.payment._id);
+                    const statusInfo = (res as any).data || res;
+                    if (statusInfo.isPaid || statusInfo.matched) {
+                        setSurchargePolling(false);
+                        clearInterval(interval);
+                        setShowSurchargeModal(false);
+                        setSurchargePhase('method');
+                        setSurchargeBankInfo(null);
+                        setShowPaySuccessToast(true);
+                        setTimeout(() => setShowPaySuccessToast(false), 4000);
+                        // Refresh session data
+                        if (session?._id) {
+                            const sRes = await parkingSessionService.getById(session._id);
+                            if (sRes?.data) setSession(sRes.data);
+                        }
+                    }
+                } catch (err) {
+                    console.error('Surcharge polling error:', err);
+                }
+            }, 3000);
+        }
+        return () => clearInterval(interval);
+    }, [surchargePolling, surchargeBankInfo, session?._id]);
+
     const handlePayCheckout = () => {
-        navigate('/checkout', {
-            state: {
-                spot,
-                vehicleType: vehicleTypeData,
-                floor: floorData,
-                zone: zoneData,
-                slot: slotData,
-                session,
-                sessionId,
-                entryDate: entryTime.toISOString(),
-                elapsed,
-                totalAmount: amountDue, // The remaining due amount to pay
-                currentFee,
-                advancePayment,
-                hourlyRate,
-                licensePlate,
+        setShowSurchargeModal(true);
+        setSurchargePhase('method');
+    };
+
+    const handleConfirmSurchargePayment = async () => {
+        if (!session?._id) return;
+        setSurchargeProcessing(true);
+        try {
+            if (surchargePayMethod === 'bank_transfer') {
+                const paymentRes = await paymentService.initiateBankTransfer(session._id);
+                const paymentInfo = (paymentRes as any).data || paymentRes;
+                setSurchargeBankInfo(paymentInfo);
+                setSurchargePhase('qr');
+                setSurchargePolling(true);
+            } else {
+                // Cash / MoMo: fallback to old checkout page
+                setShowSurchargeModal(false);
+                navigate('/checkout', {
+                    state: {
+                        spot, vehicleType: vehicleTypeData, floor: floorData, zone: zoneData,
+                        slot: slotData, session, sessionId,
+                        entryDate: entryTime.toISOString(), elapsed,
+                        totalAmount: amountDue, currentFee, advancePayment, hourlyRate, licensePlate,
+                    }
+                });
             }
-        });
+        } catch (err) {
+            console.error('Failed to initiate surcharge payment', err);
+        } finally {
+            setSurchargeProcessing(false);
+        }
     };
 
     return (
@@ -784,7 +841,7 @@ const SessionPage = () => {
                                         size={200}
                                         bgColor="#ffffff"
                                         fgColor="#0f172a"
-                                        level="H"
+                                        level="L"
                                         includeMargin={false}
                                     />
                                 ) : (
@@ -894,201 +951,201 @@ const SessionPage = () => {
                         {!isMonthlyPassSession && (
                             <div className="dashboard-panel">
 
-                            {/* Expiring Soon Alert (Floating Toast) */}
-                            {isExpiringSoon && (
-                                <div style={{ 
-                                    position: 'fixed', top: '32px', left: '50%', transform: 'translateX(-50%)', 
-                                    zIndex: 9999, background: '#fffbeb', border: '1px solid #fde68a', 
-                                    borderRadius: '16px', padding: '16px', display: 'flex', gap: '12px', 
-                                    alignItems: 'flex-start', boxShadow: '0 20px 40px -10px rgba(217,119,6,0.2), 0 0 0 4px rgba(253,230,138,0.5)',
-                                    width: 'max-content', maxWidth: '90vw',
-                                    animation: 'slideDownFadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1)'
-                                }}>
-                                    <style>{`
+                                {/* Expiring Soon Alert (Floating Toast) */}
+                                {isExpiringSoon && (
+                                    <div style={{
+                                        position: 'fixed', top: '32px', left: '50%', transform: 'translateX(-50%)',
+                                        zIndex: 9999, background: '#fffbeb', border: '1px solid #fde68a',
+                                        borderRadius: '16px', padding: '16px', display: 'flex', gap: '12px',
+                                        alignItems: 'flex-start', boxShadow: '0 20px 40px -10px rgba(217,119,6,0.2), 0 0 0 4px rgba(253,230,138,0.5)',
+                                        width: 'max-content', maxWidth: '90vw',
+                                        animation: 'slideDownFadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1)'
+                                    }}>
+                                        <style>{`
                                         @keyframes slideDownFadeIn {
                                             from { opacity: 0; transform: translate(-50%, -20px); }
                                             to { opacity: 1; transform: translate(-50%, 0); }
                                         }
                                     `}</style>
-                                    <div style={{ color: '#d97706', marginTop: '2px' }}>
-                                        <WarningIcon />
-                                    </div>
-                                    <div>
-                                        <div style={{ color: '#b45309', fontWeight: 800, fontSize: '14px', marginBottom: '4px' }}>Session Expiring Soon</div>
-                                        <div style={{ color: '#b45309', fontSize: '12px', lineHeight: 1.5, fontWeight: 500, maxWidth: '280px' }}>
-                                            Your parking time is almost up. Please exit before the booked time to avoid late departure surcharges.
+                                        <div style={{ color: '#d97706', marginTop: '2px' }}>
+                                            <WarningIcon />
                                         </div>
+                                        <div>
+                                            <div style={{ color: '#b45309', fontWeight: 800, fontSize: '14px', marginBottom: '4px' }}>Session Expiring Soon</div>
+                                            <div style={{ color: '#b45309', fontSize: '12px', lineHeight: 1.5, fontWeight: 500, maxWidth: '280px' }}>
+                                                Your parking time is almost up. Please exit before the booked time to avoid late departure surcharges.
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Stats Grid */}
+                                <div className="stat-grid s-in-1">
+                                    <div className="stat-card blue">
+                                        <div className="stat-label blue" style={{ display: 'flex', width: '100%', justifyContent: 'center' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
+                                                <TimerIcon /> Parking Duration
+                                            </div>
+                                        </div>
+                                        <div className="stat-value blue">{formatHMS(Math.max(0, elapsed))}</div>
+                                        <div className="stat-sub blue" style={{ marginBottom: '12px' }}>Hours : Mins : Secs</div>
+                                        {isOvertime ? (
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', fontSize: '9px', color: '#ef4444', background: '#fef2f2', padding: '4px 10px', borderRadius: '12px', width: 'fit-content', margin: '0 auto', border: '1px solid #fecaca' }}>
+                                                <div style={{ width: '6px', height: '6px', backgroundColor: '#ef4444', borderRadius: '50%', animation: 'pulse 1.5s infinite' }} />
+                                                OVERTIME
+                                            </div>
+                                        ) : isExpiringSoon ? (
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', fontSize: '9px', color: '#d97706', background: '#fffbeb', padding: '4px 10px', borderRadius: '12px', width: 'fit-content', margin: '0 auto', border: '1px solid #fde68a' }}>
+                                                <div style={{ width: '6px', height: '6px', backgroundColor: '#d97706', borderRadius: '50%', animation: 'pulse 1.5s infinite' }} />
+                                                EXPIRING SOON
+                                            </div>
+                                        ) : (
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', fontSize: '9px', color: '#10b981', background: '#ecfdf5', padding: '4px 10px', borderRadius: '12px', width: 'fit-content', margin: '0 auto' }}>
+                                                <div style={{ width: '6px', height: '6px', backgroundColor: '#10b981', borderRadius: '50%', animation: 'pulse 1.5s infinite' }} />
+                                                ACTIVE
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div className="stat-card green">
+                                        <div className="stat-label green" style={{ display: 'flex', width: '100%', justifyContent: 'center' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
+                                                <CardIcon /> Current Fee
+                                            </div>
+                                        </div>
+                                        <div className="stat-value green" style={{ color: '#059669' }}>
+                                            {fmtVND(currentFee)}
+                                        </div>
+                                        <div className="stat-sub green" style={{ marginBottom: '6px' }}>{fmtVND(blockRate)} / 4-hour block</div>
                                     </div>
                                 </div>
-                            )}
 
-                            {/* Stats Grid */}
-                            <div className="stat-grid s-in-1">
-                                <div className="stat-card blue">
-                                    <div className="stat-label blue" style={{ display: 'flex', width: '100%', justifyContent: 'center' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
-                                            <TimerIcon /> Parking Duration
+                                {/* Details Card */}
+                                <div className="s-card s-in-2">
+                                    <div className="location-row">
+                                        <div className="location-icon">
+                                            <PinIcon />
+                                        </div>
+                                        <div>
+                                            <div className="location-label">Parking Spot</div>
+                                            <div className="location-value">{floorName} — {slotCode}</div>
+                                            {zoneName && zoneName !== 'N/A' && (
+                                                <div className="location-sub">Zone {zoneName}</div>
+                                            )}
                                         </div>
                                     </div>
-                                    <div className="stat-value blue">{formatHMS(Math.max(0, elapsed))}</div>
-                                    <div className="stat-sub blue" style={{ marginBottom: '12px' }}>Hours : Mins : Secs</div>
-                                    {isOvertime ? (
-                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', fontSize: '9px', color: '#ef4444', background: '#fef2f2', padding: '4px 10px', borderRadius: '12px', width: 'fit-content', margin: '0 auto', border: '1px solid #fecaca' }}>
-                                            <div style={{ width: '6px', height: '6px', backgroundColor: '#ef4444', borderRadius: '50%', animation: 'pulse 1.5s infinite' }} />
-                                            OVERTIME
-                                        </div>
-                                    ) : isExpiringSoon ? (
-                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', fontSize: '9px', color: '#d97706', background: '#fffbeb', padding: '4px 10px', borderRadius: '12px', width: 'fit-content', margin: '0 auto', border: '1px solid #fde68a' }}>
-                                            <div style={{ width: '6px', height: '6px', backgroundColor: '#d97706', borderRadius: '50%', animation: 'pulse 1.5s infinite' }} />
-                                            EXPIRING SOON
-                                        </div>
-                                    ) : (
-                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', fontSize: '9px', color: '#10b981', background: '#ecfdf5', padding: '4px 10px', borderRadius: '12px', width: 'fit-content', margin: '0 auto' }}>
-                                            <div style={{ width: '6px', height: '6px', backgroundColor: '#10b981', borderRadius: '50%', animation: 'pulse 1.5s infinite' }} />
-                                            ACTIVE
-                                        </div>
-                                    )}
-                                </div>
 
-                                <div className="stat-card green">
-                                    <div className="stat-label green" style={{ display: 'flex', width: '100%', justifyContent: 'center' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
-                                            <CardIcon /> Current Fee
+                                    <div className="details-grid">
+                                        <div>
+                                            <div className="detail-item-label">Parking Lot</div>
+                                            <div className="detail-item-value">{spot.title}</div>
                                         </div>
+                                        {spot.code && (
+                                            <div>
+                                                <div className="detail-item-label">Parking Code</div>
+                                                <div className="detail-item-value">{spot.code}</div>
+                                            </div>
+                                        )}
+                                        {slotData?.features?.hasEVCharger && (
+                                            <div>
+                                                <div className="detail-item-label">Features</div>
+                                                <div className="detail-item-value" style={{ color: '#10b981' }}>⚡ EV Charging</div>
+                                            </div>
+                                        )}
                                     </div>
-                                    <div className="stat-value green" style={{ color: '#059669' }}>
-                                        {fmtVND(currentFee)}
-                                    </div>
-                                    <div className="stat-sub green" style={{ marginBottom: '6px' }}>{fmtVND(blockRate)} / 4-hour block</div>
-                                </div>
-                            </div>
 
-                            {/* Details Card */}
-                            <div className="s-card s-in-2">
-                                <div className="location-row">
-                                    <div className="location-icon">
-                                        <PinIcon />
-                                    </div>
-                                    <div>
-                                        <div className="location-label">Parking Spot</div>
-                                        <div className="location-value">{floorName} — {slotCode}</div>
-                                        {zoneName && zoneName !== 'N/A' && (
-                                            <div className="location-sub">Zone {zoneName}</div>
+                                    {/* Pricing Summary */}
+                                    <div className="pricing-details">
+                                        <div className="pricing-row">
+                                            <span className="pricing-label">Surcharge (4-hour block)</span>
+                                            <span className="pricing-value" style={{ color: '#2563eb' }}>{fmtVND(blockRate)} / block</span>
+                                        </div>
+                                        {earlyOtFee > 0 && (
+                                            <div className="pricing-row">
+                                                <span className="pricing-label">Early Arrival Surcharge</span>
+                                                <span className="pricing-value" style={{ color: '#b45309' }}>{fmtVND(earlyOtFee)}</span>
+                                            </div>
+                                        )}
+                                        {lateOtFee > 0 && (
+                                            <div className="pricing-row">
+                                                <span className="pricing-label">Late Departure Surcharge</span>
+                                                <span className="pricing-value" style={{ color: '#b45309' }}>{fmtVND(lateOtFee)}</span>
+                                            </div>
+                                        )}
+                                        {vehicleTypeData?.pricing?.dailyRate && (
+                                            <div className="pricing-row">
+                                                <span className="pricing-label">Daily Max Rate</span>
+                                                <span className="pricing-value" style={{ color: '#64748b', fontSize: '13px' }}>
+                                                    {fmtVND(vehicleTypeData.pricing.dailyRate)} / day
+                                                </span>
+                                            </div>
+                                        )}
+                                        {advancePayment > 0 && (
+                                            <div className="pricing-row">
+                                                <span className="pricing-label" style={{ color: '#10b981' }}>Prepaid (Booking)</span>
+                                                <span className="pricing-value" style={{ color: '#10b981' }}>
+                                                    - {fmtVND(advancePayment)}
+                                                </span>
+                                            </div>
                                         )}
                                     </div>
                                 </div>
 
-                                <div className="details-grid">
-                                    <div>
-                                        <div className="detail-item-label">Parking Lot</div>
-                                        <div className="detail-item-value">{spot.title}</div>
-                                    </div>
-                                    {spot.code && (
-                                        <div>
-                                            <div className="detail-item-label">Parking Code</div>
-                                            <div className="detail-item-value">{spot.code}</div>
-                                        </div>
-                                    )}
-                                    {slotData?.features?.hasEVCharger && (
-                                        <div>
-                                            <div className="detail-item-label">Features</div>
-                                            <div className="detail-item-value" style={{ color: '#10b981' }}>⚡ EV Charging</div>
-                                        </div>
-                                    )}
-                                </div>
-
-                                {/* Pricing Summary */}
-                                <div className="pricing-details">
-                                    <div className="pricing-row">
-                                        <span className="pricing-label">Surcharge (4-hour block)</span>
-                                        <span className="pricing-value" style={{ color: '#2563eb' }}>{fmtVND(blockRate)} / block</span>
-                                    </div>
-                                    {earlyOtFee > 0 && (
-                                        <div className="pricing-row">
-                                            <span className="pricing-label">Early Arrival Surcharge</span>
-                                            <span className="pricing-value" style={{ color: '#b45309' }}>{fmtVND(earlyOtFee)}</span>
-                                        </div>
-                                    )}
-                                    {lateOtFee > 0 && (
-                                        <div className="pricing-row">
-                                            <span className="pricing-label">Late Departure Surcharge</span>
-                                            <span className="pricing-value" style={{ color: '#b45309' }}>{fmtVND(lateOtFee)}</span>
-                                        </div>
-                                    )}
-                                    {vehicleTypeData?.pricing?.dailyRate && (
-                                        <div className="pricing-row">
-                                            <span className="pricing-label">Daily Max Rate</span>
-                                            <span className="pricing-value" style={{ color: '#64748b', fontSize: '13px' }}>
-                                                {fmtVND(vehicleTypeData.pricing.dailyRate)} / day
-                                            </span>
-                                        </div>
-                                    )}
-                                    {advancePayment > 0 && (
-                                        <div className="pricing-row">
-                                            <span className="pricing-label" style={{ color: '#10b981' }}>Prepaid (Booking)</span>
-                                            <span className="pricing-value" style={{ color: '#10b981' }}>
-                                                - {fmtVND(advancePayment)}
-                                            </span>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* Surcharge Logs */}
-                            <div className="s-card s-in-3" style={{ padding: '20px' }}>
-                                <h4 style={{ fontSize: 13, fontWeight: 800, color: '#0f172a', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
-                                    <TimerIcon /> Surcharge Logs
-                                </h4>
-                                {feeLogs.length > 0 ? (
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 180, overflowY: 'auto', paddingRight: 4 }}>
-                                        {feeLogs.map((log, i) => (
-                                            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, paddingBottom: 8, borderBottom: i < feeLogs.length - 1 ? '1px dashed #e2e8f0' : 'none' }}>
-                                                <div>
-                                                    <div style={{ fontWeight: 600, color: log.type === 'early' ? '#b45309' : '#ef4444' }}>{log.label}</div>
-                                                    <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>
-                                                        {log.timestamp.toLocaleDateString('vi-VN')} {log.timestamp.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                                {/* Surcharge Logs */}
+                                <div className="s-card s-in-3" style={{ padding: '20px' }}>
+                                    <h4 style={{ fontSize: 13, fontWeight: 800, color: '#0f172a', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+                                        <TimerIcon /> Surcharge Logs
+                                    </h4>
+                                    {feeLogs.length > 0 ? (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 180, overflowY: 'auto', paddingRight: 4 }}>
+                                            {feeLogs.map((log, i) => (
+                                                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, paddingBottom: 8, borderBottom: i < feeLogs.length - 1 ? '1px dashed #e2e8f0' : 'none' }}>
+                                                    <div>
+                                                        <div style={{ fontWeight: 600, color: log.type === 'early' ? '#b45309' : '#ef4444' }}>{log.label}</div>
+                                                        <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>
+                                                            {log.timestamp.toLocaleDateString('vi-VN')} {log.timestamp.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                                                        </div>
+                                                    </div>
+                                                    <div style={{ fontWeight: 700, color: '#0f172a' }}>
+                                                        + {fmtVND(log.amount)}
                                                     </div>
                                                 </div>
-                                                <div style={{ fontWeight: 700, color: '#0f172a' }}>
-                                                    + {fmtVND(log.amount)}
-                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <div style={{ padding: '12px 0 4px', textAlign: 'center' }}>
+                                            <div style={{ color: '#10b981', fontSize: 13, fontWeight: 700, marginBottom: 4 }}>
+                                                No Surcharges Incurred
                                             </div>
-                                        ))}
-                                    </div>
-                                ) : (
-                                    <div style={{ padding: '12px 0 4px', textAlign: 'center' }}>
-                                        <div style={{ color: '#10b981', fontSize: 13, fontWeight: 700, marginBottom: 4 }}>
-                                            No Surcharges Incurred
+                                            <div style={{ fontSize: 11, color: '#64748b', fontWeight: 500 }}>
+                                                You are parking within the valid schedule.
+                                            </div>
                                         </div>
-                                        <div style={{ fontSize: 11, color: '#64748b', fontWeight: 500 }}>
-                                            You are parking within the valid schedule.
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
+                                    )}
+                                </div>
 
-                            {/* Notice */}
-                            <div className="notice-card s-in-3">
-                                <WarningIcon />
-                                <div>
-                                    <div className="notice-title">Fee Policy & Notice</div>
-                                    <div className="notice-text">
-                                        <strong>Early Arrival:</strong> Check-in is allowed up to 15 mins before booked time. Arriving earlier incurs surcharges.<br />
-                                        <strong>Late Departure:</strong> Surcharges apply immediately if parked past the booked exit time.
+                                {/* Notice */}
+                                <div className="notice-card s-in-3">
+                                    <WarningIcon />
+                                    <div>
+                                        <div className="notice-title">Fee Policy & Notice</div>
+                                        <div className="notice-text">
+                                            <strong>Early Arrival:</strong> Check-in is allowed up to 15 mins before booked time. Arriving earlier incurs surcharges.<br />
+                                            <strong>Late Departure:</strong> Surcharges apply immediately if parked past the booked exit time.
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
 
-                            {/* Actions */}
-                            <div className="action-group s-in-3">
-                                {amountDue > 0 && (
-                                    <button className="btn-primary" onClick={handlePayCheckout}>
-                                        <PayIcon /> Pay Surcharge: {fmtVND(amountDue)}
-                                    </button>
-                                )}
-                            </div>
+                                {/* Actions */}
+                                <div className="action-group s-in-3">
+                                    {amountDue > 0 && (
+                                        <button className="btn-primary" onClick={handlePayCheckout}>
+                                            <PayIcon /> Pay Surcharge: {fmtVND(amountDue)}
+                                        </button>
+                                    )}
+                                </div>
 
-                        </div>
+                            </div>
                         )}
                     </div>
                 </div>
@@ -1129,7 +1186,7 @@ const SessionPage = () => {
                                     size={Math.min(window.innerWidth - 100, 320)}
                                     bgColor="#ffffff"
                                     fgColor="#0f172a"
-                                    level="H"
+                                    level="L"
                                     includeMargin={false}
                                 />
                             </div>
@@ -1168,6 +1225,134 @@ const SessionPage = () => {
                             </button>
                         </div>
                     </div>
+                </div>
+            )}
+
+            {/* ── Surcharge Payment Modal ── */}
+            {showSurchargeModal && (
+                <div
+                    style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99998, padding: 20 }}
+                    onClick={() => { setShowSurchargeModal(false); setSurchargePolling(false); setSurchargePhase('method'); }}
+                >
+                    <div
+                        style={{ background: '#fff', borderRadius: 24, width: '100%', maxWidth: 460, overflow: 'hidden', boxShadow: '0 25px 60px rgba(0,0,0,0.3)' }}
+                        onClick={e => e.stopPropagation()}
+                    >
+                        {surchargePhase === 'method' ? (
+                            <>
+                                {/* Header */}
+                                <div style={{ padding: '28px 28px 0' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                                        <span style={{ fontSize: 22 }}>💳</span>
+                                        <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: '#0f172a' }}>Pay Surcharge</h2>
+                                    </div>
+                                    <p style={{ margin: 0, fontSize: 14, color: '#64748b' }}>Select payment method to pay the surcharge fee.</p>
+                                </div>
+
+                                {/* Payment methods */}
+                                <div style={{ padding: '20px 28px' }}>
+                                    {[
+                                        { id: 'bank_transfer', icon: '🏦', label: 'Bank Transfer (VietQR)', sub: 'Scan VietQR code to pay via Banking App' },
+                                        { id: 'momo', icon: '🟣', label: 'MoMo Wallet', sub: 'Pay at parking booth before exit' },
+                                        { id: 'cash', icon: '💵', label: 'Pay at Counter', sub: 'Pay cash at parking booth before exit' },
+                                    ].map(m => (
+                                        <div
+                                            key={m.id}
+                                            onClick={() => setSurchargePayMethod(m.id as any)}
+                                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderRadius: 14, border: `2px solid ${surchargePayMethod === m.id ? '#3b82f6' : '#e2e8f0'}`, background: surchargePayMethod === m.id ? '#eff6ff' : '#fff', marginBottom: 10, cursor: 'pointer', transition: 'all 0.15s' }}
+                                        >
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                                                <span style={{ fontSize: 24, flexShrink: 0 }}>{m.icon}</span>
+                                                <div>
+                                                    <div style={{ fontWeight: 700, fontSize: 15, color: '#0f172a' }}>{m.label}</div>
+                                                    <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>{m.sub}</div>
+                                                </div>
+                                            </div>
+                                            <div style={{ width: 20, height: 20, borderRadius: '50%', border: `2px solid ${surchargePayMethod === m.id ? '#3b82f6' : '#cbd5e1'}`, background: surchargePayMethod === m.id ? '#3b82f6' : 'transparent', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                {surchargePayMethod === m.id && <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#fff' }} />}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                {/* Amount summary */}
+                                <div style={{ margin: '0 28px 20px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 14, padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                    <div>
+                                        <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, color: '#64748b', fontWeight: 700 }}>Surcharge Fee</div>
+                                        <div style={{ fontSize: 13, color: '#475569', marginTop: 2 }}>{fmtVND(amountDue)}</div>
+                                    </div>
+                                    <div style={{ textAlign: 'right' }}>
+                                        <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, color: '#2563eb', fontWeight: 700 }}>Total Due</div>
+                                        <div style={{ fontSize: 22, fontWeight: 900, color: '#0f172a' }}>{fmtVND(amountDue)}</div>
+                                    </div>
+                                </div>
+
+                                {/* Actions */}
+                                <div style={{ padding: '0 28px 28px', display: 'flex', gap: 12 }}>
+                                    <button
+                                        onClick={() => { setShowSurchargeModal(false); setSurchargePhase('method'); }}
+                                        style={{ flex: 1, padding: '14px', borderRadius: 14, border: '2px solid #e2e8f0', background: '#fff', color: '#475569', fontWeight: 700, fontSize: 15, cursor: 'pointer' }}
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={handleConfirmSurchargePayment}
+                                        disabled={surchargeProcessing}
+                                        style={{ flex: 2, padding: '14px', borderRadius: 14, border: 'none', background: 'linear-gradient(135deg,#2563eb,#1d4ed8)', color: '#fff', fontWeight: 800, fontSize: 15, cursor: surchargeProcessing ? 'wait' : 'pointer', opacity: surchargeProcessing ? 0.7 : 1 }}
+                                    >
+                                        {surchargeProcessing ? 'Processing...' : 'Confirm Payment'}
+                                    </button>
+                                </div>
+                            </>
+                        ) : (
+                            <>
+                                {/* QR Phase */}
+                                <div style={{ padding: '28px 28px 0' }}>
+                                    <h2 style={{ margin: '0 0 4px', fontSize: 20, fontWeight: 800, color: '#0f172a' }}>Payment</h2>
+                                    <p style={{ margin: 0, fontSize: 14, color: '#64748b' }}>Scan to complete payment</p>
+                                </div>
+                                <div style={{ padding: 28, textAlign: 'center' }}>
+                                    <div style={{ background: 'linear-gradient(135deg,#eff6ff,#dbeafe)', borderRadius: 20, padding: 24, border: '1px solid #bfdbfe' }}>
+                                        <div style={{ fontWeight: 800, fontSize: 17, color: '#1d4ed8', marginBottom: 20 }}>Scan to Pay via VietQR</div>
+                                        <div style={{ background: '#fff', padding: 16, borderRadius: 16, display: 'inline-block', boxShadow: '0 8px 24px rgba(37,99,235,0.15)', marginBottom: 16 }}>
+                                            {surchargeBankInfo?.qrUrl
+                                                ? <img src={surchargeBankInfo.qrUrl} alt="VietQR" style={{ width: 200, height: 200, objectFit: 'contain', display: 'block' }} />
+                                                : <div style={{ width: 200, height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8' }}>Loading...</div>
+                                            }
+                                        </div>
+                                        <div style={{ fontSize: 13, color: '#475569', background: '#fff', padding: '12px 16px', borderRadius: 10, border: '1px dashed #93c5fd', wordBreak: 'break-all' }}>
+                                            Transfer Content: <strong style={{ color: '#1e293b', fontSize: 16, letterSpacing: 1 }}>{surchargeBankInfo?.transferContent}</strong>
+                                        </div>
+                                        <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                                            <div style={{ width: 16, height: 16, border: '2px solid #3b82f6', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                                            <span style={{ fontSize: 13, color: '#2563eb', fontWeight: 600 }}>Waiting for payment confirmation...</span>
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={() => { setShowSurchargeModal(false); setSurchargePolling(false); setSurchargePhase('method'); }}
+                                        style={{ marginTop: 20, width: '100%', padding: '14px', borderRadius: 14, border: '2px solid #e2e8f0', background: '#fff', color: '#475569', fontWeight: 700, fontSize: 15, cursor: 'pointer' }}
+                                    >
+                                        Cancel
+                                    </button>
+                                </div>
+                            </>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* \u2500\u2500 Payment Success Toast \u2500\u2500 */}
+            {showPaySuccessToast && (
+                <div style={{
+                    position: 'fixed', top: 24, left: '50%', transform: 'translateX(-50%)',
+                    zIndex: 100000, background: '#10b981', color: '#fff',
+                    padding: '14px 28px', borderRadius: 100, fontWeight: 700, fontSize: 15,
+                    boxShadow: '0 10px 30px rgba(16,185,129,0.4)',
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    animation: 'fadeSlideIn 0.4s ease-out'
+                }}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                    Payment successful!
                 </div>
             )}
         </>

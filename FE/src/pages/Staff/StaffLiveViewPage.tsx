@@ -278,7 +278,9 @@ const StaffLiveViewPage = () => {
                           <td className="px-6 py-4 font-bold text-gray-900">{session.vehicleInfo?.licensePlate}</td>
                           <td className="px-6 py-4">{session.vehicleType?.name}</td>
                           <td className="px-6 py-4">{new Date(session.entryTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
-                          <td className="px-6 py-4">{session.zone?.name || 'Unassigned'}</td>
+                          <td className="px-6 py-4">
+                            {session.zone?.name ? `${session.zone.name}${session.slot?.slotCode ? ` - Slot ${session.slot.slotCode}` : ''}` : (session.slot?.slotCode ? `Slot ${session.slot.slotCode}` : 'Unassigned')}
+                          </td>
                           <td className="px-6 py-4 font-medium">{
                             (() => {
                               const diff = new Date().getTime() - new Date(session.entryTime).getTime();

@@ -11,6 +11,7 @@ import bookingService from '../../services/api/bookingService';
 import paymentService from '../../services/api/paymentService';
 import parkingLotService from '../../services/api/parkingLotService';
 import monthlyPassService, { MonthlyPass } from '../../services/api/monthlyPassService';
+import parkingSessionService from '../../services/api/parkingSessionService';
 import { useSocket } from '../../contexts/SocketContext';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -78,7 +79,31 @@ const isAfterDay = (d1: Date, d2: Date) => {
 
 // Vietnamese license plate validation
 const LP_REGEX = /^[0-9]{2}[A-Z]{1,2}-[0-9]{4,5}$|^[0-9]{2}-[A-Z][0-9]{4,5}$/i;
-const formatPlate = (v: string) => v.toUpperCase().replace(/[^A-Z0-9-]/gi, '');
+const formatPlate = (rawValue: string, vehicleCode?: string) => {
+    // If the user manually types a dash, preserve it and just clean invalid chars
+    if (rawValue.includes('-')) {
+        return rawValue.toUpperCase().replace(/[^A-Z0-9-]/g, '');
+    }
+
+    let v = rawValue.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (v.length < 4) return v;
+
+    const isMoto = vehicleCode ? (vehicleCode.toUpperCase().includes('MOTOR') || vehicleCode.toUpperCase().includes('BIKE')) : false;
+
+    let prefixLen = 3; // Default for cars (e.g. 51A)
+    if (/[A-Z]/.test(v[3])) {
+        // 4th char is a letter (e.g. 51LD)
+        prefixLen = 4;
+    } else if (isMoto) {
+        // Motorcycle plates usually have a 4-char prefix (e.g. 59T1)
+        prefixLen = 4;
+    }
+
+    if (v.length > prefixLen) {
+        return v.slice(0, prefixLen) + '-' + v.slice(prefixLen);
+    }
+    return v;
+};
 
 // Format helpers
 const fmtVND = (n: number) => new Intl.NumberFormat('vi-VN').format(Math.round(n)) + ' ₫';
@@ -537,6 +562,7 @@ const BookingPage = () => {
     const [savedVehicles, setSavedVehicles] = useState<Vehicle[]>([]);
     const [myMonthlyPasses, setMyMonthlyPasses] = useState<MonthlyPass[]>([]);
     const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
+    const [isCheckingPlate, setIsCheckingPlate] = useState(false);
 
     // ── Step 2: Vehicle Type ──
     const [vehicleType, setVehicleType] = useState<VehicleType | null>(null);
@@ -593,7 +619,7 @@ const BookingPage = () => {
             if (finalH >= 24) {
                 const next = new Date(entry.getTime() + 4 * 3600000);
                 const iso = next.toISOString();
-                setExitDate(`${iso.slice(0,10)}T${String(next.getHours()).padStart(2,'0')}:${String(next.getMinutes()).padStart(2,'0')}`);
+                setExitDate(`${iso.slice(0, 10)}T${String(next.getHours()).padStart(2, '0')}:${String(next.getMinutes()).padStart(2, '0')}`);
                 return;
             }
         }
@@ -608,10 +634,10 @@ const BookingPage = () => {
         if (proposedEntry >= currentExit) {
             const nextExit = new Date(proposedEntry.getTime() + 4 * 3600000);
             const iso = nextExit.toISOString();
-            setExitDate(`${iso.slice(0,10)}T${String(nextExit.getHours()).padStart(2,'0')}:${String(nextExit.getMinutes()).padStart(2,'0')}`);
+            setExitDate(`${iso.slice(0, 10)}T${String(nextExit.getHours()).padStart(2, '0')}:${String(nextExit.getMinutes()).padStart(2, '0')}`);
         }
     };
-    
+
     const setExitSlot = (h: number, m: number) => {
         handleSetExitDate(h, m);
     };
@@ -652,12 +678,14 @@ const BookingPage = () => {
 
     const openCalendar = (mode: 'from' | 'to') => {
         const fromDate = new Date(entryDate.slice(0, 10));
-        const toDate = new Date(exitDate);
+        const toDate = new Date(exitDate.slice(0, 10));
 
         setTempFromDate(fromDate);
         setTempToDate(toDate);
-        setCalMonth(fromDate.getMonth());
-        setCalYear(fromDate.getFullYear());
+
+        const targetDate = mode === 'from' ? fromDate : toDate;
+        setCalMonth(targetDate.getMonth());
+        setCalYear(targetDate.getFullYear());
         setActiveInput(mode);
         setShowCalendar(true);
     };
@@ -821,21 +849,10 @@ const BookingPage = () => {
                         clearInterval(interval);
 
                         saveToMyTickets(successBooking);
-                        
-                        navigate('/checkoutsuccess', {
+
+                        navigate('/tickets', {
                             state: {
-                                isBooking: true,
-                                spot: parkingSpot,
-                                vehicleType: vehicleType,
-                                floor: selectedFloor,
-                                slot: selectedSlot,
-                                licensePlate: formatPlate(licensePlate),
-                                entryDate: new Date(entryDate).toISOString(),
-                                exitTime: exitTime.toISOString(),
-                                elapsed: new Date(exitDate).getTime() - new Date(entryDate).getTime(),
-                                totalAmount: estimatedPrice,
-                                payMethod: payMethod,
-                                transactionId: `REC-${Math.floor(100000 + Math.random() * 900000)}`
+                                showToast: 'Booking successful! Your ticket has been saved here.'
                             }
                         });
 
@@ -889,21 +906,10 @@ const BookingPage = () => {
             } else {
                 // Cash/Momo (Mock for now): directly show success
                 saveToMyTickets(bookingRes.data || bookingRes);
-                
-                navigate('/checkoutsuccess', {
+
+                navigate('/tickets', {
                     state: {
-                        isBooking: true,
-                        spot: parkingSpot,
-                        vehicleType: vehicleType,
-                        floor: selectedFloor,
-                        slot: selectedSlot,
-                        licensePlate: formatPlate(licensePlate),
-                        entryDate: new Date(entryDate).toISOString(),
-                        exitTime: exitTime.toISOString(),
-                        elapsed: new Date(exitDate).getTime() - new Date(entryDate).getTime(),
-                        totalAmount: estimatedPrice,
-                        payMethod: payMethod,
-                        transactionId: `REC-${Math.floor(100000 + Math.random() * 900000)}`
+                        showToast: 'Booking successful! Your ticket has been saved here.'
                     }
                 });
 
@@ -1020,11 +1026,11 @@ const BookingPage = () => {
     const duration = Math.max(0, Math.round(durationMs / 3600000));
     const baseRate = vehicleType?.pricing?.dayBlockRate || (TEMP_PRICES[vehicleType?.code?.toUpperCase()]?.dayBlockRate) || (vehicleType?.pricing?.hourlyRate ? vehicleType.pricing.hourlyRate * 4 : 20000);
     const nightRate = vehicleType?.pricing?.nightBlockRate || baseRate * 1.5;
-    
+
     let calculatedEstCost = 0;
     let tempStart = new Date(entryDate);
     const tempExit = new Date(exitTime);
-    
+
     while (tempStart < tempExit) {
         const blockEnd = new Date(Math.min(tempExit.getTime(), tempStart.getTime() + 4 * 60 * 60 * 1000));
         const effectiveEnd = new Date(blockEnd.getTime() - 1);
@@ -1036,14 +1042,14 @@ const BookingPage = () => {
         calculatedEstCost += isNightBlock ? nightRate : baseRate;
         tempStart = new Date(tempStart.getTime() + 4 * 60 * 60 * 1000);
     }
-    
+
     const estimatedPrice = calculatedEstCost;
 
     // ─── Navigation ─────────────────────────────────────────────────────────
     const canProceed = (step: number): boolean => {
         switch (step) {
             case 1: return !!vehicleType;
-            case 2: return licensePlate.trim().length >= 4;
+            case 2: return licensePlate.trim().length >= 4 && licensePlate.trim().length <= 10;
             case 3: return !!entryDate && !!exitDate && new Date(exitDate).getTime() > new Date(entryDate).getTime();
             case 4: return !!selectedFloor;
             case 5: return !!selectedZone;
@@ -1052,24 +1058,62 @@ const BookingPage = () => {
         }
     };
 
-    const handleNext = () => {
+    const handleNext = async () => {
         if (currentStep === 2) {
-            const cleaned = formatPlate(licensePlate);
+            const cleaned = formatPlate(licensePlate, vehicleType?.code);
             setLicensePlate(cleaned);
-            if (cleaned.length < 4) { setPlateError('Please enter a valid license plate number'); return; }
-            
+            if (cleaned.length < 4 || cleaned.length > 10) {
+                setPlateError('Biển số xe không hợp lệ (tối đa 9 ký tự)');
+                return;
+            }
+
             // Check if entered plate has active pass for this lot
             const activePass = myMonthlyPasses.find(p => {
                 const pLotId = typeof p.parkingLot === 'object' ? p.parkingLot._id : p.parkingLot;
-                return p.licensePlate === cleaned && 
-                       ['active', 'pending'].includes(p.status) &&
-                       pLotId === parkingSpot._id;
+                return p.licensePlate === cleaned &&
+                    ['active', 'pending'].includes(p.status) &&
+                    pLotId === parkingSpot._id;
             });
             if (activePass) {
                 setPlateError('This vehicle already has a Monthly Pass for this location. You can park without booking.');
                 return;
             }
-            
+
+            setIsCheckingPlate(true);
+            try {
+                // 1. Check if the vehicle is currently parked
+                try {
+                    const activeRes = await parkingSessionService.findActive({ licensePlate: cleaned });
+                    if (activeRes && activeRes._id) {
+                        setPlateError('This vehicle is currently parked (has an active session).');
+                        setIsCheckingPlate(false);
+                        return;
+                    }
+                } catch (e: any) {
+                    const status = e?.status || e?.response?.status;
+                    if (status !== 404) {
+                        console.error('Check active error', e);
+                    }
+                }
+
+                // 2. Check if the vehicle already has an upcoming booking
+                const myBookings = await bookingService.getMyBookings({ limit: 50 });
+                const list = Array.isArray(myBookings) ? myBookings : (myBookings?.data ?? myBookings?.docs ?? []);
+                const hasPending = list.some((b: any) => 
+                    b.vehicleInfo?.licensePlate === cleaned && 
+                    ['pending', 'approved'].includes(b.status)
+                );
+                
+                if (hasPending) {
+                    setPlateError('This vehicle already has an upcoming booking.');
+                    setIsCheckingPlate(false);
+                    return;
+                }
+            } catch (err) {
+                console.error('Validation error', err);
+            }
+            setIsCheckingPlate(false);
+
             setPlateError('');
         }
         if (currentStep < 6) setCurrentStep(s => s + 1);
@@ -2141,9 +2185,9 @@ const BookingPage = () => {
                                                         // Check if vehicle has an active monthly pass for this parking lot
                                                         const activePass = myMonthlyPasses.find(p => {
                                                             const pLotId = typeof p.parkingLot === 'object' ? p.parkingLot._id : p.parkingLot;
-                                                            return p.licensePlate === v.licensePlate && 
-                                                                   ['active', 'pending'].includes(p.status) &&
-                                                                   pLotId === parkingSpot._id;
+                                                            return p.licensePlate === v.licensePlate &&
+                                                                ['active', 'pending'].includes(p.status) &&
+                                                                pLotId === parkingSpot._id;
                                                         });
                                                         const isDisabled = !!activePass;
 
@@ -2185,7 +2229,7 @@ const BookingPage = () => {
                                                                         {v.licensePlate}
                                                                         {isDisabled && (
                                                                             <span style={{
-                                                                                fontSize: 10, fontWeight: 700, color: '#047857', background: '#d1fae5', 
+                                                                                fontSize: 10, fontWeight: 700, color: '#047857', background: '#d1fae5',
                                                                                 padding: '2px 6px', borderRadius: 6, letterSpacing: 0
                                                                             }}>
                                                                                 Has Monthly Pass
@@ -2221,16 +2265,21 @@ const BookingPage = () => {
                                             className={`lp-plate-input ${plateError ? 'error' : ''}`}
                                             value={licensePlate}
                                             onChange={e => {
-                                                setLicensePlate(formatPlate(e.target.value));
+                                                const formatted = formatPlate(e.target.value, vehicleType?.code);
+                                                setLicensePlate(formatted);
                                                 setSelectedVehicleId(null);
-                                                setPlateError('');
+                                                if (formatted.length > 10) {
+                                                    setPlateError('Vehicle license plates can have a maximum of 9 characters (excluding the dash).');
+                                                } else {
+                                                    setPlateError('');
+                                                }
                                             }}
                                             onKeyDown={e => { if (e.key === 'Enter' && canProceed(2)) handleNext(); }}
-                                            placeholder="51A-12345"
-                                            maxLength={12}
+                                            placeholder="51A-35574"
+                                            maxLength={11}
                                             autoFocus
                                         />
-                                        {plateError && <div className="lp-error">⚠️ {plateError}</div>}
+                                        {plateError && <div className="lp-error">{plateError}</div>}
                                     </div>
 
                                     {licensePlate.length >= 4 && (
@@ -2256,8 +2305,8 @@ const BookingPage = () => {
                                         id="step2-next-btn"
                                         className="bk-btn-next"
                                         onClick={handleNext}
-                                        disabled={licensePlate.trim().length < 4}>
-                                        Continue → Date & Time
+                                        disabled={licensePlate.trim().length < 4 || isCheckingPlate}>
+                                        {isCheckingPlate ? 'Checking...' : 'Continue → Date & Time'}
                                     </button>
                                 </div>
                             </div>
@@ -2381,13 +2430,13 @@ const BookingPage = () => {
                                                 <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}> Booking Date</div>
                                                 <button
                                                     onClick={() => {
-                                                        if (showCalendar) setShowCalendar(false);
+                                                        if (showCalendar && activeInput === 'from') setShowCalendar(false);
                                                         else openCalendar('from');
                                                     }}
                                                     style={{
                                                         width: '100%',
                                                         background: 'white',
-                                                        border: showCalendar ? '1.5px solid #2563eb' : '1.5px solid #e2e8f0',
+                                                        border: (showCalendar && activeInput === 'from') ? '1.5px solid #2563eb' : '1.5px solid #e2e8f0',
                                                         borderRadius: 14,
                                                         padding: '14px 18px',
                                                         fontSize: 15,
@@ -2397,13 +2446,61 @@ const BookingPage = () => {
                                                         alignItems: 'center',
                                                         justifyContent: 'space-between',
                                                         cursor: 'pointer',
-                                                        boxShadow: showCalendar ? '0 0 0 3px rgba(37,99,235,0.15)' : '0 1px 3px rgba(0,0,0,0.05)',
+                                                        boxShadow: (showCalendar && activeInput === 'from') ? '0 0 0 3px rgba(37,99,235,0.15)' : '0 1px 3px rgba(0,0,0,0.05)',
                                                         transition: 'all 0.2s',
                                                     }}
                                                 >
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                                                         {/* <span style={{ fontSize: 16 }}>📅</span> */}
                                                         <span>{fmtCalBtnDate(fromDt)}</span>
+                                                    </div>
+                                                    <span style={{ color: '#94a3b8', fontSize: 10 }}>▼</span>
+                                                </button>                                            </div>
+                                        );
+                                    })()}
+
+                                    {/* ── 1.5 EXIT DATE ── */}
+                                    {(() => {
+                                        const MONTH_NAMES = [
+                                            'January', 'February', 'March', 'April', 'May', 'June',
+                                            'July', 'August', 'September', 'October', 'November', 'December'
+                                        ];
+                                        const toDt = new Date(exitDate.slice(0, 10));
+
+                                        const fmtCalBtnDate = (d: Date) => {
+                                            const day = String(d.getDate()).padStart(2, '0');
+                                            const month = MONTH_NAMES[d.getMonth()];
+                                            const year = d.getFullYear();
+                                            return `${day} ${month}, ${year}`;
+                                        };
+
+                                        return (
+                                            <div style={{ position: 'relative', marginBottom: 28 }}>
+                                                <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}> Exit Date</div>
+                                                <button
+                                                    onClick={() => {
+                                                        if (showCalendar && activeInput === 'to') setShowCalendar(false);
+                                                        else openCalendar('to');
+                                                    }}
+                                                    style={{
+                                                        width: '100%',
+                                                        background: 'white',
+                                                        border: (showCalendar && activeInput === 'to') ? '1.5px solid #2563eb' : '1.5px solid #e2e8f0',
+                                                        borderRadius: 14,
+                                                        padding: '14px 18px',
+                                                        fontSize: 15,
+                                                        fontWeight: 700,
+                                                        color: '#334155',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'space-between',
+                                                        cursor: 'pointer',
+                                                        boxShadow: (showCalendar && activeInput === 'to') ? '0 0 0 3px rgba(37,99,235,0.15)' : '0 1px 3px rgba(0,0,0,0.05)',
+                                                        transition: 'all 0.2s',
+                                                    }}
+                                                >
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                                        <span>{fmtCalBtnDate(toDt)}</span>
                                                     </div>
                                                     <span style={{ color: '#94a3b8', fontSize: 10 }}>▼</span>
                                                 </button>                                            </div>
@@ -3131,7 +3228,7 @@ const BookingPage = () => {
                         <div className="cal-modal-content" onClick={e => e.stopPropagation()}>
                             {/* Title inside Modal */}
                             <div style={{ textAlign: 'center', marginBottom: 16, fontSize: 16, fontWeight: 800, color: '#1e293b' }}>
-                                Select Booking Date
+                                Select {activeInput === 'from' ? 'Booking Date' : 'Exit Date'}
                             </div>
 
                             <div className="cal-popover-header">
@@ -3175,7 +3272,7 @@ const BookingPage = () => {
                                     const cellDate = new Date(cell.year, cell.month, cell.day);
                                     const isPast = isBeforeDay(cellDate, todayOnly);
 
-                                    const isSelected = isSameDay(cellDate, tempFromDate);
+                                    const isSelected = isSameDay(cellDate, activeInput === 'from' ? tempFromDate : tempToDate);
 
                                     let cellClass = 'cal-day-cell';
                                     if (!cell.isCurrentMonth) cellClass += ' other-month';
@@ -3188,13 +3285,35 @@ const BookingPage = () => {
                                             className={cellClass}
                                             onClick={() => {
                                                 if (isPast) return;
-                                                const selHour = parseInt(entryDate.slice(11, 13)) || 0;
-                                                const selMin = parseInt(entryDate.slice(14, 16)) || 0;
                                                 const dateStr = `${cellDate.getFullYear()}-${String(cellDate.getMonth() + 1).padStart(2, '0')}-${String(cellDate.getDate()).padStart(2, '0')}`;
-                                                handleSetEntryDate(dateStr, selHour, selMin);
 
-                                                setTempFromDate(cellDate);
-                                                setTempToDate(cellDate);
+                                                if (activeInput === 'from') {
+                                                    const selHour = parseInt(entryDate.slice(11, 13)) || 0;
+                                                    const selMin = parseInt(entryDate.slice(14, 16)) || 0;
+                                                    handleSetEntryDate(dateStr, selHour, selMin);
+                                                    setTempFromDate(cellDate);
+
+                                                    // Ensure exit date shifts if entry passes it
+                                                    const proposedEntry = new Date(`${dateStr}T${String(selHour).padStart(2, '0')}:${String(selMin).padStart(2, '0')}`);
+                                                    const currentExit = new Date(exitDate);
+                                                    if (proposedEntry >= currentExit) {
+                                                        const nextExit = new Date(proposedEntry.getTime() + 4 * 3600000);
+                                                        const iso = nextExit.toISOString();
+                                                        setExitDate(`${iso.slice(0, 10)}T${String(nextExit.getHours()).padStart(2, '0')}:${String(nextExit.getMinutes()).padStart(2, '0')}`);
+                                                        setTempToDate(nextExit);
+                                                    }
+                                                } else {
+                                                    const exitSelHour = parseInt(exitDate.slice(11, 13)) || 0;
+                                                    const exitSelMin = parseInt(exitDate.slice(14, 16)) || 0;
+                                                    const newExitDate = `${dateStr}T${String(exitSelHour).padStart(2, '0')}:${String(exitSelMin).padStart(2, '0')}`;
+
+                                                    if (new Date(newExitDate) <= new Date(entryDate)) {
+                                                        alert("Exit date/time must be after arrival date/time.");
+                                                        return;
+                                                    }
+                                                    setExitDate(newExitDate);
+                                                    setTempToDate(cellDate);
+                                                }
                                                 setShowCalendar(false);
                                             }}
                                         >

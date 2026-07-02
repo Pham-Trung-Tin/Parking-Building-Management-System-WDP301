@@ -117,6 +117,10 @@ const StaffPage = () => {
   const [gateStatus, setGateStatus] = useState('Closed');
   const [notification, setNotification] = useState<{ show: boolean, message: string, type: 'success' | 'info' | 'error' } | null>(null);
   const [capturedImageBase64, setCapturedImageBase64] = useState<string | null>(null);
+  
+  const [isPlateRegistered, setIsPlateRegistered] = useState(false);
+  const [isPlateMonthlyPass, setIsPlateMonthlyPass] = useState(false);
+  const [customerName, setCustomerName] = useState<string | null>(null);
 
   const [floors, setFloors] = useState<any[]>([]);
   const [floorStats, setFloorStats] = useState<Record<string, { total: number, occupied: number }>>({});
@@ -196,6 +200,9 @@ const StaffPage = () => {
     setConfidence(null);
     setLprEngine(null);
     setLprProcessingTime(null);
+    setIsPlateRegistered(false);
+    setIsPlateMonthlyPass(false);
+    setCustomerName(null);
 
     try {
       // Draw current video frame to canvas
@@ -219,8 +226,19 @@ const StaffPage = () => {
         setLprProcessingTime(data.processingTimeMs);
         setCapturedImageBase64(imageBase64);
         setIsManualStandard(false);
+        setIsPlateRegistered(!!data.isRegistered);
+        setIsPlateMonthlyPass(!!data.isMonthlyPass);
+        setCustomerName(data.customerName || null);
+
+        if (data.predictedVehicleTypeId) {
+          setSelectedVehicle(data.predictedVehicleTypeId);
+        }
+
+        let typeStr = data.isMonthlyPass ? ' [MONTHLY PASS]' : (data.isRegistered ? ' [REGISTERED GUEST]' : ' [GUEST]');
+        let nameStr = data.customerName ? ` - ${data.customerName}` : '';
+
         showNotification(
-          `AI recognized: ${data.licensePlate} (${data.confidence}% confidence, ${data.processingTimeMs}ms)`,
+          `AI recognized: ${data.licensePlate}${typeStr}${nameStr} (${data.confidence}% confidence, ${data.processingTimeMs}ms)`,
           'success'
         );
       } else {
@@ -320,6 +338,9 @@ const StaffPage = () => {
         setPlate('');
         setConfidence(null);
         setCapturedImageBase64(null);
+        setIsPlateRegistered(false);
+        setIsPlateMonthlyPass(false);
+        setCustomerName(null);
         setGateStatus('Closed');
         if (vehicleTypesList.length > 0) setSelectedVehicle(vehicleTypesList[0]._id);
         showNotification('Gate closed. Ready for next vehicle.', 'info');
@@ -382,36 +403,60 @@ const StaffPage = () => {
     setIsLoadingQR(true);
     try {
       let payload: any;
-      try {
-        payload = await verifyQRToken(code);
-      } catch (tokenErr: any) {
-        // Fallback: Check if it's a plain JSON string from the mobile app
-        try {
-          // Clean up potential weird escapes from different scanners before parsing
-          let cleanCode = code.replace(/\\"/g, '"').replace(/\\'/g, "'").trim();
-          if (cleanCode.startsWith('"') && cleanCode.endsWith('"')) {
-            cleanCode = cleanCode.substring(1, cleanCode.length - 1);
-          }
 
-          payload = JSON.parse(cleanCode);
-          if (typeof payload === 'string') {
-            payload = JSON.parse(payload); // Handle double-encoded JSON
-          }
-        } catch (jsonErr) {
-          // Fallback: Check if it's just a plain text booking ID
-          if (typeof code === 'string' && code.trim().length > 0) {
-            payload = { bookingId: code.trim(), id: code.trim(), type: 'checkin' };
-          } else {
-            throw tokenErr;
+      // ── Ưu tiên 1: QR mới — plain prefix "ci_<bookingId>" ──────────────────
+      if (code.startsWith('ci_')) {
+        payload = { bookingId: code.slice(3).trim(), type: 'checkin' };
+      } else {
+        // ── Ưu tiên 2: HMAC token cũ (dạng <base64>.<sig>) ─────────────────
+        try {
+          payload = await verifyQRToken(code);
+        } catch (tokenErr: any) {
+          // Fallback: Check if it's a plain JSON string from the mobile app
+          try {
+            // Clean up potential weird escapes from different scanners before parsing
+            let cleanCode = code.replace(/\\\"/g, '"').replace(/\\'/g, "'").trim();
+            if (cleanCode.startsWith('"') && cleanCode.endsWith('"')) {
+              cleanCode = cleanCode.substring(1, cleanCode.length - 1);
+            }
+
+            payload = JSON.parse(cleanCode);
+            if (typeof payload === 'string') {
+              payload = JSON.parse(payload); // Handle double-encoded JSON
+            }
+          } catch (jsonErr) {
+            // Fallback: Check if it's just a plain text booking ID
+            if (typeof code === 'string' && code.trim().length > 0) {
+              payload = { bookingId: code.trim(), id: code.trim(), type: 'checkin' };
+            } else {
+              throw tokenErr;
+            }
           }
         }
       }
 
       if (payload.type && payload.type !== 'checkin' && payload.type !== 'monthly_pass') {
-        throw new Error('Mã QR không hợp lệ. Chỉ hỗ trợ Booking hoặc Vé Tháng.');
+        throw new Error('Invalid QR Code. Only Booking or Monthly Pass supported.');
       }
 
       if (payload.type === 'monthly_pass') {
+        // --- Prevent duplicate check-in at scan time ---
+        const plate = payload.licensePlate;
+        if (plate) {
+          try {
+            const activeRes = await parkingSessionService.findActive({ licensePlate: plate });
+            if (activeRes && (activeRes.data || activeRes._id)) {
+              throw new Error(`Vehicle ${plate} is already checked in.`);
+            }
+          } catch (err: any) {
+            if (err.message === `Vehicle ${plate} is already checked in.`) {
+              throw err;
+            }
+            // 404 means no active session found (which is good)
+          }
+        }
+        // -----------------------------------------------
+
         setIsLoadingQR(false);
         const mockResult: BookingData = {
           id: payload.passCode || code.substring(0, 8).toUpperCase(),
@@ -433,6 +478,23 @@ const StaffPage = () => {
         const bookingRes = await bookingService.getById(safeBookingId);
         const booking = bookingRes.data || bookingRes;
 
+        // --- Prevent duplicate check-in at scan time ---
+        const plate = booking.vehicleInfo?.licensePlate || payload.licensePlate;
+        if (plate) {
+          try {
+            const activeRes = await parkingSessionService.findActive({ licensePlate: plate });
+            if (activeRes && (activeRes.data || activeRes._id)) {
+              throw new Error(`Vehicle ${plate} is already checked in.`);
+            }
+          } catch (err: any) {
+            if (err.message === `Vehicle ${plate} is already checked in.`) {
+              throw err;
+            }
+            // 404 means no active session found (which is good)
+          }
+        }
+        // -----------------------------------------------
+
         setIsLoadingQR(false);
         const mockResult: BookingData = {
           id: booking.bookingCode || safeBookingId.substring(0, 8).toUpperCase(),
@@ -445,11 +507,14 @@ const StaffPage = () => {
         setModalData(mockResult);
         setShowModal(true);
       } catch (fetchErr: any) {
-        throw new Error('Không tìm thấy thông tin Booking từ mã QR này.');
+        if (fetchErr.message && fetchErr.message.includes('already checked in')) {
+          throw fetchErr;
+        }
+        throw new Error('Could not find Booking info for this QR code.');
       }
     } catch (error: any) {
       setIsLoadingQR(false);
-      showNotification(error.message || 'Mã QR không hợp lệ', 'error');
+      showNotification(error.message || 'Invalid QR Code', 'error');
       // Cooldown 3s to prevent 429 Too Many Requests spam
       setTimeout(() => {
         setIsProcessingQR(false);
@@ -488,7 +553,7 @@ const StaffPage = () => {
 
   const handleConfirmCheckInQR = async () => {
     if (!modalData?.bookingId && !modalData?.monthlyPassCode) {
-      showNotification('Dữ liệu quét không hợp lệ hoặc thiếu ID', 'error');
+      showNotification('Invalid scanned data or missing ID', 'error');
       setIsProcessingQR(false);
       return;
     }
@@ -713,6 +778,34 @@ const StaffPage = () => {
                       />
                     )}
                   </div>
+
+                  {/* Customer Type Indicator */}
+                  {!isScanningStandard && plate && plate.length > 0 && (
+                    <div className="mt-3 flex justify-center flex-col items-center gap-1">
+                       {isPlateMonthlyPass ? (
+                          <div className="px-4 py-1.5 bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-full text-sm font-bold flex items-center gap-2">
+                             <CheckCircle className="w-4 h-4" />
+                             MONTHLY PASS
+                          </div>
+                       ) : isPlateRegistered ? (
+                          <div className="px-4 py-1.5 bg-blue-100 text-blue-800 border border-blue-300 rounded-full text-sm font-bold flex items-center gap-2">
+                             <User className="w-4 h-4" />
+                             REGISTERED GUEST
+                          </div>
+                       ) : (
+                          <div className="px-4 py-1.5 bg-gray-100 text-gray-600 border border-gray-300 rounded-full text-sm font-bold flex items-center gap-2">
+                             <Car className="w-4 h-4" />
+                             GUEST
+                          </div>
+                       )}
+                       {customerName && (
+                         <span className="text-xs font-semibold text-gray-700">
+                           {customerName}
+                         </span>
+                       )}
+                    </div>
+                  )}
+
                   <div className="flex justify-between items-center mt-3 min-h-[24px]">
                     <span className="text-sm text-gray-500 flex items-center gap-2">
                       {isScanningStandard ? (

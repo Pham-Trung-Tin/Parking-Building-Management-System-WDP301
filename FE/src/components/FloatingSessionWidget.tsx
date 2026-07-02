@@ -31,10 +31,95 @@ const FloatingSessionWidget: React.FC = () => {
     const navigate = useNavigate();
     const location = useLocation();
 
+    // ── Dragging State ──
+    const [position, setPosition] = useState({ x: window.innerWidth - 250, y: 100 });
+    const [isDragging, setIsDragging] = useState(false);
+    const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+    const widgetRef = useRef<HTMLDivElement>(null);
+    const isMoved = useRef(false);
+
+    // Initial position on resize
+    useEffect(() => {
+        const handleResize = () => {
+            if (position.x > window.innerWidth - 100) {
+                 setPosition(prev => ({ ...prev, x: window.innerWidth - 250 }));
+            }
+        };
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, [position.x]);
+
+    const handleMouseDown = (e: React.MouseEvent) => {
+        if (e.button !== 0 || !widgetRef.current) return;
+        setIsDragging(true);
+        isMoved.current = false;
+        const rect = widgetRef.current.getBoundingClientRect();
+        setDragOffset({
+            x: e.clientX - rect.left,
+            y: e.clientY - rect.top,
+        });
+    };
+
+    const handleMouseMove = (e: MouseEvent) => {
+        if (!isDragging) return;
+        isMoved.current = true;
+        
+        let newX = e.clientX - dragOffset.x;
+        let newY = e.clientY - dragOffset.y;
+        
+        const maxX = window.innerWidth - (widgetRef.current?.offsetWidth || 0);
+        const maxY = window.innerHeight - (widgetRef.current?.offsetHeight || 0);
+        
+        newX = Math.max(0, Math.min(newX, maxX));
+        newY = Math.max(0, Math.min(newY, maxY));
+        
+        setPosition({ x: newX, y: newY });
+    };
+
+    const handleMouseUp = () => {
+        setIsDragging(false);
+    };
+
+    useEffect(() => {
+        if (isDragging) {
+            window.addEventListener('mousemove', handleMouseMove);
+            window.addEventListener('mouseup', handleMouseUp);
+        } else {
+            window.removeEventListener('mousemove', handleMouseMove);
+            window.removeEventListener('mouseup', handleMouseUp);
+        }
+        return () => {
+            window.removeEventListener('mousemove', handleMouseMove);
+            window.removeEventListener('mouseup', handleMouseUp);
+        };
+    }, [isDragging, dragOffset]);
+
+    const handleWidgetClick = (e: React.MouseEvent) => {
+        if (isMoved.current) {
+            e.preventDefault();
+            return;
+        }
+        if (activeSession) {
+            navigate('/session', { state: { sessionId: activeSession._id } });
+        }
+    };
+
     // ── Check Role ──
-    const userStr = localStorage.getItem('user');
-    const role = userStr ? JSON.parse(userStr)?.role : null;
-    const isCustomer = role === 'parking_user';
+    const checkIsCustomer = () => {
+        const userStr = localStorage.getItem('user');
+        const role = userStr ? JSON.parse(userStr)?.role : null;
+        return role === 'parking_user';
+    };
+    
+    const [isCustomer, setIsCustomer] = useState(checkIsCustomer());
+
+    useEffect(() => {
+        const handleAuthChange = () => {
+            setIsCustomer(checkIsCustomer());
+        };
+        window.addEventListener('authChange', handleAuthChange);
+        return () => window.removeEventListener('authChange', handleAuthChange);
+    }, []);
 
     const fetchActiveSession = async () => {
         try {
@@ -45,6 +130,8 @@ const FloatingSessionWidget: React.FC = () => {
             data = data.filter((s: any) => !s.monthlyPass);
             
             if (data.length > 0) {
+                // Sắp xếp giảm dần theo entryTime để luôn lấy session mới nhất
+                data.sort((a: any, b: any) => new Date(b.entryTime).getTime() - new Date(a.entryTime).getTime());
                 setActiveSession(data[0]);
             } else {
                 setActiveSession(null);
@@ -109,13 +196,26 @@ const FloatingSessionWidget: React.FC = () => {
 
     if (isCollapsed) {
         return (
-            <div className="fixed top-28 right-0 z-[999] animate-fade-in-up">
+            <div 
+                ref={widgetRef}
+                onMouseDown={handleMouseDown}
+                className={`fixed z-[999] ${isDragging ? 'cursor-grabbing' : 'cursor-grab'} animate-fade-in-up`}
+                style={{
+                    left: `${position.x}px`,
+                    top: `${position.y}px`,
+                    userSelect: 'none',
+                    touchAction: 'none'
+                }}
+            >
                 <button 
-                    onClick={() => setIsCollapsed(false)}
-                    className="flex items-center justify-center w-10 h-14 bg-gradient-to-b from-blue-600 to-indigo-700 text-white rounded-l-xl shadow-lg shadow-blue-500/40 hover:w-12 transition-all duration-300 backdrop-blur-md border border-r-0 border-white/20"
+                    onClick={(e) => {
+                        if (isMoved.current) { e.preventDefault(); return; }
+                        setIsCollapsed(false);
+                    }}
+                    className="flex items-center justify-center w-12 h-12 bg-gradient-to-br from-blue-600 to-indigo-700 text-white rounded-full shadow-lg shadow-blue-500/40 hover:scale-110 transition-all duration-300 backdrop-blur-md border border-white/20"
                 >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="m15 18-6-6 6-6"/>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
                     </svg>
                 </button>
             </div>
@@ -124,9 +224,17 @@ const FloatingSessionWidget: React.FC = () => {
 
     return (
         <div 
-            onClick={() => navigate('/session', { state: { sessionId: activeSession._id } })}
-            className="fixed top-24 right-5 z-[999] cursor-pointer animate-fade-in-up hover:scale-105 transition-transform duration-300"
-            style={{ animationDuration: '0.4s' }}
+            ref={widgetRef}
+            onMouseDown={handleMouseDown}
+            onClick={handleWidgetClick}
+            className={`fixed z-[999] ${isDragging ? 'cursor-grabbing hover:scale-100' : 'cursor-grab hover:scale-105'} transition-transform duration-300 animate-fade-in-up`}
+            style={{ 
+                left: `${position.x}px`, 
+                top: `${position.y}px`,
+                animationDuration: '0.4s',
+                userSelect: 'none',
+                touchAction: 'none'
+            }}
         >
             <div className="relative bg-gradient-to-br from-blue-600 to-indigo-700 text-white p-4 rounded-2xl shadow-xl shadow-blue-500/30 overflow-hidden border border-white/10 backdrop-blur-md min-w-[220px]">
                 {/* Glow Effect */}
