@@ -49,12 +49,7 @@ const WalletIcon = ({ size = 24 }) => (
         <path d="M18 12a2 2 0 0 0 0 4h4v-4z" />
     </svg>
 );
-const MomoIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
-        <circle cx="12" cy="12" r="11" fill="#ae2070" />
-        <text x="12" y="16" textAnchor="middle" fill="white" fontSize="8" fontWeight="900" fontFamily="sans-serif">MoMo</text>
-    </svg>
-);
+
 const ZaloPayIcon = () => (
     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
         <rect width="24" height="24" rx="6" fill="#0068ff" />
@@ -109,7 +104,7 @@ const CheckoutPage = () => {
     const exitTime = new Date();
 
     // Payment state
-    const [payMethod, setPayMethod] = useState('bank_transfer'); // 'card' | 'momo' | 'zalopay' | 'cash' | 'bank_transfer'
+    const [payMethod, setPayMethod] = useState('bank_transfer'); // 'bank_transfer' | 'cash'
     const [cardNumber, setCardNumber] = useState('');
     const [cardName, setCardName] = useState('');
     const [expiry, setExpiry] = useState('');
@@ -227,7 +222,6 @@ const CheckoutPage = () => {
 
     const payMethods = [
         { id: 'bank_transfer', label: 'Bank Transfer (VietQR)', icon: <QrCodeIcon size={22} />, color: '#0ea5e9' },
-        { id: 'momo', label: 'MoMo Wallet', icon: <MomoIcon />, color: '#ae2070' },
         { id: 'cash', label: 'Pay at Counter', icon: <CashIcon size={22} />, color: '#10b981' },
     ];
 
@@ -618,9 +612,6 @@ const CheckoutPage = () => {
                                             <div className="pay-method-name">{m.label}</div>
                                             <div className="pay-method-sub">
                                                 {m.id === 'bank_transfer' && 'Scan VietQR to transfer securely'}
-                                                {m.id === 'card' && 'Visa, Mastercard, JCB, Amex'}
-                                                {m.id === 'momo' && 'Instant payment via MoMo app'}
-                                                {m.id === 'zalopay' && 'Instant payment via ZaloPay app'}
                                                 {m.id === 'cash' && 'Pay at parking booth before exit'}
                                             </div>
                                         </div>
@@ -714,26 +705,7 @@ const CheckoutPage = () => {
                                 </div>
                             )}
 
-                            {/* QR instruction for e-wallets */}
-                            {(payMethod === 'momo' || payMethod === 'zalopay') && (
-                                <div style={{
-                                    marginTop: 20, padding: '24px',
-                                    background: payMethod === 'momo' ? 'linear-gradient(135deg,#fdf2f8,#fce7f3)' : 'linear-gradient(135deg,#eff6ff,#dbeafe)',
-                                    borderRadius: 14,
-                                    border: `1px solid ${payMethod === 'momo' ? '#f9a8d4' : '#bfdbfe'}`,
-                                    textAlign: 'center'
-                                }}>
-                                    <div style={{ fontSize: 48, marginBottom: 12 }}>
-                                        {payMethod === 'momo' ? '📱' : '📲'}
-                                    </div>
-                                    <div style={{ fontWeight: 700, fontSize: 15, color: payMethod === 'momo' ? '#9d174d' : '#1d4ed8', marginBottom: 6 }}>
-                                        Open {payMethod === 'momo' ? 'MoMo' : 'ZaloPay'} app and confirm payment
-                                    </div>
-                                    <div style={{ fontSize: 13, color: '#64748b', fontWeight: 500 }}>
-                                        Amount: <strong>{grandTotal.toLocaleString('vi-VN')} ₫</strong> will be deducted from your wallet
-                                    </div>
-                                </div>
-                            )}
+
 
                             {/* Cash instructions */}
                             {payMethod === 'cash' && (

@@ -381,9 +381,7 @@ const MyTicketsPage = () => {
 
     const getPayMethodLabel = (method: string) => {
         switch (method) {
-            case 'card': return 'Credit Card';
-            case 'momo': return 'MoMo Wallet';
-            case 'zalopay': return 'ZaloPay';
+            case 'bank_transfer': return 'Bank Transfer (VietQR)';
             case 'cash': return 'Cash at Counter';
             default: return method;
         }

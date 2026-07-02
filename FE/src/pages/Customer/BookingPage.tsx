@@ -101,12 +101,7 @@ const CreditCardIcon = ({ size = 24 }: { size?: number }) => (
         <rect x="1" y="4" width="22" height="16" rx="2" /><line x1="1" y1="10" x2="23" y2="10" />
     </svg>
 );
-const MomoIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
-        <circle cx="12" cy="12" r="11" fill="#ae2070" />
-        <text x="12" y="16" textAnchor="middle" fill="white" fontSize="8" fontWeight="900" fontFamily="sans-serif">MoMo</text>
-    </svg>
-);
+
 const ZaloPayIcon = () => (
     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
         <rect width="24" height="24" rx="6" fill="#0068ff" />
@@ -753,7 +748,7 @@ const BookingPage = () => {
 
     // ── Integrated Checkout States ──
     const [checkoutPhase, setCheckoutPhase] = useState<'review' | 'payment' | 'qr'>('review');
-    const [payMethod, setPayMethod] = useState<'bank_transfer' | 'momo' | 'cash'>('bank_transfer');
+    const [payMethod, setPayMethod] = useState<'bank_transfer' | 'cash'>('bank_transfer');
     const [checkoutProcessing, setCheckoutProcessing] = useState(false);
     const [checkoutErrors, setCheckoutErrors] = useState<Record<string, string>>({});
 
@@ -2797,7 +2792,6 @@ const BookingPage = () => {
                 const grandTotal = Math.round(estimatedPrice);
                 const payMethods = [
                     { id: 'bank_transfer', label: 'Bank Transfer (VietQR)', icon: <QrCodeIcon size={22} />, color: '#2563eb' },
-                    { id: 'momo', label: 'MoMo Wallet', icon: <MomoIcon />, color: '#ae2070' },
                     { id: 'cash', label: 'Pay at Counter', icon: <CashIcon size={22} />, color: '#10b981' },
                 ];
                 return (
@@ -2893,7 +2887,6 @@ const BookingPage = () => {
                                                     <div className="pay-method-name">{m.label}</div>
                                                     <div className="pay-method-sub">
                                                         {m.id === 'bank_transfer' && 'Scan VietQR code to pay via Banking App'}
-                                                        {m.id === 'momo' && 'Instant payment via MoMo app'}
                                                         {m.id === 'cash' && 'Pay at parking booth before exit'}
                                                     </div>
                                                 </div>
@@ -2904,26 +2897,7 @@ const BookingPage = () => {
                                         ))}
                                     </div>
 
-                                    {/* QR instruction for e-wallets */}
-                                    {(payMethod === 'momo') && (
-                                        <div style={{
-                                            marginTop: 20, padding: '20px',
-                                            background: payMethod === 'momo' ? 'linear-gradient(135deg,#fdf2f8,#fce7f3)' : 'linear-gradient(135deg,#eff6ff,#dbeafe)',
-                                            borderRadius: 14,
-                                            border: `1px solid ${payMethod === 'momo' ? '#f9a8d4' : '#bfdbfe'}`,
-                                            textAlign: 'center'
-                                        }}>
-                                            <div style={{ fontSize: 36, marginBottom: 12 }}>
-                                                {payMethod === 'momo' ? '📱' : '📲'}
-                                            </div>
-                                            <div style={{ fontWeight: 700, fontSize: 14, color: payMethod === 'momo' ? '#9d174d' : '#1d4ed8', marginBottom: 6 }}>
-                                                Open {payMethod === 'momo' ? 'MoMo' : 'E-wallet'} app and confirm payment
-                                            </div>
-                                            <div style={{ fontSize: 12, color: '#64748b', fontWeight: 500 }}>
-                                                Amount: <strong>{fmtVND(grandTotal)}</strong> will be deducted from your wallet
-                                            </div>
-                                        </div>
-                                    )}
+
 
                                     {/* Cash instructions */}
                                     {payMethod === 'cash' && (

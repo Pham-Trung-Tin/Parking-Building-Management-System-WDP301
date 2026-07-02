@@ -152,11 +152,8 @@ const CheckoutSuccessPage = () => {
 
     const payMethodLabel = {
         bank_transfer: 'Bank Transfer (VietQR)',
-        card: cardLast4 ? `Card ···· ${cardLast4}` : 'Credit Card',
-        momo: 'MoMo Wallet',
-        zalopay: 'ZaloPay',
         cash: 'Cash at Counter',
-    }[payMethod] || 'Unknown Method';
+    }[payMethod] || 'Bank Transfer (VietQR)';
 
     const formatTime = (d) => d.toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true });
 
