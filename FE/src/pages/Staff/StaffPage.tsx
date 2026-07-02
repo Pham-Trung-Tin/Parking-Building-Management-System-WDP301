@@ -120,6 +120,7 @@ const StaffPage = () => {
   
   const [isPlateRegistered, setIsPlateRegistered] = useState(false);
   const [isPlateMonthlyPass, setIsPlateMonthlyPass] = useState(false);
+  const [customerName, setCustomerName] = useState<string | null>(null);
 
   const [floors, setFloors] = useState<any[]>([]);
   const [floorStats, setFloorStats] = useState<Record<string, { total: number, occupied: number }>>({});
@@ -201,6 +202,7 @@ const StaffPage = () => {
     setLprProcessingTime(null);
     setIsPlateRegistered(false);
     setIsPlateMonthlyPass(false);
+    setCustomerName(null);
 
     try {
       // Draw current video frame to canvas
@@ -226,15 +228,17 @@ const StaffPage = () => {
         setIsManualStandard(false);
         setIsPlateRegistered(!!data.isRegistered);
         setIsPlateMonthlyPass(!!data.isMonthlyPass);
+        setCustomerName(data.customerName || null);
 
         if (data.predictedVehicleTypeId) {
           setSelectedVehicle(data.predictedVehicleTypeId);
         }
 
         let typeStr = data.isMonthlyPass ? ' [MONTHLY PASS]' : (data.isRegistered ? ' [REGISTERED GUEST]' : ' [GUEST]');
+        let nameStr = data.customerName ? ` - ${data.customerName}` : '';
 
         showNotification(
-          `AI recognized: ${data.licensePlate}${typeStr} (${data.confidence}% confidence, ${data.processingTimeMs}ms)`,
+          `AI recognized: ${data.licensePlate}${typeStr}${nameStr} (${data.confidence}% confidence, ${data.processingTimeMs}ms)`,
           'success'
         );
       } else {
@@ -336,6 +340,7 @@ const StaffPage = () => {
         setCapturedImageBase64(null);
         setIsPlateRegistered(false);
         setIsPlateMonthlyPass(false);
+        setCustomerName(null);
         setGateStatus('Closed');
         if (vehicleTypesList.length > 0) setSelectedVehicle(vehicleTypesList[0]._id);
         showNotification('Gate closed. Ready for next vehicle.', 'info');
@@ -776,7 +781,7 @@ const StaffPage = () => {
 
                   {/* Customer Type Indicator */}
                   {!isScanningStandard && plate && plate.length > 0 && (
-                    <div className="mt-3 flex justify-center">
+                    <div className="mt-3 flex justify-center flex-col items-center gap-1">
                        {isPlateMonthlyPass ? (
                           <div className="px-4 py-1.5 bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-full text-sm font-bold flex items-center gap-2">
                              <CheckCircle className="w-4 h-4" />
@@ -792,6 +797,11 @@ const StaffPage = () => {
                              <Car className="w-4 h-4" />
                              GUEST
                           </div>
+                       )}
+                       {customerName && (
+                         <span className="text-xs font-semibold text-gray-700">
+                           {customerName}
+                         </span>
                        )}
                     </div>
                   )}

@@ -729,6 +729,11 @@ const StaffExitPage = () => {
                             (activeSession?.user ? 'Registered' : 'Guest')
                           ) : '---'}
                         </p>
+                        {sessionFound && activeSession?.user?.fullName && (
+                          <p className="text-xs text-gray-500 font-semibold mt-0.5">
+                            {activeSession.user.fullName}
+                          </p>
+                        )}
                       </div>
                       <div>
                         <p className="text-xs text-gray-500 mb-1">License Plate</p>
