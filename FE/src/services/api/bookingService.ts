@@ -11,7 +11,7 @@ const bookingService = {
         return axiosClient.get(`/bookings/${id}`);
     },
     cancel: (id: string, reason: string): Promise<any> => {
-        return axiosClient.post(`/bookings/${id}/cancel`, { reason });
+        return axiosClient.patch(`/bookings/${id}/cancel`, { reason });
     }
 };
 

@@ -2332,32 +2332,55 @@ const BookingPage = () => {
                                             const bookingId = plateError.split(':')[1];
                                             return (
                                                 <div style={{
-                                                    marginTop: 10, padding: '14px 16px',
-                                                    background: '#fffbeb', border: '1.5px solid #fbbf24',
-                                                    borderRadius: 12, fontSize: 13, color: '#92400e', fontWeight: 600,
+                                                    marginTop: 10,
+                                                    padding: '12px 14px',
+                                                    background: '#eff6ff',
+                                                    border: '1px solid #bfdbfe',
+                                                    borderRadius: 10,
+                                                    fontSize: 13,
+                                                    color: '#1e40af',
                                                 }}>
-                                                    <div style={{ marginBottom: 8 }}>
-                                                        ⏳ This vehicle already has an unpaid booking.
+                                                    <div style={{ fontWeight: 600, marginBottom: 10 }}>
+                                                        ⚠️ This vehicle has an unpaid booking.
                                                     </div>
-                                                    <button
-                                                        onClick={() => navigate('/checkout', {
-                                                            state: {
-                                                                isBooking: true,
-                                                                bookingId,
-                                                                parkingLotName: parkingSpot?.title || parkingSpot?.name,
-                                                                licensePlate: licensePlate,
-                                                                totalAmount: estimatedPrice,
-                                                            }
-                                                        })}
-                                                        style={{
-                                                            background: 'linear-gradient(135deg,#f59e0b,#d97706)',
-                                                            color: 'white', border: 'none', borderRadius: 8,
-                                                            padding: '8px 18px', fontWeight: 800, fontSize: 13,
-                                                            cursor: 'pointer', width: '100%',
-                                                        }}
-                                                    >
-                                                        💳 Continue to Payment →
-                                                    </button>
+                                                    <div style={{ display: 'flex', gap: 8 }}>
+                                                        <button
+                                                            onClick={() => navigate('/checkout', {
+                                                                state: {
+                                                                    isBooking: true,
+                                                                    bookingId,
+                                                                    parkingLotName: parkingSpot?.title || parkingSpot?.name,
+                                                                    licensePlate: licensePlate,
+                                                                    totalAmount: estimatedPrice,
+                                                                }
+                                                            })}
+                                                            style={{
+                                                                flex: 1,
+                                                                background: '#2563eb',
+                                                                color: 'white', border: 'none', borderRadius: 8,
+                                                                padding: '8px 0', fontWeight: 700, fontSize: 13,
+                                                                cursor: 'pointer',
+                                                            }}
+                                                        >
+                                                            Continue to Payment →
+                                                        </button>
+                                                        <button
+                                                            onClick={async () => {
+                                                                try {
+                                                                    await bookingService.cancel(bookingId, 'Cancelled by user');
+                                                                } catch (_) {}
+                                                                setPlateError('');
+                                                            }}
+                                                            style={{
+                                                                background: 'white',
+                                                                color: '#64748b', border: '1px solid #cbd5e1', borderRadius: 8,
+                                                                padding: '8px 14px', fontWeight: 600, fontSize: 13,
+                                                                cursor: 'pointer', whiteSpace: 'nowrap',
+                                                            }}
+                                                        >
+                                                            Cancel
+                                                        </button>
+                                                    </div>
                                                 </div>
                                             );
                                         })() : plateError ? (
