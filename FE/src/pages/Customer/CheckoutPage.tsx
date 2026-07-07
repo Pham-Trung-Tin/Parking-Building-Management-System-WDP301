@@ -1,7 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import Header from '../../components/Header/Header';
 import paymentService, { PaymentInitiateBankTransferResponse } from '../../services/api/paymentService';
+import bookingService from '../../services/api/bookingService';
+import { useSocket } from '../../contexts/SocketContext';
 
 // ── Icons ─────────────────────────────────────────────────────────────────────
 const ArrowLeftIcon = () => (
@@ -90,10 +92,10 @@ const CheckoutPage = () => {
 
     const isMoto = typeof vehicleType === 'object' ? vehicleType.code === 'motorcycle' : vehicleType === 'motorcycle';
     const vehicleTypeName = typeof vehicleType === 'object' ? vehicleType.name : (isMoto ? 'Motorcycle' : 'Car');
-    
+
     const floorName = typeof floorObj === 'object' && floorObj !== null ? (floorObj.name || `Floor ${floorObj.floorNumber}`) : `Floor ${floorObj || 3}`;
     const slotCode = typeof slotObj === 'object' && slotObj !== null ? slotObj.slotCode : `${String.fromCharCode(64 + Number(floorObj || 3))}-${floorObj || 3}0${String(slotObj || 5).padStart(1, '0')}`;
-    
+
     const entryDate = data.entryDate ? new Date(data.entryDate) : new Date(Date.now() - 7200000);
     const elapsed = data.elapsed || 7200; // seconds
     const amountDue = data.totalAmount !== undefined ? data.totalAmount : 0;
@@ -112,44 +114,208 @@ const CheckoutPage = () => {
     const [saveCard, setSaveCard] = useState(false);
     const [processing, setProcessing] = useState(false);
     const [errors, setErrors] = useState<Record<string, string>>({});
-    
+
     const sessionId = data.sessionId || data.session?._id;
     const bookingId = data.bookingId;
     const monthlyPassId = data.monthlyPassId;
-    
+
+    // ── Fetch booking detail for isBooking flow (resume payment) ─────────────
+    const [bookingDetail, setBookingDetail] = useState<any>(null);
+    useEffect(() => {
+        if (!data.isBooking || !bookingId) return;
+        bookingService.getById(bookingId).then((res: any) => {
+            const b = res?.data ?? res;
+            const floorObj = typeof b.floor === 'object' ? b.floor : null;
+            const slotObj = typeof b.assignedSlot === 'object' ? b.assignedSlot : null;
+            const vtObj = typeof b.vehicleType === 'object' ? b.vehicleType : null;
+
+            const parseDateTime = (dStr: string, tStr: string) => {
+                if (!dStr || !tStr) return null;
+                const d = new Date(dStr);
+                const [hh, mm] = tStr.split(':').map(Number);
+                if (!isNaN(hh)) d.setHours(hh, mm || 0, 0, 0);
+                return d.toISOString();
+            };
+
+            setBookingDetail({
+                bookingCode: b.bookingCode || b._id,
+                parkingLotName: typeof b.parkingLot === 'object' ? b.parkingLot?.name : data.parkingLotName,
+                floorName: floorObj ? (floorObj.name || `Floor ${floorObj.floorNumber}`) : '—',
+                slotCode: slotObj?.slotCode || '—',
+                vehicleTypeName: vtObj?.name || '—',
+                entryDate: parseDateTime(b.scheduledDate, b.startTime),
+                exitDate: parseDateTime(b.scheduledDate, b.endTime || b.startTime),
+                totalAmount: b.estimatedFee ?? data.totalAmount ?? 0,
+                licensePlate: b.vehicleInfo?.licensePlate || data.licensePlate,
+                createdAt: b.createdAt,
+            });
+        }).catch(console.error);
+    }, [bookingId, data.isBooking]);
+
+    // Merge fetched detail back into data for rendering
+    const mergedData = data.isBooking && bookingDetail
+        ? { ...data, ...bookingDetail }
+        : data;
+
+    // Store paymentId separately for reliable polling
+    const [paymentId, setPaymentId] = useState<string | null>(null);
+
     // Bank Transfer State
     const [bankInfo, setBankInfo] = useState<PaymentInitiateBankTransferResponse | null>(null);
     const [polling, setPolling] = useState(false);
     const [pollingError, setPollingError] = useState('');
+    // Init countdown: for isBooking flow use remaining time from createdAt, else 600s
+    const calcInitialCountdown = () => {
+        if (data.isBooking && bookingDetail?.createdAt) {
+            const expiry = new Date(bookingDetail.createdAt).getTime() + 10 * 60 * 1000;
+            return Math.max(0, Math.floor((expiry - Date.now()) / 1000));
+        }
+        return 600;
+    };
+    const [countdown, setCountdown] = useState(600); // will be updated once bookingDetail loads
+    const [countdownExpired, setCountdownExpired] = useState(false);
 
+    // Update countdown initial value once bookingDetail is loaded
+    useEffect(() => {
+        if (data.isBooking && bookingDetail?.createdAt && !polling) {
+            const expiry = new Date(bookingDetail.createdAt).getTime() + 10 * 60 * 1000;
+            const remaining = Math.max(0, Math.floor((expiry - Date.now()) / 1000));
+            setCountdown(remaining);
+            if (remaining === 0) setCountdownExpired(true);
+        }
+    }, [bookingDetail, data.isBooking, polling]);
+    const { socket } = useSocket();
+    // Use a ref to avoid stale closure in navigate callback
+    const dataRef = useRef(data);
+    const payMethodRef = useRef(payMethod);
+    dataRef.current = data;
+    payMethodRef.current = payMethod;
+
+    // ── Socket: react instantly when SEPay webhook confirms payment ───────────
+    useEffect(() => {
+        if (!socket) return;
+
+        const goToSuccess = (invoiceCode?: string) => {
+            setPolling(false);
+            navigate('/checkoutsuccess', {
+                state: {
+                    ...dataRef.current,
+                    transactionId: invoiceCode,
+                    payMethod: payMethodRef.current,
+                }
+            });
+        };
+
+        // Monthly pass confirmed via webhook
+        const onMonthlyPassConfirmed = (payload: any) => {
+            if (!monthlyPassId) return;
+            const pid = payload?.monthlyPassId?.toString?.() || payload?.monthlyPassId;
+            if (pid === monthlyPassId) {
+                console.log('[CheckoutPage] 🎉 monthlyPassPaymentConfirmed via socket!');
+                goToSuccess(payload?.invoiceCode);
+            }
+        };
+
+        // Booking confirmed via webhook
+        const onBookingConfirmed = (payload: any) => {
+            if (!bookingId) return;
+            const bid = payload?.bookingId?.toString?.() || payload?.bookingId;
+            if (bid === bookingId) {
+                console.log('[CheckoutPage] 🎉 bookingPaymentConfirmed via socket!');
+                goToSuccess(payload?.invoiceCode);
+            }
+        };
+
+        // Session confirmed via webhook
+        const onPaymentConfirmed = (payload: any) => {
+            if (!sessionId) return;
+            console.log('[CheckoutPage] 🎉 paymentConfirmed via socket!');
+            goToSuccess(payload?.invoiceCode);
+        };
+
+        socket.on('monthlyPassPaymentConfirmed', onMonthlyPassConfirmed);
+        socket.on('bookingPaymentConfirmed', onBookingConfirmed);
+        socket.on('paymentConfirmed', onPaymentConfirmed);
+
+        return () => {
+            socket.off('monthlyPassPaymentConfirmed', onMonthlyPassConfirmed);
+            socket.off('bookingPaymentConfirmed', onBookingConfirmed);
+            socket.off('paymentConfirmed', onPaymentConfirmed);
+        };
+    }, [socket, navigate, monthlyPassId, bookingId, sessionId]);
+
+    // ── Countdown timer ───────────────────────────────────────────────────────
+    useEffect(() => {
+        // For isBooking flow, count down even before polling (show remaining booking window)
+        const shouldCount = polling || (data.isBooking && countdown > 0 && !countdownExpired);
+        if (!shouldCount) {
+            if (!data.isBooking) {
+                setCountdown(600);
+                setCountdownExpired(false);
+            }
+            return;
+        }
+        const tick = setInterval(() => {
+            setCountdown(prev => {
+                if (prev <= 1) {
+                    clearInterval(tick);
+                    setCountdownExpired(true);
+                    setPolling(false);
+                    return 0;
+                }
+                return prev - 1;
+            });
+        }, 1000);
+        return () => clearInterval(tick);
+    }, [polling, data.isBooking, countdownExpired]);
+
+    // Track whether the booking was ALREADY expired when we arrived (don't auto-nav in that case)
+    const countdownStartedPositiveRef = useRef(false);
+    useEffect(() => {
+        if (data.isBooking && countdown > 0) {
+            countdownStartedPositiveRef.current = true;
+        }
+    }, [countdown, data.isBooking]);
+
+    // Auto-cancel booking when countdown expires (only if it was counting down while on this page)
+    useEffect(() => {
+        if (!data.isBooking || !bookingId || !countdownExpired) return;
+        if (!countdownStartedPositiveRef.current) return; // was already expired on arrival — BookingPage handled it
+        bookingService.cancel(bookingId, 'Payment timeout').catch(() => { });
+        navigate('/booking', { replace: true });
+    }, [countdownExpired, data.isBooking, bookingId, navigate]);
+
+
+    // ── HTTP Polling fallback (in case socket misses the event) ───────────────
     useEffect(() => {
         let interval: ReturnType<typeof setInterval>;
-        if (polling && bankInfo?.payment?._id) {
+        const pid = paymentId || bankInfo?.payment?._id || bankInfo?.payment?.id;
+        if (polling && pid) {
             interval = setInterval(async () => {
                 try {
-                    const res: any = await paymentService.checkBankTransferStatus(bankInfo.payment._id);
-                    // axios interceptor unwraps response.data, but ApiResponse wraps in .data again
+                    const res: any = await paymentService.checkBankTransferStatus(pid);
                     const statusData = res?.data || res;
+                    console.log('[Polling] status check:', statusData?.isPaid, statusData);
                     if (statusData.isPaid || statusData.matched) {
                         setPolling(false);
                         clearInterval(interval);
                         navigate('/checkoutsuccess', {
                             state: {
-                                ...data,
+                                ...dataRef.current,
                                 transactionId: statusData.invoiceCode,
-                                payMethod
+                                payMethod: payMethodRef.current,
                             }
                         });
                     }
                 } catch (err: any) {
                     console.error('Polling error:', err);
                 }
-            }, 3000); // poll every 3 seconds
+            }, 2000); // poll every 2 seconds
         }
         return () => {
             if (interval) clearInterval(interval);
         };
-    }, [polling, bankInfo, navigate]);
+    }, [polling, bankInfo, paymentId, navigate]);
 
     const validate = () => {
         const e: Record<string, string> = {};
@@ -166,7 +332,7 @@ const CheckoutPage = () => {
         const e = validate();
         if (Object.keys(e).length) { setErrors(e); return; }
         setErrors({});
-        
+
         if (payMethod === 'bank_transfer') {
             if (!sessionId && !bookingId && !monthlyPassId) {
                 setPollingError('No active parking session, booking, or pass found to pay for.');
@@ -189,6 +355,9 @@ const CheckoutPage = () => {
                 }
                 const bankData = res?.data || res;
                 setBankInfo(bankData);
+                // Store paymentId reliably — handle both _id and id
+                const pid = bankData?.payment?._id || bankData?.payment?.id || bankData?.paymentId;
+                if (pid) setPaymentId(String(pid));
                 setPolling(true);
             } catch (error: any) {
                 console.error(error);
@@ -220,10 +389,14 @@ const CheckoutPage = () => {
 
     const grandTotal = Math.round(amountDue);
 
-    const payMethods = [
+    const allPayMethods = [
         { id: 'bank_transfer', label: 'Bank Transfer (VietQR)', icon: <QrCodeIcon size={22} />, color: '#0ea5e9' },
         { id: 'cash', label: 'Pay at Counter', icon: <CashIcon size={22} />, color: '#10b981' },
     ];
+    // Monthly pass can only be paid via bank transfer (no physical counter)
+    const payMethods = data.isMonthlyPass
+        ? allPayMethods.filter(m => m.id === 'bank_transfer')
+        : allPayMethods;
 
     return (
         <>
@@ -596,6 +769,13 @@ const CheckoutPage = () => {
                         {/* Payment methods */}
                         <div className="co-card co-in">
                             <div className="co-card-title">
+                                <span style={{
+                                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                    width: 24, height: 24, borderRadius: '50%',
+                                    background: 'linear-gradient(135deg,#2563eb,#4f46e5)',
+                                    color: 'white', fontSize: 12, fontWeight: 900,
+                                    flexShrink: 0, marginRight: 2,
+                                }}>1</span>
                                 <CreditCardIcon size={20} />
                                 Select Payment Method
                             </div>
@@ -698,7 +878,7 @@ const CheckoutPage = () => {
 
                                     <div className="save-card-row" onClick={() => setSaveCard(!saveCard)}>
                                         <div className={`save-checkbox ${saveCard ? 'checked' : ''}`}>
-                                            {saveCard && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>}
+                                            {saveCard && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3"><polyline points="20 6 9 17 4 12" /></svg>}
                                         </div>
                                         <span className="save-card-text">Save this card for future payments</span>
                                     </div>
@@ -740,9 +920,9 @@ const CheckoutPage = () => {
                                     <div style={{ fontSize: 13, color: '#64748b', marginBottom: 16 }}>
                                         Use any banking app that supports VietQR
                                     </div>
-                                    
-                                    <div style={{ 
-                                        display: 'inline-block', padding: 12, background: 'white', 
+
+                                    <div style={{
+                                        display: 'inline-block', padding: 12, background: 'white',
                                         borderRadius: 16, border: '2px solid #e2e8f0',
                                         boxShadow: '0 8px 24px rgba(0,0,0,0.06)'
                                     }}>
@@ -753,16 +933,16 @@ const CheckoutPage = () => {
                                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 12px', fontSize: 13 }}>
                                             <div style={{ color: '#64748b', fontWeight: 600 }}>Bank:</div>
                                             <div style={{ fontWeight: 700, color: '#1e3a8a' }}>{bankInfo.bankInfo?.bankName || bankInfo.bankName || 'N/A'}</div>
-                                            
+
                                             <div style={{ color: '#64748b', fontWeight: 600 }}>Account Name:</div>
                                             <div style={{ fontWeight: 700, color: '#1e3a8a' }}>{bankInfo.bankInfo?.accountName || bankInfo.accountName || 'N/A'}</div>
-                                            
+
                                             <div style={{ color: '#64748b', fontWeight: 600 }}>Account No:</div>
                                             <div style={{ fontWeight: 800, color: '#1d4ed8', fontFamily: 'monospace', fontSize: 14 }}>{bankInfo.bankInfo?.accountNumber || bankInfo.accountNumber || 'N/A'}</div>
-                                            
+
                                             <div style={{ color: '#64748b', fontWeight: 600 }}>Amount:</div>
                                             <div style={{ fontWeight: 800, color: '#ef4444', fontSize: 15 }}>{(bankInfo.amount || 0).toLocaleString('vi-VN')} ₫</div>
-                                            
+
                                             <div style={{ color: '#64748b', fontWeight: 600 }}>Content:</div>
                                             <div style={{ fontWeight: 800, color: '#0f172a', fontFamily: 'monospace', fontSize: 14, background: '#f1f5f9', padding: '2px 6px', borderRadius: 4, display: 'inline-block' }}>
                                                 {bankInfo.transferContent || 'N/A'}
@@ -770,14 +950,18 @@ const CheckoutPage = () => {
                                         </div>
                                     </div>
 
-                                    <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, color: '#2563eb', fontSize: 13, fontWeight: 600 }}>
-                                        <div className="spinner" style={{ width: 14, height: 14, borderWidth: 2, borderTopColor: '#2563eb', borderColor: 'rgba(37,99,235,0.2)' }}></div>
-                                        Waiting for payment confirmation...
-                                    </div>
+
                                 </div>
                             )}
 
-                            {payMethod === 'bank_transfer' && pollingError && (
+                            {payMethod === 'bank_transfer' && countdownExpired && (
+                                <div style={{ marginTop: 16, padding: '16px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 12, color: '#dc2626', fontSize: 13, fontWeight: 600, textAlign: 'center' }}>
+                                    <div style={{ fontSize: 22, marginBottom: 6 }}>⌛</div>
+                                    <div style={{ fontWeight: 800, marginBottom: 4 }}>Giao dịch đã hết hạn</div>
+                                    <div style={{ color: '#64748b', fontWeight: 500 }}>Thời gian thanh toán đã qua. Vui lòng quay lại và tạo giao dịch mới.</div>
+                                </div>
+                            )}
+                            {payMethod === 'bank_transfer' && pollingError && !countdownExpired && (
                                 <div style={{ marginTop: 16, padding: '12px 16px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10, color: '#ef4444', fontSize: 13, fontWeight: 600 }}>
                                     ⚠️ {pollingError}
                                 </div>
@@ -788,12 +972,39 @@ const CheckoutPage = () => {
                     {/* ── RIGHT: Order Summary ── */}
                     <div className="order-summary">
                         <div className="co-card co-in-1">
-                            <div className="co-card-title">🧾 Order Summary</div>
+                            <div className="co-card-title" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <span style={{
+                                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                    width: 24, height: 24, borderRadius: '50%',
+                                    background: 'linear-gradient(135deg,#2563eb,#4f46e5)',
+                                    color: 'white', fontSize: 12, fontWeight: 900,
+                                    flexShrink: 0,
+                                }}>2</span>
+                                <span>🧾 Order Summary</span>
+                                {(polling || data.isBooking) && countdown > 0 && (
+                                    <span style={{
+                                        marginLeft: 'auto',
+                                        fontFamily: 'monospace',
+                                        fontSize: 13,
+                                        fontWeight: 800,
+                                        color: countdown <= 120 ? '#ef4444' : '#2563eb',
+                                        background: countdown <= 120 ? '#fef2f2' : '#eff6ff',
+                                        border: `1px solid ${countdown <= 120 ? '#fecaca' : '#bfdbfe'}`,
+                                        borderRadius: 6,
+                                        padding: '2px 8px',
+                                        letterSpacing: '0.05em',
+                                    }}>
+                                        {String(Math.floor(countdown / 60)).padStart(2, '0')}:{String(countdown % 60).padStart(2, '0')}
+                                    </span>
+                                )}
+                            </div>
                             <div className="co-divider"></div>
 
                             <div style={{ marginBottom: 16, padding: '10px 14px', background: '#f8fafc', borderRadius: 10, border: '1px solid #f1f5f9' }}>
                                 <div style={{ fontSize: 12, color: '#94a3b8', fontWeight: 600, marginBottom: 3 }}>Parking Facility</div>
-                                <div style={{ fontSize: 14, fontWeight: 700, color: '#1d4ed8' }}>{data.isMonthlyPass ? data.parkingLotName : spot.title}</div>
+                                <div style={{ fontSize: 14, fontWeight: 700, color: '#1d4ed8' }}>
+                                    {(mergedData.isMonthlyPass || mergedData.isBooking) ? mergedData.parkingLotName : spot.title}
+                                </div>
                             </div>
 
                             {data.isMonthlyPass ? (
@@ -830,6 +1041,40 @@ const CheckoutPage = () => {
                                         <span className="co-row-value">{Math.round(amountDue / data.durationMonths).toLocaleString('vi-VN')} ₫ / month</span>
                                     </div>
                                 </>
+                            ) : data.isBooking ? (
+                                <>
+                                    <div className="co-row">
+                                        <span className="co-row-label">License Plate</span>
+                                        <span className="co-row-value" style={{ fontFamily: 'monospace', letterSpacing: '0.06em' }}>{mergedData.licensePlate || data.licensePlate}</span>
+                                    </div>
+                                    <div className="co-row">
+                                        <span className="co-row-label">Booking Code</span>
+                                        <span className="co-row-value" style={{ fontFamily: 'monospace' }}>{mergedData.bookingCode || '—'}</span>
+                                    </div>
+                                    <div className="co-row">
+                                        <span className="co-row-label">Floor / Slot</span>
+                                        <span className="co-row-value">{mergedData.floorName || '—'} — {mergedData.slotCode || '—'}</span>
+                                    </div>
+                                    <div className="co-row">
+                                        <span className="co-row-label">Vehicle Type</span>
+                                        <span className="co-row-value" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                            {mergedData.vehicleTypeName || '—'}
+                                        </span>
+                                    </div>
+                                    <div className="co-row">
+                                        <span className="co-row-label">Entry</span>
+                                        <span className="co-row-value" style={{ fontSize: 12 }}>
+                                            {mergedData.entryDate ? formatTime(new Date(mergedData.entryDate)) : '—'}
+                                        </span>
+                                    </div>
+                                    <div className="co-row">
+                                        <span className="co-row-label">Est. Exit</span>
+                                        <span className="co-row-value" style={{ fontSize: 12 }}>
+                                            {mergedData.exitDate ? formatTime(new Date(mergedData.exitDate)) : '—'}
+                                        </span>
+                                    </div>
+                                </>
+
                             ) : (
                                 <>
                                     <div className="co-row">
@@ -871,6 +1116,8 @@ const CheckoutPage = () => {
                                     )}
                                 </>
                             )}
+
+
                             <div className="co-row">
                                 <span className="co-row-label">Amount Due</span>
                                 <span className="co-row-value">{Math.round(amountDue).toLocaleString('vi-VN')} ₫</span>

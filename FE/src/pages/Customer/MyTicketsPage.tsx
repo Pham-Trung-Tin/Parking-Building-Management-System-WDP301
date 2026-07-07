@@ -24,6 +24,9 @@ interface Ticket {
     elapsed: number;
     totalAmount: number;
     payMethod?: string;
+    status?: string;
+    paymentStatus?: string;
+    createdAt?: string;
 }
 
 // ── Live timer hook ─────────────────────────────────────────────────────────
@@ -185,8 +188,8 @@ const MyTicketsPage = () => {
             const res = await bookingService.getMyBookings({ limit: 50 });
             let list = Array.isArray(res) ? res : (res?.data ?? res?.docs ?? []);
 
-            // Only show bookings that are pending (e.g. newly created) or approved
-            list = list.filter((b: any) => b.status === 'pending' || b.status === 'approved');
+            // Only show bookings that have been successfully paid
+            list = list.filter((b: any) => b.paymentStatus === 'paid');
 
             // Map backend booking objects to our local Ticket interface for rendering
             const mappedTickets: Ticket[] = list.map((b: any) => {
@@ -218,6 +221,9 @@ const MyTicketsPage = () => {
                     elapsed: 0,
                     totalAmount: b.estimatedFee || 0,
                     payMethod: b.paymentMethod || 'card',
+                    status: b.status,
+                    paymentStatus: b.paymentStatus,
+                    createdAt: b.createdAt,
                 };
             });
 
@@ -266,8 +272,8 @@ const MyTicketsPage = () => {
                 const res = await bookingService.getMyBookings({ limit: 50 });
                 let list = Array.isArray(res) ? res : (res?.data ?? res?.docs ?? []);
 
-                // Only show bookings that are pending (e.g. newly created) or approved
-                list = list.filter((b: any) => b.status === 'pending' || b.status === 'approved');
+                // Only show bookings that have been successfully paid
+                list = list.filter((b: any) => b.paymentStatus === 'paid');
 
                 // Map backend booking objects to our local Ticket interface for rendering
                 const mappedTickets: Ticket[] = list.map((b: any) => {
@@ -299,6 +305,9 @@ const MyTicketsPage = () => {
                         elapsed: 0,
                         totalAmount: b.estimatedFee || 0,
                         payMethod: b.paymentMethod || 'card',
+                        status: b.status,
+                        paymentStatus: b.paymentStatus,
+                        createdAt: b.createdAt,
                     };
                 });
 
@@ -964,30 +973,51 @@ const MyTicketsPage = () => {
                     ) : (
                         <>
                             <div className="t-list">
-                                {tickets.map(ticket => (
-                                    <div key={ticket.receiptId} className="t-list-item" onClick={() => setSelectedTicket(ticket)}>
-                                        <div className="t-list-item-left">
-                                            <div className="t-list-item-icon">
-                                                {getVehicleEmoji(ticket.vehicleType)}
-                                            </div>
-                                            <div className="t-list-item-info">
-                                                <h3 className="t-list-item-title">{ticket.spot.title}</h3>
-                                                <div className="t-list-item-subtitle">
-                                                    <span>Plate: <strong style={{ color: '#334155' }}>{ticket.licensePlate}</strong></span>
-                                                    <span className="t-list-item-meta">{ticket.floorName} — {ticket.slotCode}</span>
-                                                    <span style={{ color: '#cbd5e1' }}>|</span>
-                                                    <span>In: {fmtDateTime(ticket.entryDate)}</span>
+                                {tickets.map(ticket => {
+                                    const isPaid = ticket.paymentStatus === 'paid';
+                                    const isUnpaid = !isPaid;
+                                    let remainingSeconds = 0;
+                                    if (isUnpaid && ticket.createdAt) {
+                                        const expiryTime = new Date(ticket.createdAt).getTime() + 10 * 60 * 1000;
+                                        remainingSeconds = Math.max(0, Math.floor((expiryTime - Date.now()) / 1000));
+                                    }
+                                    const mm = String(Math.floor(remainingSeconds / 60)).padStart(2, '0');
+                                    const ss = String(remainingSeconds % 60).padStart(2, '0');
+                                    
+                                    return (
+                                        <div key={ticket.receiptId} className="t-list-item" onClick={() => setSelectedTicket(ticket)}>
+                                            <div className="t-list-item-left">
+                                                <div className="t-list-item-icon">
+                                                    {getVehicleEmoji(ticket.vehicleType)}
+                                                </div>
+                                                <div className="t-list-item-info">
+                                                    <h3 className="t-list-item-title">{ticket.spot.title}</h3>
+                                                    <div className="t-list-item-subtitle">
+                                                        <span>Plate: <strong style={{ color: '#334155' }}>{ticket.licensePlate}</strong></span>
+                                                        <span className="t-list-item-meta">{ticket.floorName} — {ticket.slotCode}</span>
+                                                        <span style={{ color: '#cbd5e1' }}>|</span>
+                                                        <span>In: {fmtDateTime(ticket.entryDate)}</span>
+                                                        {isUnpaid && remainingSeconds > 0 && (
+                                                            <>
+                                                                <span style={{ color: '#cbd5e1' }}>|</span>
+                                                                <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700 }}>
+                                                                    <span className="ls-pulse-dot" style={{ width: 6, height: 6, background: '#ef4444', boxShadow: '0 0 0 0 rgba(239,68,68,0.6)', animation: 'none' }} />
+                                                                    <span style={{ color: '#ef4444' }}>{mm}:{ss} (Đang chờ thanh toán)</span>
+                                                                </span>
+                                                            </>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </div>
+                                            <div className="t-list-item-right">
+                                                <span className={`t-badge ${isUnpaid ? 'unpaid' : ''}`}>
+                                                    {isUnpaid ? 'PENDING' : 'PAID'}
+                                                </span>
+                                                <button className="t-list-item-btn" onClick={(e) => { e.stopPropagation(); setSelectedTicket(ticket); }}>View Ticket</button>
+                                            </div>
                                         </div>
-                                        <div className="t-list-item-right">
-                                            <span className={`t-badge ${ticket.payMethod === 'cash' ? 'unpaid' : ''}`}>
-                                                {ticket.payMethod === 'cash' ? 'PAY LATER' : 'PAID'}
-                                            </span>
-                                            <button className="t-list-item-btn" onClick={(e) => { e.stopPropagation(); setSelectedTicket(ticket); }}>View Ticket</button>
-                                        </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
 
                             {/* ── Ticket Detail Modal ── */}
@@ -1001,8 +1031,8 @@ const MyTicketsPage = () => {
                                                 <div className="t-card-top">
                                                     <div className="t-card-header">
                                                         <h3 className="t-spot-title">{ticket.spot.title}</h3>
-                                                        <span className={`t-badge ${ticket.payMethod === 'cash' ? 'unpaid' : ''}`}>
-                                                            {ticket.payMethod === 'cash' ? 'PAY LATER' : 'PAID'}
+                                                        <span className={`t-badge ${ticket.paymentStatus !== 'paid' ? 'unpaid' : ''}`}>
+                                                            {ticket.paymentStatus !== 'paid' ? 'PENDING' : 'PAID'}
                                                         </span>
                                                     </div>
 
