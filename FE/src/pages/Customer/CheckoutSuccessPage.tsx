@@ -152,11 +152,8 @@ const CheckoutSuccessPage = () => {
 
     const payMethodLabel = {
         bank_transfer: 'Bank Transfer (VietQR)',
-        card: cardLast4 ? `Card ···· ${cardLast4}` : 'Credit Card',
-        momo: 'MoMo Wallet',
-        zalopay: 'ZaloPay',
         cash: 'Cash at Counter',
-    }[payMethod] || 'Unknown Method';
+    }[payMethod] || 'Bank Transfer (VietQR)';
 
     const formatTime = (d) => d.toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true });
 
@@ -537,11 +534,11 @@ const CheckoutSuccessPage = () => {
                             <>
                                 <div className="r-row">
                                     <span className="r-label">Monthly Rate</span>
-                                    <span className="r-value">{Math.round(data.price / data.durationMonths).toLocaleString('vi-VN')} ₫ / month</span>
+                                    <span className="r-value">{Math.round((data.price ?? data.totalAmount) / data.durationMonths).toLocaleString('vi-VN')} ₫ / month</span>
                                 </div>
                                 <div className="r-total">
                                     <span className="r-total-label">Total Fee</span>
-                                    <span className="r-total-amount">{Math.round(data.price).toLocaleString('vi-VN')} ₫</span>
+                                    <span className="r-total-amount">{Math.round(data.price ?? data.totalAmount).toLocaleString('vi-VN')} ₫</span>
                                 </div>
                             </>
                         )}

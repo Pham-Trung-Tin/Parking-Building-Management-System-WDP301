@@ -200,13 +200,15 @@ const MyVehiclesPage: React.FC = () => {
     catch (err: any) { setError(err.message || 'Failed to set default.'); }
   };
 
-  const handleBuyPassSubmit = async (e: React.FormEvent) => {
+  const handleBuyPassSubmit = async (e: React.FormEvent, overrideLotId?: string) => {
     e.preventDefault();
-    if (!buyPassVehicle || !passForm.parkingLotId) return;
+    if (!buyPassVehicle) return;
+    const lotId = overrideLotId || passForm.parkingLotId;
+    if (!lotId) return;
     const vtId = typeof buyPassVehicle.vehicleType === 'object' ? buyPassVehicle.vehicleType._id : buyPassVehicle.vehicleType;
     try {
         const res: any = await monthlyPassService.createMonthlyPass({
-            parkingLotId: passForm.parkingLotId,
+            parkingLotId: lotId,
             vehicleTypeId: vtId,
             licensePlate: buyPassVehicle.licensePlate,
             startDate: passForm.startDate,
@@ -367,56 +369,140 @@ const MyVehiclesPage: React.FC = () => {
             )}
 
             {/* Buy Monthly Pass Modal */}
-            {buyPassVehicle && (
+            {buyPassVehicle && (() => {
+                // Check if this vehicle has an active pass (renewal mode)
+                const existingActivePass = monthlyPasses.find(
+                    p => p.licensePlate === buyPassVehicle.licensePlate && p.status === 'active'
+                );
+                const isRenewal = !!existingActivePass;
+
+                // For renewal: compute expected start date (endDate + 1 day)
+                const renewalStartDate = isRenewal
+                    ? (() => {
+                        const d = new Date(existingActivePass!.endDate);
+                        d.setDate(d.getDate() + 1);
+                        return d;
+                    })()
+                    : null;
+
+                // For renewal: lock parking lot to existing one
+                const lockedLotId = isRenewal
+                    ? (typeof existingActivePass!.parkingLot === 'object'
+                        ? (existingActivePass!.parkingLot as any)._id
+                        : existingActivePass!.parkingLot)
+                    : passForm.parkingLotId;
+
+                const lockedLotName = isRenewal && typeof existingActivePass!.parkingLot === 'object'
+                    ? (existingActivePass!.parkingLot as any).name
+                    : parkingLots.find(l => l._id === passForm.parkingLotId)?.name;
+
+                return (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setBuyPassVehicle(null)}>
-                <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
-                <form
-                  onSubmit={handleBuyPassSubmit}
-                  onClick={e => e.stopPropagation()}
-                  className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl p-8 space-y-5 animate-[fadeInUp_0.25s_ease-out]"
-                >
-                  <button
-                    type="button"
-                    onClick={() => setBuyPassVehicle(null)}
-                    className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition cursor-pointer text-lg font-bold"
-                  >✕</button>
+                    <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+                    <form
+                        onSubmit={(e) => handleBuyPassSubmit(e, isRenewal ? lockedLotId : undefined)}
+                        onClick={e => e.stopPropagation()}
+                        className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl p-8 space-y-5 animate-[fadeInUp_0.25s_ease-out]"
+                    >
+                        <button
+                            type="button"
+                            onClick={() => setBuyPassVehicle(null)}
+                            className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition cursor-pointer text-lg font-bold"
+                        >✕</button>
 
-                  <h3 className="text-xl font-bold text-slate-900 mb-1">Buy Monthly Pass</h3>
-                  <p className="text-sm text-slate-500 mb-4">For vehicle: <strong>{buyPassVehicle.licensePlate}</strong></p>
+                        {/* Title */}
+                        <div>
+                            <h3 className="text-xl font-bold text-slate-900 mb-1">
+                                {isRenewal ? '🔄 Extend Monthly Pass' : '🎫 Buy Monthly Pass'}
+                            </h3>
+                            <p className="text-sm text-slate-500">
+                                Vehicle: <strong className="text-slate-800">{buyPassVehicle.licensePlate}</strong>
+                            </p>
+                        </div>
 
-                  <div className="space-y-4">
-                    <div>
-                      <label className={labelCls}>Parking Lot *</label>
-                      <select required value={passForm.parkingLotId} onChange={e => setPassForm({ ...passForm, parkingLotId: e.target.value })} className={inputCls}>
-                        <option value="">-- Select Location --</option>
-                        {parkingLots.map(l => <option key={l._id} value={l._id}>{l.name}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className={labelCls}>Start Date *</label>
-                      <input required type="date" value={passForm.startDate} onChange={e => setPassForm({ ...passForm, startDate: e.target.value })} className={inputCls} min={new Date().toISOString().split('T')[0]} />
-                    </div>
-                    <div>
-                      <label className={labelCls}>Duration *</label>
-                      <select required value={passForm.durationMonths} onChange={e => setPassForm({ ...passForm, durationMonths: Number(e.target.value) })} className={inputCls}>
-                        {[1, 2, 3, 6, 12].map(m => <option key={m} value={m}>{m} Month{m > 1 ? 's' : ''}</option>)}
-                      </select>
-                    </div>
-                  </div>
+                        {/* Renewal notice banner */}
+                        {isRenewal && (
+                            <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-sm">
+                                <div className="text-blue-800 font-bold mb-1">📋 Renewal Info</div>
+                                <div className="text-blue-700 text-xs space-y-1">
+                                    <div>Current pass expires: <strong>{new Date(existingActivePass!.endDate).toLocaleDateString('en-GB')}</strong></div>
+                                    <div>New pass starts from: <strong className="text-emerald-700">{renewalStartDate?.toLocaleDateString('en-GB')}</strong></div>
+                                </div>
+                            </div>
+                        )}
 
-                  <div className="flex justify-end gap-3 pt-4">
-                    <button
-                      type="button"
-                      onClick={() => setBuyPassVehicle(null)}
-                      className="px-5 py-2.5 border border-slate-200 text-slate-600 rounded-xl font-bold text-sm hover:bg-slate-50 transition-all cursor-pointer"
-                    >Cancel</button>
-                    <button type="submit" className="px-6 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl font-bold text-sm hover:from-emerald-700 hover:to-teal-700 transition-all cursor-pointer shadow-sm">
-                      Confirm Purchase
-                    </button>
-                  </div>
-                </form>
-              </div>
-            )}
+                        <div className="space-y-4">
+                            {/* Parking Lot — locked for renewal */}
+                            <div>
+                                <label className={labelCls}>Parking Lot *</label>
+                                {isRenewal ? (
+                                    <div className={`${inputCls} bg-slate-50 text-slate-600 cursor-not-allowed flex items-center gap-2`}>
+                                        🔒 <span>{lockedLotName}</span>
+                                    </div>
+                                ) : (
+                                    <select
+                                        required
+                                        value={passForm.parkingLotId}
+                                        onChange={e => setPassForm({ ...passForm, parkingLotId: e.target.value })}
+                                        className={inputCls}
+                                    >
+                                        <option value="">-- Select Location --</option>
+                                        {parkingLots.map(l => <option key={l._id} value={l._id}>{l.name}</option>)}
+                                    </select>
+                                )}
+                            </div>
+
+                            {/* Start Date — hidden for renewal (auto-computed by BE) */}
+                            {!isRenewal && (
+                                <div>
+                                    <label className={labelCls}>Start Date *</label>
+                                    <input
+                                        required
+                                        type="date"
+                                        value={passForm.startDate}
+                                        onChange={e => setPassForm({ ...passForm, startDate: e.target.value })}
+                                        className={inputCls}
+                                        min={new Date().toISOString().split('T')[0]}
+                                    />
+                                </div>
+                            )}
+
+                            {/* Duration */}
+                            <div>
+                                <label className={labelCls}>Duration *</label>
+                                <select
+                                    required
+                                    value={passForm.durationMonths}
+                                    onChange={e => setPassForm({ ...passForm, durationMonths: Number(e.target.value) })}
+                                    className={inputCls}
+                                >
+                                    {[1, 2, 3, 6, 12].map(m => (
+                                        <option key={m} value={m}>{m} Month{m > 1 ? 's' : ''}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+
+                        <div className="flex justify-end gap-3 pt-2">
+                            <button
+                                type="button"
+                                onClick={() => setBuyPassVehicle(null)}
+                                className="px-5 py-2.5 border border-slate-200 text-slate-600 rounded-xl font-bold text-sm hover:bg-slate-50 transition-all cursor-pointer"
+                            >Cancel</button>
+                            <button
+                                type="submit"
+                                className={`px-6 py-2.5 text-white rounded-xl font-bold text-sm transition-all cursor-pointer shadow-sm ${isRenewal
+                                    ? 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700'
+                                    : 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700'
+                                }`}
+                            >
+                                {isRenewal ? '🔄 Extend Pass' : '✅ Confirm Purchase'}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+                );
+            })()}
 
             {/* Vehicle List */}
             {loading ? (

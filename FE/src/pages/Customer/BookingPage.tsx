@@ -126,12 +126,7 @@ const CreditCardIcon = ({ size = 24 }: { size?: number }) => (
         <rect x="1" y="4" width="22" height="16" rx="2" /><line x1="1" y1="10" x2="23" y2="10" />
     </svg>
 );
-const MomoIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
-        <circle cx="12" cy="12" r="11" fill="#ae2070" />
-        <text x="12" y="16" textAnchor="middle" fill="white" fontSize="8" fontWeight="900" fontFamily="sans-serif">MoMo</text>
-    </svg>
-);
+
 const ZaloPayIcon = () => (
     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
         <rect width="24" height="24" rx="6" fill="#0068ff" />
@@ -781,7 +776,7 @@ const BookingPage = () => {
 
     // ── Integrated Checkout States ──
     const [checkoutPhase, setCheckoutPhase] = useState<'review' | 'payment' | 'qr'>('review');
-    const [payMethod, setPayMethod] = useState<'bank_transfer' | 'momo' | 'cash'>('bank_transfer');
+    const [payMethod, setPayMethod] = useState<'bank_transfer' | 'cash'>('bank_transfer');
     const [checkoutProcessing, setCheckoutProcessing] = useState(false);
     const [checkoutErrors, setCheckoutErrors] = useState<Record<string, string>>({});
 
@@ -876,16 +871,18 @@ const BookingPage = () => {
         setCheckoutErrors({});
         setCheckoutProcessing(true);
 
-        const rawExit = exitTime;
-
         try {
-            // 1. Call API to create booking
-            const bookingData = {
+            // Extract HH:mm directly from the local-time strings to avoid UTC conversion bugs
+            const startTime = entryDate.slice(11, 16);   // "HH:mm" from "YYYY-MM-DDTHH:mm"
+            const endTime = exitDate.slice(11, 16);       // "HH:mm" from "YYYY-MM-DDTHH:mm"
+            const scheduledDate = entryDate.slice(0, 10); // "YYYY-MM-DD"
+
+            const bookingPayload = {
                 parkingLot: parkingSpot._id,
                 vehicleType: vehicleType?._id,
-                scheduledDate: new Date(entryDate).toISOString(),
-                startTime: `${String(new Date(entryDate).getHours()).padStart(2, '0')}:${String(new Date(entryDate).getMinutes()).padStart(2, '0')}`,
-                endTime: `${String(rawExit.getHours()).padStart(2, '0')}:${String(rawExit.getMinutes()).padStart(2, '0')}`,
+                scheduledDate,
+                startTime,
+                endTime,
                 vehicleInfo: {
                     licensePlate: formatPlate(licensePlate),
                 },
@@ -894,42 +891,42 @@ const BookingPage = () => {
                 assignedSlot: selectedSlot?._id,
             };
 
-            const bookingRes = await bookingService.create(bookingData);
-            const bookingId = bookingRes.data?._id || bookingRes._id;
-            setSuccessBooking(bookingRes.data || bookingRes); // Save for success toast
+            // axiosClient returns response.data directly (not wrapped in .data)
+            const bookingRes: any = await bookingService.create(bookingPayload);
+            const bookingObj = bookingRes?.data || bookingRes;
+            const bookingId = bookingObj?._id;
 
-            if (payMethod === 'bank_transfer') {
-                // 2. Initiate Bank Transfer
-                const paymentRes = await paymentService.initiateBookingBankTransfer(bookingId);
-                const paymentInfo = (paymentRes as any).data || paymentRes;
+            setCheckoutProcessing(false);
+            setShowConfirmModal(false);
 
-                setBankInfo(paymentInfo);
-                setMockTransferContent(paymentInfo.transferContent);
-                setCheckoutPhase('qr'); // Switch to qr phase to show QR
-                setPolling(true);
-                setCheckoutProcessing(false);
-            } else {
-                // Cash/Momo (Mock for now): directly show success
-                saveToMyTickets(bookingRes.data || bookingRes);
-
-                navigate('/tickets', {
-                    state: {
-                        showToast: 'Booking successful! Your ticket has been saved here.'
-                    }
-                });
-
-                setCheckoutProcessing(false);
-                setShowConfirmModal(false);
-            }
+            // Navigate to /checkout page — same UX as Monthly Pass flow
+            navigate('/checkout', {
+                state: {
+                    isBooking: true,
+                    bookingId,
+                    bookingCode: bookingObj?.bookingCode,
+                    parkingLotName: parkingSpot?.title || parkingSpot?.name,
+                    licensePlate: formatPlate(licensePlate),
+                    vehicleTypeName: vehicleType?.name,
+                    floorName: selectedFloor?.name || `Floor ${selectedFloor?.floorNumber}`,
+                    slotCode: selectedSlot?.slotCode,
+                    entryDate,
+                    exitDate,
+                    totalAmount: estimatedPrice,
+                    payMethod,
+                }
+            });
         } catch (error: any) {
-            let formMsg = error.response?.data?.message || 'Failed to create booking';
-            if (error.response?.data?.errors && Array.isArray(error.response.data.errors)) {
-                formMsg = error.response.data.errors.map((e: any) => `${e.field}: ${e.message}`).join(' | ');
-            }
+            // axiosClient transforms errors to { status, message, raw } — not error.response
+            console.error('[Booking error]', error);
+            const formMsg =
+                error?.message ||
+                error?.raw?.response?.data?.message ||
+                'Failed to create booking. Please try again.';
             setCheckoutErrors({ form: formMsg });
             setCheckoutProcessing(false);
         }
-    };
+    }; // end handleConfirmPayment
 
     // ─── isFloorAllowed helper ──────────────────────────────────────────────
     const isFloorAllowed = (floor: Floor) => {
@@ -1047,14 +1044,25 @@ const BookingPage = () => {
         calculatedEstCost += isNightBlock ? nightRate : baseRate;
         tempStart = new Date(tempStart.getTime() + 4 * 60 * 60 * 1000);
     }
-
     const estimatedPrice = calculatedEstCost;
+
+    // ─── Check if current plate already has an active/pending pass ──────────
+    const activePlatePass = useMemo(() => {
+        if (!licensePlate || !parkingSpot._id) return null;
+        const cleaned = formatPlate(licensePlate, vehicleType?.code);
+        return myMonthlyPasses.find(p => {
+            const pLotId = typeof p.parkingLot === 'object' ? p.parkingLot._id : p.parkingLot;
+            return p.licensePlate === cleaned &&
+                ['active', 'pending'].includes(p.status) &&
+                pLotId === parkingSpot._id;
+        }) || null;
+    }, [licensePlate, vehicleType, myMonthlyPasses, parkingSpot._id]);
 
     // ─── Navigation ─────────────────────────────────────────────────────────
     const canProceed = (step: number): boolean => {
         switch (step) {
             case 1: return !!vehicleType;
-            case 2: return licensePlate.trim().length >= 4 && licensePlate.trim().length <= 10;
+            case 2: return licensePlate.trim().length >= 4 && licensePlate.trim().length <= 10 && !activePlatePass;
             case 3: return !!entryDate && !!exitDate && new Date(exitDate).getTime() > new Date(entryDate).getTime();
             case 4: return !!selectedFloor;
             case 5: return !!selectedZone;
@@ -1062,6 +1070,7 @@ const BookingPage = () => {
             default: return false;
         }
     };
+
 
     const handleNext = async () => {
         if (currentStep === 2) {
@@ -1104,13 +1113,29 @@ const BookingPage = () => {
                 // 2. Check if the vehicle already has an upcoming booking
                 const myBookings = await bookingService.getMyBookings({ limit: 50 });
                 const list = Array.isArray(myBookings) ? myBookings : (myBookings?.data ?? myBookings?.docs ?? []);
-                const hasPending = list.some((b: any) => 
-                    b.vehicleInfo?.licensePlate === cleaned && 
-                    ['pending', 'approved'].includes(b.status)
-                );
-                
-                if (hasPending) {
-                    setPlateError('This vehicle already has an upcoming booking.');
+
+                const EXPIRY_MS = 10 * 60 * 1000; // 10 phút
+                const conflictingBooking = list.find((b: any) => {
+                    if (b.vehicleInfo?.licensePlate !== cleaned) return false;
+                    if (!['pending', 'approved'].includes(b.status)) return false;
+                    // Auto-cancel unpaid booking đã hết hạn (quá 10 phút, dù pending hay approved)
+                    if (b.paymentStatus !== 'paid' && b.createdAt) {
+                        const elapsed = Date.now() - new Date(b.createdAt).getTime();
+                        if (elapsed > EXPIRY_MS) {
+                            bookingService.cancel(b._id || b.id, 'Payment timeout').catch(() => {});
+                            return false;
+                        }
+                    }
+                    return true;
+                });
+
+                if (conflictingBooking) {
+                    const bid = conflictingBooking._id || conflictingBooking.id;
+                    if (conflictingBooking.paymentStatus === 'paid') {
+                        setPlateError(`__PAID_BOOKING__:${bid}`);
+                    } else {
+                        setPlateError(`__UNPAID_BOOKING__:${bid}`);
+                    }
                     setIsCheckingPlate(false);
                     return;
                 }
@@ -2284,7 +2309,83 @@ const BookingPage = () => {
                                             maxLength={11}
                                             autoFocus
                                         />
-                                        {plateError && <div className="lp-error">{plateError}</div>}
+                                        {plateError?.startsWith('__PAID_BOOKING__') ? (
+                                            <div style={{
+                                                marginTop: 10, padding: '12px 16px',
+                                                background: '#f0fdf4', border: '1.5px solid #86efac',
+                                                borderRadius: 12, fontSize: 13, color: '#166534', fontWeight: 600,
+                                                display: 'flex', alignItems: 'center', gap: 10,
+                                            }}>
+                                                <span style={{ fontSize: 20 }}>🎉</span>
+                                                <span>
+                                                    Your booking was paid successfully!
+                                                    {' '}
+                                                    <span
+                                                        onClick={() => navigate('/tickets')}
+                                                        style={{ color: '#2563eb', textDecoration: 'underline', cursor: 'pointer', fontWeight: 700 }}
+                                                    >
+                                                        View your ticket →
+                                                    </span>
+                                                </span>
+                                            </div>
+                                        ) : plateError?.startsWith('__UNPAID_BOOKING__') ? (() => {
+                                            const bookingId = plateError.split(':')[1];
+                                            return (
+                                                <div style={{
+                                                    marginTop: 10,
+                                                    padding: '12px 14px',
+                                                    background: '#eff6ff',
+                                                    border: '1px solid #bfdbfe',
+                                                    borderRadius: 10,
+                                                    fontSize: 13,
+                                                    color: '#1e40af',
+                                                }}>
+                                                    <div style={{ fontWeight: 600, marginBottom: 10 }}>
+                                                        ⚠️ This vehicle has an unpaid booking.
+                                                    </div>
+                                                    <div style={{ display: 'flex', gap: 8 }}>
+                                                        <button
+                                                            onClick={() => navigate('/checkout', {
+                                                                state: {
+                                                                    isBooking: true,
+                                                                    bookingId,
+                                                                    parkingLotName: parkingSpot?.title || parkingSpot?.name,
+                                                                    licensePlate: licensePlate,
+                                                                    totalAmount: estimatedPrice,
+                                                                }
+                                                            })}
+                                                            style={{
+                                                                flex: 1,
+                                                                background: '#2563eb',
+                                                                color: 'white', border: 'none', borderRadius: 8,
+                                                                padding: '8px 0', fontWeight: 700, fontSize: 13,
+                                                                cursor: 'pointer',
+                                                            }}
+                                                        >
+                                                            Continue to Payment →
+                                                        </button>
+                                                        <button
+                                                            onClick={async () => {
+                                                                try {
+                                                                    await bookingService.cancel(bookingId, 'Cancelled by user');
+                                                                } catch (_) {}
+                                                                setPlateError('');
+                                                            }}
+                                                            style={{
+                                                                background: 'white',
+                                                                color: '#64748b', border: '1px solid #cbd5e1', borderRadius: 8,
+                                                                padding: '8px 14px', fontWeight: 600, fontSize: 13,
+                                                                cursor: 'pointer', whiteSpace: 'nowrap',
+                                                            }}
+                                                        >
+                                                            Cancel
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })() : plateError ? (
+                                            <div className="lp-error">{plateError}</div>
+                                        ) : null}
                                     </div>
 
                                     {licensePlate.length >= 4 && (
@@ -2894,7 +2995,6 @@ const BookingPage = () => {
                 const grandTotal = Math.round(estimatedPrice);
                 const payMethods = [
                     { id: 'bank_transfer', label: 'Bank Transfer (VietQR)', icon: <QrCodeIcon size={22} />, color: '#2563eb' },
-                    { id: 'momo', label: 'MoMo Wallet', icon: <MomoIcon />, color: '#ae2070' },
                     { id: 'cash', label: 'Pay at Counter', icon: <CashIcon size={22} />, color: '#10b981' },
                 ];
                 return (
@@ -2990,7 +3090,6 @@ const BookingPage = () => {
                                                     <div className="pay-method-name">{m.label}</div>
                                                     <div className="pay-method-sub">
                                                         {m.id === 'bank_transfer' && 'Scan VietQR code to pay via Banking App'}
-                                                        {m.id === 'momo' && 'Instant payment via MoMo app'}
                                                         {m.id === 'cash' && 'Pay at parking booth before exit'}
                                                     </div>
                                                 </div>
@@ -3001,26 +3100,7 @@ const BookingPage = () => {
                                         ))}
                                     </div>
 
-                                    {/* QR instruction for e-wallets */}
-                                    {(payMethod === 'momo') && (
-                                        <div style={{
-                                            marginTop: 20, padding: '20px',
-                                            background: payMethod === 'momo' ? 'linear-gradient(135deg,#fdf2f8,#fce7f3)' : 'linear-gradient(135deg,#eff6ff,#dbeafe)',
-                                            borderRadius: 14,
-                                            border: `1px solid ${payMethod === 'momo' ? '#f9a8d4' : '#bfdbfe'}`,
-                                            textAlign: 'center'
-                                        }}>
-                                            <div style={{ fontSize: 36, marginBottom: 12 }}>
-                                                {payMethod === 'momo' ? '📱' : '📲'}
-                                            </div>
-                                            <div style={{ fontWeight: 700, fontSize: 14, color: payMethod === 'momo' ? '#9d174d' : '#1d4ed8', marginBottom: 6 }}>
-                                                Open {payMethod === 'momo' ? 'MoMo' : 'E-wallet'} app and confirm payment
-                                            </div>
-                                            <div style={{ fontSize: 12, color: '#64748b', fontWeight: 500 }}>
-                                                Amount: <strong>{fmtVND(grandTotal)}</strong> will be deducted from your wallet
-                                            </div>
-                                        </div>
-                                    )}
+
 
                                     {/* Cash instructions */}
                                     {payMethod === 'cash' && (
@@ -3049,6 +3129,23 @@ const BookingPage = () => {
                                             <div className="modal-total-value" style={{ fontSize: '24px' }}>{fmtVND(grandTotal)}</div>
                                         </div>
                                     </div>
+
+                                    {/* Error message from backend */}
+                                    {checkoutErrors.form && (
+                                        <div style={{
+                                            margin: '16px 0 0',
+                                            padding: '12px 16px',
+                                            background: '#fef2f2',
+                                            border: '1px solid #fca5a5',
+                                            borderRadius: 10,
+                                            color: '#b91c1c',
+                                            fontSize: 13,
+                                            fontWeight: 600,
+                                            lineHeight: 1.5,
+                                        }}>
+                                            ⚠️ {checkoutErrors.form}
+                                        </div>
+                                    )}
 
                                     <div className="modal-actions" style={{ marginTop: '24px' }}>
                                         <button className="modal-cancel" onClick={() => setShowConfirmModal(false)} disabled={checkoutProcessing}>
