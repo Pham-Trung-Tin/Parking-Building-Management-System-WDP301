@@ -73,7 +73,7 @@ const DevPanel: React.FC = () => {
             let list: Booking[] = Array.isArray(res)
                 ? res
                 : (res?.data ?? res?.docs ?? []);
-            
+
             list = list.filter((b: any) => b.status === 'pending' || b.status === 'approved');
             setBookings(list);
         } catch (e: any) {
@@ -457,29 +457,29 @@ const DevPanel: React.FC = () => {
                                     Simulate time passing to test Overtime logic in Session Page.
                                 </div>
                                 <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'center' }}>
-                                    <button 
-                                        className="dev-util-btn" 
+                                    <button
+                                        className="dev-util-btn"
                                         style={{ background: '#fef3c7', color: '#92400e', border: 'none' }}
                                         onClick={() => updateDevTimeOffset(60 * 1000)}
                                     >+ 1 Phút</button>
-                                    <button 
-                                        className="dev-util-btn" 
+                                    <button
+                                        className="dev-util-btn"
                                         style={{ background: '#f1f5f9', color: '#334155', border: 'none' }}
                                         onClick={() => updateDevTimeOffset(15 * 60 * 1000)}
                                     >+ 15 Phút</button>
-                                    <button 
-                                        className="dev-util-btn" 
+                                    <button
+                                        className="dev-util-btn"
                                         style={{ background: '#e0f2fe', color: '#0369a1', border: 'none' }}
                                         onClick={() => updateDevTimeOffset(60 * 60 * 1000)}
                                     >+ 1 Giờ</button>
-                                    <button 
-                                        className="dev-util-btn" 
+                                    <button
+                                        className="dev-util-btn"
                                         style={{ background: '#fee2e2', color: '#b91c1c', border: 'none' }}
                                         onClick={() => updateDevTimeOffset(4 * 60 * 60 * 1000)}
                                     >+ 4 Giờ</button>
                                 </div>
-                                <button 
-                                    className="dev-util-btn" 
+                                <button
+                                    className="dev-util-btn"
                                     style={{ marginTop: '10px', background: '#f87171', color: '#fff', border: 'none' }}
                                     onClick={() => resetDevTimeOffset()}
                                 >Reset Time to Now</button>

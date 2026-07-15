@@ -161,6 +161,16 @@ const MyTicketsPage = () => {
     const [sessionsError, setSessionsError] = useState<string | null>(null);
     const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+    const [hiddenTickets, setHiddenTickets] = useState<string[]>(() => {
+        try { return JSON.parse(localStorage.getItem('hiddenTickets') || '[]'); } catch { return []; }
+    });
+
+    const handleHideTicket = (receiptId: string) => {
+        const newHidden = [...hiddenTickets, receiptId];
+        setHiddenTickets(newHidden);
+        localStorage.setItem('hiddenTickets', JSON.stringify(newHidden));
+    };
+
     const fetchActiveSessions = useCallback(async () => {
         try {
             const res = await parkingSessionService.getSessions({ status: 'active', limit: 10 });
@@ -188,8 +198,8 @@ const MyTicketsPage = () => {
             const res = await bookingService.getMyBookings({ limit: 50 });
             let list = Array.isArray(res) ? res : (res?.data ?? res?.docs ?? []);
 
-            // Only show bookings that have been successfully paid
-            list = list.filter((b: any) => b.paymentStatus === 'paid');
+            // Only show active bookings (pending/approved) or no_show that are paid
+            list = list.filter((b: any) => b.paymentStatus === 'paid' && ['pending', 'approved', 'no_show'].includes(b.status));
 
             // Map backend booking objects to our local Ticket interface for rendering
             const mappedTickets: Ticket[] = list.map((b: any) => {
@@ -272,8 +282,8 @@ const MyTicketsPage = () => {
                 const res = await bookingService.getMyBookings({ limit: 50 });
                 let list = Array.isArray(res) ? res : (res?.data ?? res?.docs ?? []);
 
-                // Only show bookings that have been successfully paid
-                list = list.filter((b: any) => b.paymentStatus === 'paid');
+                // Only show active bookings (pending/approved) or no_show that are paid
+                list = list.filter((b: any) => b.paymentStatus === 'paid' && ['pending', 'approved', 'no_show'].includes(b.status));
 
                 // Map backend booking objects to our local Ticket interface for rendering
                 const mappedTickets: Ticket[] = list.map((b: any) => {
@@ -699,10 +709,17 @@ const MyTicketsPage = () => {
                     cursor: pointer;
                     transition: all 0.2s ease;
                 }
-                .t-list-item:hover {
+                .t-list-item:hover:not(.no-show) {
                     border-color: #cbd5e1;
                     transform: translateY(-2px);
                     box-shadow: 0 10px 15px -3px rgba(0,0,0,0.05), 0 4px 6px -2px rgba(0,0,0,0.05);
+                }
+                .t-list-item.no-show {
+                    opacity: 0.7;
+                    cursor: default;
+                }
+                .t-list-item.no-show .t-list-item-icon {
+                    filter: grayscale(1);
                 }
                 .t-list-item-left { display: flex; align-items: center; gap: 16px; flex: 1; }
                 .t-list-item-icon {
@@ -739,6 +756,26 @@ const MyTicketsPage = () => {
                     cursor: pointer; transition: all 0.2s;
                 }
                 .t-list-item-btn:hover { background: #1d4ed8; }
+
+                /* Delete / Hide Ticket Button */
+                .t-delete-btn {
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    width: 32px;
+                    height: 32px;
+                    border-radius: 50%;
+                    border: none;
+                    background: transparent;
+                    color: #94a3b8;
+                    cursor: pointer;
+                    margin-left: 8px;
+                    transition: all 0.2s;
+                }
+                .t-delete-btn:hover {
+                    background: rgba(15, 23, 42, 0.05); /* Card bo tròn mờ khi hover */
+                    color: #ef4444;
+                }
 
                 /* ── Empty State ── */
                 .t-empty-card {
@@ -973,7 +1010,7 @@ const MyTicketsPage = () => {
                     ) : (
                         <>
                             <div className="t-list">
-                                {tickets.map(ticket => {
+                                {tickets.filter(t => !hiddenTickets.includes(t.receiptId)).map(ticket => {
                                     const isPaid = ticket.paymentStatus === 'paid';
                                     const isUnpaid = !isPaid;
                                     let remainingSeconds = 0;
@@ -983,9 +1020,14 @@ const MyTicketsPage = () => {
                                     }
                                     const mm = String(Math.floor(remainingSeconds / 60)).padStart(2, '0');
                                     const ss = String(remainingSeconds % 60).padStart(2, '0');
+                                    const isNoShow = ticket.status === 'no_show';
                                     
                                     return (
-                                        <div key={ticket.receiptId} className="t-list-item" onClick={() => setSelectedTicket(ticket)}>
+                                        <div 
+                                            key={ticket.receiptId} 
+                                            className={`t-list-item ${isNoShow ? 'no-show' : ''}`}
+                                            onClick={() => !isNoShow && setSelectedTicket(ticket)}
+                                        >
                                             <div className="t-list-item-left">
                                                 <div className="t-list-item-icon">
                                                     {getVehicleEmoji(ticket.vehicleType)}
@@ -1010,10 +1052,27 @@ const MyTicketsPage = () => {
                                                 </div>
                                             </div>
                                             <div className="t-list-item-right">
-                                                <span className={`t-badge ${isUnpaid ? 'unpaid' : ''}`}>
-                                                    {isUnpaid ? 'PENDING' : 'PAID'}
+                                                <span className={`t-badge ${isUnpaid ? 'unpaid' : ''}`} style={isNoShow ? { background: '#f1f5f9', color: '#64748b', border: '1px solid #cbd5e1' } : {}}>
+                                                    {isNoShow ? 'VÉ QUÁ GIỜ' : (isUnpaid ? 'PENDING' : 'PAID')}
                                                 </span>
-                                                <button className="t-list-item-btn" onClick={(e) => { e.stopPropagation(); setSelectedTicket(ticket); }}>View Ticket</button>
+                                                {!isNoShow && (
+                                                    <button className="t-list-item-btn" onClick={(e) => { e.stopPropagation(); setSelectedTicket(ticket); }}>View Ticket</button>
+                                                )}
+                                                {isNoShow && (
+                                                    <>
+                                                        <span style={{ fontSize: '12px', fontWeight: 600, color: '#ef4444' }}>Đã huỷ</span>
+                                                        <button 
+                                                            className="t-delete-btn" 
+                                                            onClick={(e) => { e.stopPropagation(); handleHideTicket(ticket.receiptId); }}
+                                                            title="Ẩn vé quá hạn"
+                                                        >
+                                                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                                <line x1="18" y1="6" x2="6" y2="18"></line>
+                                                                <line x1="6" y1="6" x2="18" y2="18"></line>
+                                                            </svg>
+                                                        </button>
+                                                    </>
+                                                )}
                                             </div>
                                         </div>
                                     );

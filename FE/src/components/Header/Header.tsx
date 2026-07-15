@@ -76,7 +76,7 @@ const Header = () => {
           <Link to="/find-parking" className="hover:text-blue-600 transition-colors no-underline text-inherit py-2">Find Building</Link>
           <Link to="/booking" className="hover:text-blue-600 transition-colors no-underline text-inherit py-2">Book a Slot</Link>
           {user && (
-            <Link to="/tickets" className="hover:text-blue-600 transition-colors no-underline text-inherit py-2">My QR</Link>
+            <Link to="/tickets" className="hover:text-blue-600 transition-colors no-underline text-inherit py-2">My Tickets</Link>
           )}
         </nav>
 
