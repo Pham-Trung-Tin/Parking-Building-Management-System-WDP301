@@ -24,7 +24,40 @@ export interface PaymentBankTransferStatusResponse {
     paidAt: string;
 }
 
+export interface Payment {
+    _id: string;
+    invoiceCode: string;
+    amount: number;
+    method: string;
+    status: string;
+    paymentType: string;
+    paidAt?: string;
+    createdAt: string;
+    user?: { fullName: string; email: string };
+    parkingLot?: { name: string; code: string };
+    parkingSession?: { sessionCode: string; vehicleInfo?: { licensePlate: string } };
+    booking?: { bookingCode: string };
+    monthlyPass?: any;
+    transferContent?: string;
+    invoiceNumber?: string;
+}
+
 const paymentService = {
+    /** GET /payments — list payments with optional filters */
+    getPayments: (params?: {
+        status?: string;
+        method?: string;
+        paymentType?: string;
+        parkingLot?: string;
+        startDate?: string;
+        endDate?: string;
+        page?: number;
+        limit?: number;
+        sort?: string;
+    }): Promise<any> => {
+        return axiosClient.get('/payments', { params });
+    },
+
     /** POST /payments/bank-transfer/initiate — Initiate bank transfer payment */
     initiateBankTransfer: (sessionId: string): Promise<PaymentInitiateBankTransferResponse> => {
         return axiosClient.post('/payments/bank-transfer/initiate', { sessionId });

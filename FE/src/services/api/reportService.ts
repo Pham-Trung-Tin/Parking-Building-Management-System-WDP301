@@ -25,6 +25,12 @@ export interface RevenueReport {
     totalRevenue: number;
     totalTransactions: number;
     avgPerTransaction: number;
+    bookingRevenue: number;
+    bookingCount: number;
+    monthlyPassRevenue: number;
+    monthlyPassCount: number;
+    sessionRevenue: number;
+    sessionCount: number;
     chart: Array<{
         _id: {
             year: number;
@@ -37,6 +43,11 @@ export interface RevenueReport {
         avgRevenue: number;
     }>;
     byMethod: Array<{
+        _id: string;
+        total: number;
+        count: number;
+    }>;
+    byPaymentType: Array<{
         _id: string;
         total: number;
         count: number;

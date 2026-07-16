@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Building, Car, Layers, Grid, MapPin, Users, LogOut, Shield } from 'lucide-react';
+import { Building, Car, Layers, Grid, MapPin, Users, LogOut, Shield, DollarSign } from 'lucide-react';
 import BuildingsTab from './BuildingsTab';
 import VehicleTypesTab from './VehicleTypesTab';
 import FloorsTab from './FloorsTab';
 import ZonesTab from './ZonesTab';
 import SlotsTab from './SlotsTab';
 import StaffAssignmentTab from './StaffAssignmentTab';
+import RevenueTab from './RevenueTab';
 
 const NAV = [
   { id: 'buildings',    label: 'Buildings',       icon: Building },
@@ -15,6 +16,7 @@ const NAV = [
   { id: 'zones',        label: 'Zones',           icon: Grid     },
   { id: 'slots',        label: 'Parking Slots',   icon: MapPin   },
   { id: 'staff',        label: 'Staff Assignment', icon: Users    },
+  { id: 'revenue',      label: 'Revenue',         icon: DollarSign },
 ];
 
 export default function ManagerPortal() {
@@ -90,8 +92,9 @@ export default function ManagerPortal() {
           {tab === 'vehicleTypes' && <VehicleTypesTab />}
           {tab === 'floors'       && <FloorsTab globalLotId={globalLotId} setGlobalLotId={setGlobalLotId} />}
           {tab === 'zones'        && <ZonesTab globalLotId={globalLotId} setGlobalLotId={setGlobalLotId} />}
-          {tab === 'slots'        && <SlotsTab globalLotId={globalLotId} setGlobalLotId={setGlobalLotId} />}
-          {tab === 'staff'        && <StaffAssignmentTab globalLotId={globalLotId} setGlobalLotId={setGlobalLotId} />}
+          { tab === 'slots'        && <SlotsTab globalLotId={globalLotId} setGlobalLotId={setGlobalLotId} /> }
+          { tab === 'staff'        && <StaffAssignmentTab globalLotId={globalLotId} setGlobalLotId={setGlobalLotId} /> }
+          { tab === 'revenue'      && <RevenueTab globalLotId={globalLotId} /> }
         </div>
       </div>
     </div>
