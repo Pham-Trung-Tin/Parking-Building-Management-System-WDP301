@@ -265,7 +265,7 @@ const StaffExitPage = () => {
         } else {
           throw new Error('Session not found.');
         }
-      } else if (query.includes('.') || query.startsWith('{')) {
+      } else if ((query.includes('.') && query.length > 20) || query.startsWith('{')) {
         // ── Ưu tiên 2: HMAC token cũ (dạng <base64>.<sig>) hoặc JSON ────────
         try {
           let payload: any;
@@ -283,7 +283,7 @@ const StaffExitPage = () => {
               }
             } catch (jsonErr) {
               if (typeof query === 'string' && query.trim().length > 0) {
-                if (query.includes('.')) throw new Error('Invalid or expired Checkout QR Code.');
+                if (query.includes('.') && query.length > 20) throw new Error('Invalid or expired Checkout QR Code.');
                 payload = { id: query.trim() };
               } else {
                 throw new Error('Unsupported QR format.');
@@ -429,7 +429,7 @@ const StaffExitPage = () => {
             // Nếu là sessionCode dạng PS-XXXXX → tìm qua findActive
             if (trimmed.toUpperCase().startsWith('PS-')) {
               payload = { sessionCode: trimmed, type: 'checkout' };
-            } else if (trimmed.includes('.')) {
+            } else if (trimmed.includes('.') && trimmed.length > 20) {
               throw new Error('Invalid or expired Checkout QR Code.');
             } else {
               // Giả định là MongoDB _id
