@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import axiosClient from '../../services/api/axiosClient';
-import { CalendarDays, Tag, DollarSign, RefreshCw, ChevronLeft, ChevronRight, AlertCircle, Calendar } from 'lucide-react';
+import { CalendarDays, Tag, DollarSign, RefreshCw, ChevronLeft, ChevronRight, AlertCircle, Calendar, X, User, CreditCard, Receipt, Clock, Hash } from 'lucide-react';
 
 type Tab = 'session_checkout' | 'booking' | 'monthly_pass';
 
@@ -32,19 +32,146 @@ const METHOD_LABEL: Record<string, string> = {
 
 const STATUS_COLOR: Record<string, string> = {
   completed: 'bg-emerald-100 text-emerald-700',
-  pending:   'bg-amber-100 text-amber-700',
-  failed:    'bg-red-100 text-red-700',
-  refunded:  'bg-gray-100 text-gray-600',
+  pending: 'bg-amber-100 text-amber-700',
+  failed: 'bg-red-100 text-red-700',
+  refunded: 'bg-gray-100 text-gray-600',
   cancelled: 'bg-gray-100 text-gray-500',
 };
+
+function TransactionDetailModal({ tx, onClose, fmt, fmtDate, activeTab }: {
+  tx: TxPayment;
+  onClose: () => void;
+  fmt: (n: number) => string;
+  fmtDate: (d?: string) => string;
+  activeTab: Tab;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50">
+          <div>
+            <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Payment Detail</p>
+            <p className="font-mono text-sm font-bold text-gray-900 mt-0.5">{tx.invoiceCode || '—'}</p>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:bg-gray-200 transition">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="px-6 py-5 space-y-4">
+          {/* Amount */}
+          <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4 flex items-center justify-between">
+            <div>
+              <p className="text-xs text-emerald-600 font-medium uppercase tracking-wider mb-1">Total Amount</p>
+              <p className="text-2xl font-bold text-emerald-700">{fmt(tx.amount || 0)}</p>
+            </div>
+            {(tx.baseFee !== undefined || tx.overtimeFee !== undefined) && (
+              <div className="text-right text-xs text-gray-500 space-y-0.5">
+                {tx.baseFee !== undefined && <p>Base: <span className="font-semibold text-gray-700">{fmt(tx.baseFee)}</span></p>}
+                {tx.overtimeFee && tx.overtimeFee > 0 && <p className="text-red-500">Overtime: <span className="font-semibold">+{fmt(tx.overtimeFee)}</span></p>}
+              </div>
+            )}
+          </div>
+
+          {/* Status + Method */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-gray-50 rounded-xl p-3">
+              <div className="flex items-center gap-1.5 mb-1">
+                <Hash className="w-3 h-3 text-gray-400" />
+                <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Status</p>
+              </div>
+              <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-semibold capitalize ${STATUS_COLOR[tx.status] ?? 'bg-gray-100 text-gray-600'}`}>
+                {tx.status}
+              </span>
+            </div>
+            <div className="bg-gray-50 rounded-xl p-3">
+              <div className="flex items-center gap-1.5 mb-1">
+                <CreditCard className="w-3 h-3 text-gray-400" />
+                <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Method</p>
+              </div>
+              <p className="text-sm font-semibold text-gray-800">{METHOD_LABEL[tx.method] ?? tx.method}</p>
+            </div>
+          </div>
+
+          {/* Customer */}
+          {tx.user && (
+            <div className="bg-gray-50 rounded-xl p-3">
+              <div className="flex items-center gap-1.5 mb-2">
+                <User className="w-3 h-3 text-gray-400" />
+                <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Customer</p>
+              </div>
+              <p className="text-sm font-semibold text-gray-800">{tx.user.fullName}</p>
+              <p className="text-xs text-gray-400">{tx.user.email}</p>
+            </div>
+          )}
+
+          {/* Reference info */}
+          {(tx.booking?.bookingCode || tx.parkingSession?.sessionCode || tx.parkingSession?.vehicleInfo?.licensePlate || tx.monthlyPass?.passCode || tx.transferContent) && (
+            <div className="bg-gray-50 rounded-xl p-3">
+              <div className="flex items-center gap-1.5 mb-2">
+                <Receipt className="w-3 h-3 text-gray-400" />
+                <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
+                  {activeTab === 'session_checkout' ? 'Session Info' : activeTab === 'booking' ? 'Booking Info' : 'Pass Info'}
+                </p>
+              </div>
+              {tx.booking?.bookingCode && <p className="text-sm font-mono font-semibold text-blue-600">{tx.booking.bookingCode}</p>}
+              {tx.parkingSession?.sessionCode && <p className="text-xs text-gray-500">Session: <span className="font-mono">{tx.parkingSession.sessionCode}</span></p>}
+              {tx.parkingSession?.vehicleInfo?.licensePlate && <p className="text-xs text-gray-500">Plate: <span className="font-semibold text-gray-700">{tx.parkingSession.vehicleInfo.licensePlate}</span></p>}
+              {tx.monthlyPass?.passCode && <p className="text-sm font-mono font-semibold text-amber-600">{tx.monthlyPass.passCode}</p>}
+              {tx.transferContent && <p className="text-xs font-mono text-gray-500 mt-1 break-all">{tx.transferContent}</p>}
+            </div>
+          )}
+
+          {/* Dates */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-gray-50 rounded-xl p-3">
+              <div className="flex items-center gap-1.5 mb-1">
+                <Clock className="w-3 h-3 text-gray-400" />
+                <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Created</p>
+              </div>
+              <p className="text-xs font-medium text-gray-700">{fmtDate(tx.createdAt)}</p>
+            </div>
+            {tx.paidAt && (
+              <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <Clock className="w-3 h-3 text-emerald-400" />
+                  <p className="text-[10px] font-semibold text-emerald-400 uppercase tracking-wider">Paid At</p>
+                </div>
+                <p className="text-xs font-medium text-emerald-700">{fmtDate(tx.paidAt)}</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 py-4 border-t border-gray-100 bg-gray-50">
+          <button onClick={onClose} className="w-full py-2.5 bg-gray-900 text-white rounded-xl text-sm font-semibold hover:bg-gray-700 transition">Close</button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function RevenueTab({ globalLotId }: { globalLotId?: string }) {
   const [activeTab, setActiveTab] = useState<Tab>('session_checkout');
   const [allTransactions, setAllTransactions] = useState<TxPayment[]>([]);
-  const [loading, setLoading]   = useState(false);
-  const [error, setError]       = useState<string | null>(null);
-  const [page, setPage]         = useState(1);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [selectedTx, setSelectedTx] = useState<TxPayment | null>(null);
   const LIMIT = 10;
+
+  // Grand total across all 3 tabs
+  const [grandTotal, setGrandTotal] = useState(0);
+  const [grandCount, setGrandCount] = useState(0);
+  const [tabTotals, setTabTotals] = useState<Record<Tab, number>>({
+    session_checkout: 0,
+    booking: 0,
+    monthly_pass: 0,
+  });
 
   // Month & Year state
   const currentDate = new Date();
@@ -62,34 +189,60 @@ export default function RevenueTab({ globalLotId }: { globalLotId?: string }) {
     });
   };
 
+  const fetchOneTab = async (type: Tab, startDate: string, endDate: string): Promise<TxPayment[]> => {
+    const params: Record<string, any> = {
+      paymentType: type,
+      limit: 10000,
+      page: 1,
+      sort: '-createdAt',
+      status: 'completed',
+      startDate,
+      endDate,
+    };
+    if (globalLotId) params.parkingLot = globalLotId;
+    const res: any = await axiosClient.get('/payments', { params });
+    let docs = res.data?.docs ?? res.docs ?? res.data ?? [];
+    return Array.isArray(docs) ? docs : [];
+  };
+
   const fetchTransactions = async () => {
     try {
       setLoading(true);
       setError(null);
-      
+
       const startDate = new Date(year, month - 1, 1).toISOString();
       const endDate = new Date(year, month, 0, 23, 59, 59, 999).toISOString();
-      
-      const params: Record<string, any> = {
-        paymentType: activeTab,
-        limit: 10000, // Fetch all for the month to calculate total
-        page: 1,
-        sort: '-createdAt',
-        status: 'completed',
-        startDate,
-        endDate
-      };
-      if (globalLotId) params.parkingLot = globalLotId;
 
-      const res: any = await axiosClient.get('/payments', { params });
-      if (res.success !== false) {
-        let docs = res.data?.docs ?? res.docs ?? res.data ?? [];
-        if (!Array.isArray(docs)) docs = [];
-        setAllTransactions(docs);
-        setPage(1);
-      } else {
-        setError(res.message || 'Failed to load transactions.');
-      }
+      // Fetch all 3 tabs in parallel
+      const [sessionDocs, bookingDocs, passDocs] = await Promise.all([
+        fetchOneTab('session_checkout', startDate, endDate),
+        fetchOneTab('booking', startDate, endDate),
+        fetchOneTab('monthly_pass', startDate, endDate),
+      ]);
+
+      const allDocs: Record<Tab, TxPayment[]> = {
+        session_checkout: sessionDocs,
+        booking: bookingDocs,
+        monthly_pass: passDocs,
+      };
+
+      // Update active tab list
+      setAllTransactions(allDocs[activeTab]);
+      setPage(1);
+
+      // Compute per-tab totals
+      const totals = {} as Record<Tab, number>;
+      let grand = 0;
+      let count = 0;
+      (['session_checkout', 'booking', 'monthly_pass'] as Tab[]).forEach(t => {
+        const sum = allDocs[t].reduce((acc, tx) => acc + (tx.amount || 0), 0);
+        totals[t] = sum;
+        grand += sum;
+        count += allDocs[t].length;
+      });
+      setTabTotals(totals);
+      setGrandTotal(grand);
+      setGrandCount(count);
     } catch (err: any) {
       setError(err.message || 'Error loading transactions.');
     } finally {
@@ -97,6 +250,8 @@ export default function RevenueTab({ globalLotId }: { globalLotId?: string }) {
     }
   };
 
+  // When switching tab, update displayed list from already-fetched data
+  // (re-fetch covers all tabs so just re-run on tab/lot/month/year change)
   useEffect(() => {
     fetchTransactions();
   }, [activeTab, globalLotId, month, year]);
@@ -106,23 +261,15 @@ export default function RevenueTab({ globalLotId }: { globalLotId?: string }) {
     setActiveTab(tab);
   };
 
-  // Calculations & Pagination
-  const { totalRevenue, successfulCount, paginatedTransactions, totalPages } = useMemo(() => {
-    let revenue = 0;
-    let successCount = 0;
-    
-    allTransactions.forEach(tx => {
-      if (tx.status === 'completed') {
-        revenue += (tx.amount || tx.baseFee || 0);
-        successCount++;
-      }
-    });
-
+  // Pagination for active tab
+  const { paginatedTransactions, totalPages } = useMemo(() => {
     const totalPages = Math.ceil(allTransactions.length / LIMIT) || 1;
     const paginatedTransactions = allTransactions.slice((page - 1) * LIMIT, page * LIMIT);
-
-    return { totalRevenue: revenue, successfulCount: successCount, paginatedTransactions, totalPages };
+    return { paginatedTransactions, totalPages };
   }, [allTransactions, page]);
+
+  const activeTabRevenue = tabTotals[activeTab] ?? 0;
+  const activeTabCount = allTransactions.length;
 
   const tabs: { key: Tab; label: string; icon: React.ReactNode; color: string; activeClass: string }[] = [
     {
@@ -192,43 +339,51 @@ export default function RevenueTab({ globalLotId }: { globalLotId?: string }) {
       </div>
 
       {/* Revenue Summary Card */}
-      <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center">
-        <div>
-          <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">Total Revenue</p>
-          <div className="flex items-baseline gap-2">
-            <h3 className="text-3xl font-bold text-emerald-600">{fmt(totalRevenue)}</h3>
-            <span className="text-gray-400 text-sm font-medium">/ {month}-{year}</span>
+      <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+        {/* Grand total row */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-5 mb-5 border-b border-gray-100">
+          <div>
+            <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">Total</p>
+            <div className="flex items-baseline gap-2">
+              <h3 className="text-3xl font-bold text-emerald-600">{fmt(grandTotal)}</h3>
+              <span className="text-gray-400 text-sm font-medium">/ {month}-{year}</span>
+            </div>
+          </div>
+          <div className="bg-gray-50 border border-gray-100 px-5 py-3 rounded-xl flex items-center gap-4">
+            <div className="w-10 h-10 bg-white rounded-lg border border-gray-100 shadow-sm flex items-center justify-center shrink-0">
+              <DollarSign className="w-5 h-5 text-gray-600" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-500 uppercase font-medium">Total Transactions</p>
+              <p className="text-xl font-bold text-gray-900">{grandCount}</p>
+            </div>
           </div>
         </div>
-        
-        <div className="mt-4 sm:mt-0 bg-gray-50 border border-gray-100 px-5 py-3 rounded-xl flex items-center gap-4">
-          <div className="w-10 h-10 bg-white rounded-lg border border-gray-100 shadow-sm flex items-center justify-center shrink-0">
-            <DollarSign className="w-5 h-5 text-gray-600" />
-          </div>
-          <div>
-            <p className="text-xs text-gray-500 uppercase font-medium">Successful Transactions</p>
-            <p className="text-xl font-bold text-gray-900">{successfulCount}</p>
-          </div>
+
+        {/* Per-tab breakdown */}
+        <div className="grid grid-cols-3 gap-3">
+          {([
+            { key: 'session_checkout' as Tab, label: 'Parking Sessions' },
+            { key: 'booking' as Tab, label: 'Bookings' },
+            { key: 'monthly_pass' as Tab, label: 'Monthly Pass' },
+          ]).map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => handleTabChange(key)}
+              className={`text-left p-4 rounded-xl border transition-all ${activeTab === key
+                  ? 'border-emerald-300 bg-emerald-50'
+                  : 'border-gray-100 bg-gray-50 hover:border-gray-200'
+                }`}
+            >
+              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">{label}</p>
+              <p className={`text-lg font-bold ${activeTab === key ? 'text-emerald-700' : 'text-gray-700'
+                }`}>{fmt(tabTotals[key] ?? 0)}</p>
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* Tab Buttons */}
-      <div className="flex gap-3">
-        {tabs.map(tab => (
-          <button
-            key={tab.key}
-            onClick={() => handleTabChange(tab.key)}
-            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm transition-all duration-200 ${
-              activeTab === tab.key
-                ? tab.activeClass
-                : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 shadow-sm'
-            }`}
-          >
-            {tab.icon}
-            {tab.label}
-          </button>
-        ))}
-      </div>
+
 
       {/* Error */}
       {error && (
@@ -242,11 +397,14 @@ export default function RevenueTab({ globalLotId }: { globalLotId?: string }) {
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
           <h3 className="font-semibold text-gray-700">
-            {activeTab === 'booking' ? 'Parking Session Payments' : 'Monthly Pass Payments'}
+            {activeTab === 'session_checkout' ? 'Parking Session Payments' : activeTab === 'booking' ? 'Booking Payments' : 'Monthly Pass Payments'}
             {!loading && (
               <span className="ml-2 text-xs font-normal text-gray-400">({allTransactions.length} records)</span>
             )}
           </h3>
+          {!loading && allTransactions.length > 0 && (
+            <span className="text-sm font-semibold text-emerald-600">{fmt(activeTabRevenue)}</span>
+          )}
         </div>
 
         {loading ? (
@@ -278,7 +436,11 @@ export default function RevenueTab({ globalLotId }: { globalLotId?: string }) {
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {paginatedTransactions.map(tx => (
-                  <tr key={tx._id} className="hover:bg-gray-50 transition-colors">
+                  <tr
+                    key={tx._id}
+                    onClick={() => setSelectedTx(tx)}
+                    className="hover:bg-gray-50 transition-colors cursor-pointer"
+                  >
                     {/* Invoice */}
                     <td className="px-6 py-3 font-mono text-xs text-gray-600 whitespace-nowrap">
                       {tx.invoiceCode || '—'}
@@ -381,6 +543,17 @@ export default function RevenueTab({ globalLotId }: { globalLotId?: string }) {
           </div>
         )}
       </div>
+
+      {/* Detail Modal */}
+      {selectedTx && (
+        <TransactionDetailModal
+          tx={selectedTx}
+          onClose={() => setSelectedTx(null)}
+          fmt={fmt}
+          fmtDate={fmtDate}
+          activeTab={activeTab}
+        />
+      )}
     </div>
   );
 }

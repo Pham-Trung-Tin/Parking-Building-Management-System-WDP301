@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Plus, Pencil, Trash2, X, Check, MapPin, RefreshCw, Search } from 'lucide-react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { Plus, Pencil, Trash2, X, MapPin, RefreshCw, Search, Car, CircleCheck, Wrench, Lock } from 'lucide-react';
 import parkingSlotService from '../../services/api/parkingSlotService';
 import parkingLotService from '../../services/api/parkingLotService';
 import floorService from '../../services/api/floorService';
@@ -158,6 +158,15 @@ export default function SlotsTab({ globalLotId, setGlobalLotId }: any) {
     } catch (e: any) { showToast(e.message || 'Error deleting', false); }
   };
 
+  const stats = useMemo(() => ({
+    total:       items.length,
+    occupied:    items.filter(s => s.status === 'occupied').length,
+    available:   items.filter(s => s.status === 'available').length,
+    reserved:    items.filter(s => s.status === 'reserved').length,
+    maintenance: items.filter(s => s.status === 'maintenance').length,
+    locked:      items.filter(s => s.status === 'locked').length,
+  }), [items]);
+
   return (
     <div>
       <div className="flex items-end justify-between mb-6">
@@ -175,6 +184,48 @@ export default function SlotsTab({ globalLotId, setGlobalLotId }: any) {
           </button>
         </div>
       </div>
+
+      {/* Stats summary */}
+      {!loading && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-5">
+          <div className="bg-white border border-gray-100 rounded-xl p-4 shadow-sm">
+            <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">Total Slots</p>
+            <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
+          </div>
+          <div className="bg-rose-50 border border-rose-100 rounded-xl p-4 shadow-sm">
+            <div className="flex items-center gap-1.5 mb-1">
+              <Car className="w-3 h-3 text-rose-500" />
+              <p className="text-[10px] font-semibold text-rose-400 uppercase tracking-wider">Occupied</p>
+            </div>
+            <p className="text-2xl font-bold text-rose-600">{stats.occupied}</p>
+          </div>
+          <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4 shadow-sm">
+            <div className="flex items-center gap-1.5 mb-1">
+              <CircleCheck className="w-3 h-3 text-emerald-500" />
+              <p className="text-[10px] font-semibold text-emerald-400 uppercase tracking-wider">Available</p>
+            </div>
+            <p className="text-2xl font-bold text-emerald-600">{stats.available}</p>
+          </div>
+          <div className="bg-amber-50 border border-amber-100 rounded-xl p-4 shadow-sm">
+            <p className="text-[10px] font-semibold text-amber-400 uppercase tracking-wider mb-1">Reserved</p>
+            <p className="text-2xl font-bold text-amber-600">{stats.reserved}</p>
+          </div>
+          <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 shadow-sm">
+            <div className="flex items-center gap-1.5 mb-1">
+              <Wrench className="w-3 h-3 text-gray-400" />
+              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Maintenance</p>
+            </div>
+            <p className="text-2xl font-bold text-gray-600">{stats.maintenance}</p>
+          </div>
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm">
+            <div className="flex items-center gap-1.5 mb-1">
+              <Lock className="w-3 h-3 text-slate-400" />
+              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Locked</p>
+            </div>
+            <p className="text-2xl font-bold text-slate-100">{stats.locked}</p>
+          </div>
+        </div>
+      )}
 
       <div className="relative mb-5">
         <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
