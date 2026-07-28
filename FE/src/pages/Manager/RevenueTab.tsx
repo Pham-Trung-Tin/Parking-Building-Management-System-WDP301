@@ -164,7 +164,12 @@ export default function RevenueTab({ globalLotId }: { globalLotId?: string }) {
   const [selectedTx, setSelectedTx] = useState<TxPayment | null>(null);
   const LIMIT = 10;
 
-  // Grand total across all 3 tabs
+  const [allTabDocs, setAllTabDocs] = useState<Record<Tab, TxPayment[]>>({
+    session_checkout: [],
+    booking: [],
+    monthly_pass: [],
+  });
+
   const [grandTotal, setGrandTotal] = useState(0);
   const [grandCount, setGrandCount] = useState(0);
   const [tabTotals, setTabTotals] = useState<Record<Tab, number>>({
@@ -173,10 +178,9 @@ export default function RevenueTab({ globalLotId }: { globalLotId?: string }) {
     monthly_pass: 0,
   });
 
-  // Month & Year state
-  const currentDate = new Date();
-  const [month, setMonth] = useState(currentDate.getMonth() + 1);
-  const [year, setYear] = useState(currentDate.getFullYear());
+  // Single date picker – default = '' (shows full month)
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const [selectedDay, setSelectedDay] = useState<string>('');
 
   const fmt = (n: number) =>
     new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(n);
@@ -210,8 +214,10 @@ export default function RevenueTab({ globalLotId }: { globalLotId?: string }) {
       setLoading(true);
       setError(null);
 
-      const startDate = new Date(year, month - 1, 1).toISOString();
-      const endDate = new Date(year, month, 0, 23, 59, 59, 999).toISOString();
+      // Always fetch the full current month
+      const now = new Date();
+      const startDate = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+      const endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999).toISOString();
 
       // Fetch all 3 tabs in parallel
       const [sessionDocs, bookingDocs, passDocs] = await Promise.all([
@@ -226,11 +232,11 @@ export default function RevenueTab({ globalLotId }: { globalLotId?: string }) {
         monthly_pass: passDocs,
       };
 
-      // Update active tab list
+      setAllTabDocs(allDocs);
       setAllTransactions(allDocs[activeTab]);
       setPage(1);
 
-      // Compute per-tab totals
+      // Compute per-tab totals for month
       const totals = {} as Record<Tab, number>;
       let grand = 0;
       let count = 0;
@@ -250,26 +256,59 @@ export default function RevenueTab({ globalLotId }: { globalLotId?: string }) {
     }
   };
 
-  // When switching tab, update displayed list from already-fetched data
-  // (re-fetch covers all tabs so just re-run on tab/lot/month/year change)
+  // Re-fetch only when tab or building changes
   useEffect(() => {
     fetchTransactions();
-  }, [activeTab, globalLotId, month, year]);
+  }, [activeTab, globalLotId]);
 
   const handleTabChange = (tab: Tab) => {
     if (tab === activeTab) return;
     setActiveTab(tab);
   };
 
-  // Pagination for active tab
-  const { paginatedTransactions, totalPages } = useMemo(() => {
-    const totalPages = Math.ceil(allTransactions.length / LIMIT) || 1;
-    const paginatedTransactions = allTransactions.slice((page - 1) * LIMIT, page * LIMIT);
-    return { paginatedTransactions, totalPages };
-  }, [allTransactions, page]);
+  // Calculate filtered results & totals based on selectedDay
+  const { displayTransactions, displayTabTotals, displayGrandTotal, displayGrandCount } = useMemo(() => {
+    if (!selectedDay) {
+      return {
+        displayTransactions: allTransactions,
+        displayTabTotals: tabTotals,
+        displayGrandTotal: grandTotal,
+        displayGrandCount: grandCount,
+      };
+    }
 
-  const activeTabRevenue = tabTotals[activeTab] ?? 0;
-  const activeTabCount = allTransactions.length;
+    const filteredDocs: Record<Tab, TxPayment[]> = {
+      session_checkout: (allTabDocs.session_checkout || []).filter(tx => (tx.paidAt ?? tx.createdAt ?? '').slice(0, 10) === selectedDay),
+      booking: (allTabDocs.booking || []).filter(tx => (tx.paidAt ?? tx.createdAt ?? '').slice(0, 10) === selectedDay),
+      monthly_pass: (allTabDocs.monthly_pass || []).filter(tx => (tx.paidAt ?? tx.createdAt ?? '').slice(0, 10) === selectedDay),
+    };
+
+    const totals = {} as Record<Tab, number>;
+    let grand = 0;
+    let count = 0;
+    (['session_checkout', 'booking', 'monthly_pass'] as Tab[]).forEach(t => {
+      const sum = filteredDocs[t].reduce((acc, tx) => acc + (tx.amount || 0), 0);
+      totals[t] = sum;
+      grand += sum;
+      count += filteredDocs[t].length;
+    });
+
+    return {
+      displayTransactions: filteredDocs[activeTab],
+      displayTabTotals: totals,
+      displayGrandTotal: grand,
+      displayGrandCount: count,
+    };
+  }, [selectedDay, allTransactions, tabTotals, grandTotal, grandCount, allTabDocs, activeTab]);
+
+  const { paginatedTransactions, totalPages } = useMemo(() => {
+    const totalPages = Math.ceil(displayTransactions.length / LIMIT) || 1;
+    const paginatedTransactions = displayTransactions.slice((page - 1) * LIMIT, page * LIMIT);
+    return { paginatedTransactions, totalPages };
+  }, [displayTransactions, page]);
+
+  const activeTabRevenue = displayTabTotals[activeTab] ?? 0;
+  const activeTabCount = displayTransactions.length;
 
   const tabs: { key: Tab; label: string; icon: React.ReactNode; color: string; activeClass: string }[] = [
     {
@@ -305,29 +344,24 @@ export default function RevenueTab({ globalLotId }: { globalLotId?: string }) {
             Revenue
           </h1>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl p-1.5 shadow-sm">
-            <Calendar className="w-4 h-4 text-gray-400 ml-2" />
-            <select
-              value={month}
-              onChange={(e) => setMonth(Number(e.target.value))}
-              className="px-2 py-1 bg-transparent text-sm font-medium text-gray-700 outline-none cursor-pointer hover:text-emerald-600"
-            >
-              {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
-                <option key={m} value={m}>Month {m}</option>
-              ))}
-            </select>
-            <span className="text-gray-300">|</span>
-            <select
-              value={year}
-              onChange={(e) => setYear(Number(e.target.value))}
-              className="px-2 py-1 bg-transparent text-sm font-medium text-gray-700 outline-none cursor-pointer hover:text-emerald-600"
-            >
-              {[currentDate.getFullYear() - 1, currentDate.getFullYear(), currentDate.getFullYear() + 1].map(y => (
-                <option key={y} value={y}>Year {y}</option>
-              ))}
-            </select>
+        <div className="flex items-center gap-2">
+          {/* Single date picker */}
+          <div className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-sm">
+            <Calendar className="w-4 h-4 text-gray-400 shrink-0" />
+            <input
+              type="date"
+              value={selectedDay}
+              max={todayStr}
+              onChange={e => { setSelectedDay(e.target.value); setPage(1); }}
+              className="text-sm text-gray-700 outline-none bg-transparent cursor-pointer"
+            />
+            {selectedDay && (
+              <button onClick={() => { setSelectedDay(''); setPage(1); }} title="Show full month" className="text-gray-400 hover:text-gray-700 ml-0.5">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
+
           <button
             onClick={fetchTransactions}
             disabled={loading}
@@ -343,10 +377,14 @@ export default function RevenueTab({ globalLotId }: { globalLotId?: string }) {
         {/* Grand total row */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-5 mb-5 border-b border-gray-100">
           <div>
-            <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">Total</p>
+            <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">
+              {selectedDay ? 'Daily Total' : 'Monthly Total'}
+            </p>
             <div className="flex items-baseline gap-2">
-              <h3 className="text-3xl font-bold text-emerald-600">{fmt(grandTotal)}</h3>
-              <span className="text-gray-400 text-sm font-medium">/ {month}-{year}</span>
+              <h3 className="text-3xl font-bold text-emerald-600">{fmt(displayGrandTotal)}</h3>
+              <span className="text-gray-400 text-sm font-medium">
+                / {selectedDay ? new Date(selectedDay + 'T00:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : new Date().toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })}
+              </span>
             </div>
           </div>
           <div className="bg-gray-50 border border-gray-100 px-5 py-3 rounded-xl flex items-center gap-4">
@@ -355,7 +393,7 @@ export default function RevenueTab({ globalLotId }: { globalLotId?: string }) {
             </div>
             <div>
               <p className="text-xs text-gray-500 uppercase font-medium">Total Transactions</p>
-              <p className="text-xl font-bold text-gray-900">{grandCount}</p>
+              <p className="text-xl font-bold text-gray-900">{displayGrandCount}</p>
             </div>
           </div>
         </div>
@@ -371,13 +409,13 @@ export default function RevenueTab({ globalLotId }: { globalLotId?: string }) {
               key={key}
               onClick={() => handleTabChange(key)}
               className={`text-left p-4 rounded-xl border transition-all ${activeTab === key
-                  ? 'border-emerald-300 bg-emerald-50'
-                  : 'border-gray-100 bg-gray-50 hover:border-gray-200'
+                ? 'border-emerald-300 bg-emerald-50'
+                : 'border-gray-100 bg-gray-50 hover:border-gray-200'
                 }`}
             >
               <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">{label}</p>
               <p className={`text-lg font-bold ${activeTab === key ? 'text-emerald-700' : 'text-gray-700'
-                }`}>{fmt(tabTotals[key] ?? 0)}</p>
+                }`}>{fmt(displayTabTotals[key] ?? 0)}</p>
             </button>
           ))}
         </div>
@@ -399,10 +437,10 @@ export default function RevenueTab({ globalLotId }: { globalLotId?: string }) {
           <h3 className="font-semibold text-gray-700">
             {activeTab === 'session_checkout' ? 'Parking Session Payments' : activeTab === 'booking' ? 'Booking Payments' : 'Monthly Pass Payments'}
             {!loading && (
-              <span className="ml-2 text-xs font-normal text-gray-400">({allTransactions.length} records)</span>
+              <span className="ml-2 text-xs font-normal text-gray-400">({displayTransactions.length} records)</span>
             )}
           </h3>
-          {!loading && allTransactions.length > 0 && (
+          {!loading && displayTransactions.length > 0 && (
             <span className="text-sm font-semibold text-emerald-600">{fmt(activeTabRevenue)}</span>
           )}
         </div>
@@ -412,7 +450,7 @@ export default function RevenueTab({ globalLotId }: { globalLotId?: string }) {
             <RefreshCw className="w-8 h-8 animate-spin opacity-40" />
             <p className="text-sm">Loading transactions...</p>
           </div>
-        ) : allTransactions.length === 0 ? (
+        ) : displayTransactions.length === 0 ? (
           <div className="py-20 flex flex-col items-center gap-3 text-gray-400">
             <DollarSign className="w-10 h-10 opacity-20" />
             <p className="text-sm">No transactions found for this period.</p>
