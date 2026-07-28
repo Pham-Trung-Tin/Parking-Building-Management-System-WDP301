@@ -20,6 +20,15 @@ const authService = {
     },
 
     /**
+     * Đăng nhập bằng Google
+     * POST /auth/google
+     * @param {string} token
+     */
+    googleLogin: (token: string): Promise<any> => {
+        return axiosClient.post('/auth/google', { token });
+    },
+
+    /**
      * Đăng xuất
      * POST /auth/logout
      */

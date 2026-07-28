@@ -3,6 +3,8 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useFormik } from 'formik';
 import * as Yup from 'yup';
 import { authService } from '../../services/api';
+import { useGoogleLogin } from '@react-oauth/google';
+
 
 // SVG Icons for Google and Apple
 const GoogleIcon = () => (
@@ -75,6 +77,38 @@ const LoginPage = () => {
         setSubmitting(false);
       }
     },
+  });
+
+  const loginWithGoogle = useGoogleLogin({
+    onSuccess: async (tokenResponse) => {
+      setServerError('');
+      try {
+        const res = await authService.googleLogin(tokenResponse.access_token);
+        
+        if (res?.data?.accessToken) {
+          localStorage.setItem('accessToken', res.data.accessToken);
+        }
+
+        if (res?.data?.user) {
+          localStorage.setItem('user', JSON.stringify(res.data.user));
+          window.dispatchEvent(new Event('authChange'));
+        }
+
+        const role = res?.data?.user?.role;
+        if (role === 'system_admin') {
+          navigate('/admin');
+        } else if (role === 'parking_manager' || role === 'parking_staff') {
+          navigate('/staff');
+        } else {
+          navigate('/');
+        }
+      } catch (err) {
+        setServerError(err.response?.data?.message || err.message || 'Google login failed.');
+      }
+    },
+    onError: () => {
+      setServerError('Google login failed.');
+    }
   });
 
   // Helper: class border cho input theo trạng thái lỗi
@@ -221,7 +255,11 @@ const LoginPage = () => {
 
         {/* Social Login */}
         <div className="flex flex-col gap-[15px] mb-[30px]">
-          <button className="flex items-center justify-center gap-2.5 bg-white border border-slate-300 py-3.5 rounded-md text-[15px] font-semibold text-slate-900 cursor-pointer transition-all duration-200 hover:bg-slate-50 hover:border-slate-400">
+          <button 
+            type="button"
+            onClick={() => loginWithGoogle()}
+            className="flex items-center justify-center gap-2.5 bg-white border border-slate-300 py-3.5 rounded-md text-[15px] font-semibold text-slate-900 cursor-pointer transition-all duration-200 hover:bg-slate-50 hover:border-slate-400"
+          >
             <GoogleIcon />
             Continue with Google
           </button>
