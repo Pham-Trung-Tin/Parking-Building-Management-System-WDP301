@@ -198,8 +198,8 @@ const MyTicketsPage = () => {
             const res = await bookingService.getMyBookings({ limit: 50 });
             let list = Array.isArray(res) ? res : (res?.data ?? res?.docs ?? []);
 
-            // Only show active bookings (pending/approved) or no_show that are paid
-            list = list.filter((b: any) => b.paymentStatus === 'paid' && ['pending', 'approved', 'no_show'].includes(b.status));
+            // Only show active bookings (pending/approved) or no_show
+            list = list.filter((b: any) => ['paid', 'unpaid'].includes(b.paymentStatus || 'unpaid') && ['pending', 'approved', 'no_show'].includes(b.status));
 
             // Map backend booking objects to our local Ticket interface for rendering
             const mappedTickets: Ticket[] = list.map((b: any) => {
@@ -232,7 +232,7 @@ const MyTicketsPage = () => {
                     totalAmount: b.estimatedFee || 0,
                     payMethod: b.paymentMethod || 'card',
                     status: b.status,
-                    paymentStatus: b.paymentStatus,
+                    paymentStatus: b.paymentStatus || 'unpaid',
                     createdAt: b.createdAt,
                 };
             });
@@ -282,8 +282,8 @@ const MyTicketsPage = () => {
                 const res = await bookingService.getMyBookings({ limit: 50 });
                 let list = Array.isArray(res) ? res : (res?.data ?? res?.docs ?? []);
 
-                // Only show active bookings (pending/approved) or no_show that are paid
-                list = list.filter((b: any) => b.paymentStatus === 'paid' && ['pending', 'approved', 'no_show'].includes(b.status));
+                // Only show active bookings (pending/approved) or no_show
+                list = list.filter((b: any) => ['paid', 'unpaid'].includes(b.paymentStatus || 'unpaid') && ['pending', 'approved', 'no_show'].includes(b.status));
 
                 // Map backend booking objects to our local Ticket interface for rendering
                 const mappedTickets: Ticket[] = list.map((b: any) => {
@@ -316,7 +316,7 @@ const MyTicketsPage = () => {
                         totalAmount: b.estimatedFee || 0,
                         payMethod: b.paymentMethod || 'card',
                         status: b.status,
-                        paymentStatus: b.paymentStatus,
+                        paymentStatus: b.paymentStatus || 'unpaid',
                         createdAt: b.createdAt,
                     };
                 });
@@ -976,12 +976,12 @@ const MyTicketsPage = () => {
                             </div>
                         )}
 
-                        {!bookingsLoading && hasTickets && (
-                            <span className="t-section-count">{tickets.length} tickets</span>
+                        {!bookingsLoading && tickets.filter(t => !hiddenTickets.includes(t.receiptId)).length > 0 && (
+                            <span className="t-section-count">{tickets.filter(t => !hiddenTickets.includes(t.receiptId)).length} tickets</span>
                         )}
                     </div>
 
-                    {!hasTickets ? (
+                    {tickets.filter(t => !hiddenTickets.includes(t.receiptId)).length === 0 ? (
                         isEmpty ? (
                             <div className="t-empty-card">
                                 <span className="t-empty-icon">🎫</span>
