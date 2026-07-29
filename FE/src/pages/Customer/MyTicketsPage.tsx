@@ -208,11 +208,12 @@ const MyTicketsPage = () => {
                 const slotCode = typeof b.assignedSlot === 'object' ? b.assignedSlot?.slotCode : '—';
                 const vTypeName = typeof b.vehicleType === 'object' ? b.vehicleType?.name : 'Vehicle';
 
-                // Combine date and time — use date part only to avoid UTC timezone offset issues
                 const parseDateTime = (dStr: string, tStr: string) => {
                     if (!dStr || !tStr) return new Date().toISOString();
-                    const datePart = dStr.slice(0, 10); // 'YYYY-MM-DD' from DB
-                    return new Date(`${datePart}T${tStr}:00`).toISOString(); // local time
+                    const d = new Date(dStr);
+                    const [hh, mm] = tStr.split(':').map(Number);
+                    if (!isNaN(hh)) d.setHours(hh, mm || 0, 0, 0);
+                    return d.toISOString();
                 };
 
                 const entryDt = parseDateTime(b.scheduledDate, b.startTime);
@@ -300,11 +301,12 @@ const MyTicketsPage = () => {
                     const slotCode = typeof b.assignedSlot === 'object' ? b.assignedSlot?.slotCode : '—';
                     const vTypeName = typeof b.vehicleType === 'object' ? b.vehicleType?.name : 'Vehicle';
 
-                    // Combine date and time — use date part only to avoid UTC timezone offset issues
                     const parseDateTime = (dStr: string, tStr: string) => {
                         if (!dStr || !tStr) return new Date().toISOString();
-                        const datePart = dStr.slice(0, 10); // 'YYYY-MM-DD' from DB
-                        return new Date(`${datePart}T${tStr}:00`).toISOString(); // local time
+                        const d = new Date(dStr);
+                        const [hh, mm] = tStr.split(':').map(Number);
+                        if (!isNaN(hh)) d.setHours(hh, mm || 0, 0, 0);
+                        return d.toISOString();
                     };
 
                     const entryDt = parseDateTime(b.scheduledDate, b.startTime);

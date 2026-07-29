@@ -260,14 +260,14 @@ const SessionPage = () => {
     const feeLogs: { type: 'early' | 'late' | 'fallback', timestamp: Date, amount: number, label: string }[] = [];
 
     if (bookingInfo && (bookingInfo as any).endTime && (bookingInfo as any).scheduledDate) {
-        const datePart = (bookingInfo as any).scheduledDate.slice(0, 10);
+        const dStr = (bookingInfo as any).scheduledDate;
         const [startH, startM] = (bookingInfo as any).startTime.split(':').map(Number);
         const [endH, endM] = (bookingInfo as any).endTime.split(':').map(Number);
 
-        const scheduledStart = new Date(`${datePart}T00:00:00`);
+        const scheduledStart = new Date(dStr);
         scheduledStart.setHours(startH, startM, 0, 0);
         
-        let scheduledEnd = new Date(`${datePart}T00:00:00`);
+        let scheduledEnd = new Date(dStr);
         scheduledEnd.setHours(endH, endM, 0, 0);
 
         // ── Fix cross-midnight: nếu endTime < startTime (ví dụ 22:00 → 01:03)
@@ -903,8 +903,7 @@ const SessionPage = () => {
                                             {(() => {
                                                 const b = bookingInfo as any;
                                                 if (!b.scheduledDate || !b.startTime) return 'N/A';
-                                                const datePart = b.scheduledDate.slice(0, 10);
-                                                const d = new Date(`${datePart}T00:00:00`);
+                                                const d = new Date(b.scheduledDate);
                                                 const [h, m] = b.startTime.split(':').map(Number);
                                                 d.setHours(h, m);
 
@@ -932,13 +931,12 @@ const SessionPage = () => {
                                             {(() => {
                                                 const b = bookingInfo as any;
                                                 if (!b.scheduledDate || !b.endTime) return 'N/A';
-                                                const datePart = b.scheduledDate.slice(0, 10);
-                                                const d = new Date(`${datePart}T00:00:00`);
+                                                const d = new Date(b.scheduledDate);
                                                 const [h, m] = b.endTime.split(':').map(Number);
                                                 d.setHours(h, m);
                                                 
                                                 const [startH, startM] = b.startTime.split(':').map(Number);
-                                                const startD = new Date(`${datePart}T00:00:00`);
+                                                const startD = new Date(b.scheduledDate);
                                                 startD.setHours(startH, startM);
                                                 if (d < startD) {
                                                     d.setDate(d.getDate() + 1);

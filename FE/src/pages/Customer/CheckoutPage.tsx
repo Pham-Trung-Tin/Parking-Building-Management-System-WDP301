@@ -131,8 +131,7 @@ const CheckoutPage = () => {
 
             const parseDateTime = (dStr: string, tStr: string) => {
                 if (!dStr || !tStr) return null;
-                const datePart = dStr.slice(0, 10);
-                const d = new Date(`${datePart}T00:00:00`);
+                const d = new Date(dStr);
                 const [hh, mm] = tStr.split(':').map(Number);
                 if (!isNaN(hh)) d.setHours(hh, mm || 0, 0, 0);
                 return d.toISOString();

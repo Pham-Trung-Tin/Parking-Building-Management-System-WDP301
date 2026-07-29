@@ -188,14 +188,14 @@ const StaffExitPage = () => {
     if (activeSession.booking?.endTime && activeSession.booking?.scheduledDate) {
       baseFee = activeSession.baseFee || activeSession.advancePayment || 0;
       
-      const scheduledDateStr = typeof activeSession.booking.scheduledDate === 'string'
-        ? activeSession.booking.scheduledDate.split('T')[0]
-        : new Date(activeSession.booking.scheduledDate).toISOString().split('T')[0];
-        
-      const [startH, startM] = activeSession.booking.startTime.split(':');
-      const scheduledStart = new Date(`${scheduledDateStr}T${startH}:${startM}:00`);
+      const dStr = activeSession.booking.scheduledDate;
+      const [startH, startM] = activeSession.booking.startTime.split(':').map(Number);
+      const scheduledStart = new Date(dStr);
+      scheduledStart.setHours(startH, startM, 0, 0);
       
-      const scheduledEnd = new Date(`${scheduledDateStr}T${activeSession.booking.endTime}:00`);
+      const [endH, endM] = activeSession.booking.endTime.split(':').map(Number);
+      const scheduledEnd = new Date(dStr);
+      scheduledEnd.setHours(endH, endM, 0, 0);
       if (scheduledEnd < scheduledStart) {
          scheduledEnd.setDate(scheduledEnd.getDate() + 1);
       }
