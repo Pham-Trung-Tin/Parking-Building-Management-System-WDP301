@@ -23,10 +23,18 @@ const formatHMS = (totalSeconds: number) => {
     return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 };
 
+const getElapsed = (entryTime: string | Date, now: number) => {
+    const entryDate = new Date(entryTime).getTime();
+    const diff = Math.floor((now - entryDate) / 1000);
+    return diff > 0 ? diff : 0;
+};
+
 const FloatingSessionWidget: React.FC = () => {
-    const [activeSession, setActiveSession] = useState<ParkingSession | null>(null);
-    const [elapsed, setElapsed] = useState(0);
+    const [activeSessions, setActiveSessions] = useState<ParkingSession[]>([]);
+    const [now, setNow] = useState(Date.now());
     const [isCollapsed, setIsCollapsed] = useState(false);
+    const [isListExpanded, setIsListExpanded] = useState(false);
+    
     const { socket } = useSocket();
     const navigate = useNavigate();
     const location = useLocation();
@@ -99,8 +107,11 @@ const FloatingSessionWidget: React.FC = () => {
             e.preventDefault();
             return;
         }
-        if (activeSession) {
-            navigate('/session', { state: { sessionId: activeSession._id } });
+        
+        if (activeSessions.length === 1) {
+            navigate('/session', { state: { sessionId: activeSessions[0]._id } });
+        } else if (activeSessions.length > 1) {
+            setIsListExpanded(!isListExpanded);
         }
     };
 
@@ -132,9 +143,10 @@ const FloatingSessionWidget: React.FC = () => {
             if (data.length > 0) {
                 // Sắp xếp giảm dần theo entryTime để luôn lấy session mới nhất
                 data.sort((a: any, b: any) => new Date(b.entryTime).getTime() - new Date(a.entryTime).getTime());
-                setActiveSession(data[0]);
+                setActiveSessions(data);
             } else {
-                setActiveSession(null);
+                setActiveSessions([]);
+                setIsListExpanded(false);
             }
         } catch (error) {
             console.error("Failed to fetch active session for widget:", error);
@@ -155,12 +167,7 @@ const FloatingSessionWidget: React.FC = () => {
                 // Đợi 1s rồi gọi API lấy chi tiết
                 setTimeout(fetchActiveSession, 1000);
             } else if (notif.type === 'checkout_success') {
-                const sid = notif.data?.sessionId;
-                if (activeSession && String(activeSession._id) === String(sid)) {
-                    setActiveSession(null);
-                } else {
-                    fetchActiveSession();
-                }
+                fetchActiveSession();
             }
         };
 
@@ -168,31 +175,24 @@ const FloatingSessionWidget: React.FC = () => {
         return () => {
             socket.off('newNotification', handleNotif);
         };
-    }, [socket, isCustomer, activeSession]);
+    }, [socket, isCustomer]);
 
     // ── Timer Live ──
     useEffect(() => {
-        if (!activeSession?.entryTime) return;
-        const entryDate = new Date(activeSession.entryTime).getTime();
-
-        const updateTimer = () => {
-            const diff = Math.floor((Date.now() - entryDate) / 1000);
-            setElapsed(diff > 0 ? diff : 0);
-        };
-
-        updateTimer();
-        const interval = setInterval(updateTimer, 1000);
+        if (activeSessions.length === 0) return;
+        
+        setNow(Date.now());
+        const interval = setInterval(() => {
+            setNow(Date.now());
+        }, 1000);
+        
         return () => clearInterval(interval);
-    }, [activeSession?.entryTime]);
+    }, [activeSessions.length]);
 
     // Không render nếu: không phải user, không có session, hoặc đang ở trang session
-    if (!isCustomer || !activeSession || location.pathname.includes('/session')) {
+    if (!isCustomer || activeSessions.length === 0 || location.pathname.includes('/session')) {
         return null;
     }
-
-    const licensePlate = activeSession.vehicleInfo?.licensePlate || 'N/A';
-    const slotCode = (typeof activeSession.slot === 'object' ? activeSession.slot?.slotCode : activeSession.slot) || 'N/A';
-    const floorName = (typeof activeSession.floor === 'object' ? activeSession.floor?.name : '') || '';
 
     if (isCollapsed) {
         return (
@@ -222,12 +222,79 @@ const FloatingSessionWidget: React.FC = () => {
         );
     }
 
+    // Nếu chỉ có 1 xe
+    if (activeSessions.length === 1 && !isListExpanded) {
+        const session = activeSessions[0];
+        const licensePlate = session.vehicleInfo?.licensePlate || 'N/A';
+        const slotCode = (typeof session.slot === 'object' ? session.slot?.slotCode : session.slot) || 'N/A';
+        const floorName = (typeof session.floor === 'object' ? session.floor?.name : '') || '';
+        const elapsed = getElapsed(session.entryTime, now);
+
+        return (
+            <div 
+                ref={widgetRef}
+                onMouseDown={handleMouseDown}
+                onClick={handleWidgetClick}
+                className={`fixed z-[999] ${isDragging ? 'cursor-grabbing hover:scale-100' : 'cursor-grab hover:scale-105'} transition-transform duration-300 animate-fade-in-up`}
+                style={{ 
+                    left: `${position.x}px`, 
+                    top: `${position.y}px`,
+                    animationDuration: '0.4s',
+                    userSelect: 'none',
+                    touchAction: 'none'
+                }}
+            >
+                <div className="relative bg-gradient-to-br from-blue-600 to-indigo-700 text-white p-4 rounded-2xl shadow-xl shadow-blue-500/30 overflow-hidden border border-white/10 backdrop-blur-md min-w-[220px]">
+                    <div className="absolute -top-10 -right-10 w-24 h-24 bg-white/20 blur-2xl rounded-full pointer-events-none"></div>
+                    
+                    <div className="flex justify-between items-center mb-3 relative z-10">
+                        <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse ring-2 ring-emerald-400/30"></div>
+                            <span className="text-[11px] font-bold tracking-widest text-blue-100 uppercase">parking</span>
+                        </div>
+                        <div className="bg-white/15 px-2 py-0.5 rounded-md text-xs font-mono font-semibold tracking-wider">
+                            {licensePlate}
+                        </div>
+                    </div>
+
+                    <div className="flex justify-between items-end relative z-10">
+                        <div className="flex flex-col">
+                            <div className="flex items-center gap-1.5 text-white mb-1 opacity-90">
+                                <TimerIcon />
+                                <span className="text-xl font-black font-mono tracking-wide drop-shadow-md">
+                                    {formatHMS(elapsed)}
+                                </span>
+                            </div>
+                            <div className="flex items-center gap-1.5 text-[11px] text-blue-100 font-medium">
+                                <CarIcon />
+                                <span className="truncate max-w-[120px]">Position: {floorName} - {slotCode}</span>
+                            </div>
+                        </div>
+
+                        <button 
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setIsCollapsed(true);
+                            }}
+                            className="flex items-center justify-center w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 transition-colors"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="m9 18 6-6-6-6"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    // Nếu có nhiều xe 
     return (
         <div 
             ref={widgetRef}
             onMouseDown={handleMouseDown}
-            onClick={handleWidgetClick}
-            className={`fixed z-[999] ${isDragging ? 'cursor-grabbing hover:scale-100' : 'cursor-grab hover:scale-105'} transition-transform duration-300 animate-fade-in-up`}
+            onClick={isListExpanded ? undefined : handleWidgetClick}
+            className={`fixed z-[999] ${isDragging ? 'cursor-grabbing hover:scale-100' : 'cursor-grab hover:scale-105'} transition-all duration-300 animate-fade-in-up`}
             style={{ 
                 left: `${position.x}px`, 
                 top: `${position.y}px`,
@@ -236,47 +303,73 @@ const FloatingSessionWidget: React.FC = () => {
                 touchAction: 'none'
             }}
         >
-            <div className="relative bg-gradient-to-br from-blue-600 to-indigo-700 text-white p-4 rounded-2xl shadow-xl shadow-blue-500/30 overflow-hidden border border-white/10 backdrop-blur-md min-w-[220px]">
-                {/* Glow Effect */}
+            <div className={`relative bg-gradient-to-br from-blue-600 to-indigo-700 text-white p-4 rounded-2xl shadow-xl shadow-blue-500/30 overflow-hidden border border-white/10 backdrop-blur-md min-w-[240px] ${isListExpanded ? 'max-h-[400px]' : 'max-h-[120px]'} transition-all duration-500 ease-in-out`}>
                 <div className="absolute -top-10 -right-10 w-24 h-24 bg-white/20 blur-2xl rounded-full pointer-events-none"></div>
                 
-                {/* Header */}
-                <div className="flex justify-between items-center mb-3 relative z-10">
+                <div className="flex justify-between items-center relative z-10 cursor-pointer" onClick={isListExpanded ? () => setIsListExpanded(false) : undefined}>
                     <div className="flex items-center gap-2">
                         <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse ring-2 ring-emerald-400/30"></div>
-                        <span className="text-[11px] font-bold tracking-widest text-blue-100 uppercase">parking</span>
+                        <span className="text-[12px] font-bold tracking-widest text-blue-100 uppercase">
+                            {activeSessions.length} Vehicles Parked
+                        </span>
                     </div>
-                    <div className="bg-white/15 px-2 py-0.5 rounded-md text-xs font-mono font-semibold tracking-wider">
-                        {licensePlate}
-                    </div>
-                </div>
-
-                {/* Body */}
-                <div className="flex justify-between items-end relative z-10">
-                    <div className="flex flex-col">
-                        <div className="flex items-center gap-1.5 text-white mb-1 opacity-90">
-                            <TimerIcon />
-                            <span className="text-xl font-black font-mono tracking-wide drop-shadow-md">
-                                {formatHMS(elapsed)}
-                            </span>
-                        </div>
-                        <div className="flex items-center gap-1.5 text-[11px] text-blue-100 font-medium">
-                            <CarIcon />
-                            <span className="truncate max-w-[120px]">Position: {floorName} - {slotCode}</span>
-                        </div>
-                    </div>
-
                     <button 
                         onClick={(e) => {
                             e.stopPropagation();
-                            setIsCollapsed(true);
+                            if (isListExpanded) {
+                                setIsListExpanded(false);
+                            } else {
+                                setIsCollapsed(true);
+                            }
                         }}
                         className="flex items-center justify-center w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 transition-colors"
                     >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="m9 18 6-6-6-6"/>
-                        </svg>
+                        {isListExpanded ? (
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="m18 15-6-6-6 6"/>
+                            </svg>
+                        ) : (
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="m9 18 6-6-6-6"/>
+                            </svg>
+                        )}
                     </button>
+                </div>
+                
+                {!isListExpanded && (
+                    <div className="mt-2 text-[11px] text-blue-200 relative z-10 cursor-pointer">
+                        Tap to view details
+                    </div>
+                )}
+
+                {/* Danh sách xe mở rộng */}
+                <div className={`relative z-10 mt-3 flex flex-col gap-2 overflow-hidden transition-all duration-500 ${isListExpanded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 hidden'}`}>
+                    {activeSessions.map((session) => {
+                        const plate = session.vehicleInfo?.licensePlate || 'N/A';
+                        const slot = (typeof session.slot === 'object' ? session.slot?.slotCode : session.slot) || 'N/A';
+                        const elapsed = getElapsed(session.entryTime, now);
+                        
+                        return (
+                            <div 
+                                key={session._id} 
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    navigate('/session', { state: { sessionId: session._id } });
+                                }}
+                                className="bg-white/10 hover:bg-white/20 p-2.5 rounded-xl cursor-pointer transition-colors border border-white/5 flex items-center justify-between"
+                            >
+                                <div>
+                                    <div className="text-sm font-bold font-mono tracking-wider">{plate}</div>
+                                    <div className="text-[10px] text-blue-200 mt-0.5 opacity-80 flex items-center gap-1">
+                                        <CarIcon /> Slot: {slot}
+                                    </div>
+                                </div>
+                                <div className="text-sm font-black font-mono tracking-wide">
+                                    {formatHMS(elapsed)}
+                                </div>
+                            </div>
+                        );
+                    })}
                 </div>
             </div>
         </div>
