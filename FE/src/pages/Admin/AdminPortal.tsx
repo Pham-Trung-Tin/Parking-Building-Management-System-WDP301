@@ -39,11 +39,13 @@ import { Toast, Toggle, RoleToggle } from "./components/UIComponents";
 import { AddUserModal } from "./components/AddUserModal";
 import { UserDetailModal } from "./components/UserDetailModal";
 import { ReportsDashboard } from "./components/ReportsDashboard";
+import StaffAssignmentPage from '../Staff/StaffAssignmentPage';
 
 /* ─────────────────── Main Component ─────────────────── */
 export default function AdminPortal() {
   const navigate = useNavigate();
   const location = useLocation();
+  const user = (() => { try { return JSON.parse(localStorage.getItem('user') || '{}'); } catch { return {}; } })();
   const [activeNav, setActiveNav] = useState(location.state?.activeNav || "users");
 
   useEffect(() => {
@@ -152,10 +154,10 @@ export default function AdminPortal() {
 
   const navItems = [
     { id: "users", icon: Users, label: "Users" },
-    { id: "permissions", icon: Key, label: "Permissions" },
-    { id: "staff-assignment", icon: Building2, label: "Staff & Manager Assignment", isLink: true, path: "/admin/staff-assignment" },
+    // { id: "permissions", icon: Key, label: "Permissions" },
+    { id: "staff-assignment", icon: Building2, label: "Assignment" },
     { id: "config", icon: Settings, label: "Configuration" },
-    { id: "reports", icon: BarChart2, label: "Reports" },
+    // { id: "reports", icon: BarChart2, label: "Reports" },
   ];
 
   return (
@@ -177,67 +179,56 @@ export default function AdminPortal() {
 
       <div className="min-h-screen bg-[#F8F8F6] flex">
         {/* ── Sidebar ── */}
-        <div className="w-[72px] bg-white border-r border-gray-100 flex flex-col items-center py-7 gap-0 sticky top-0 h-screen z-10">
-          {/* Logo */}
-          <div className="mb-10">
-            <div className="w-10 h-10 bg-gray-900 rounded-xl flex items-center justify-center shadow-md">
-              <Shield className="w-5 h-5 text-white" />
+        <div className="w-64 bg-white border-r border-gray-100 flex flex-col sticky top-0 h-screen z-10">
+          <div className="px-6 py-5 border-b border-gray-100">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 bg-gray-900 rounded-lg flex items-center justify-center">
+                <Shield className="w-4 h-4 text-white" />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-gray-900">Admin Portal</p>
+                <p className="text-[10px] text-gray-400 uppercase tracking-wider">System Administration</p>
+              </div>
             </div>
           </div>
 
           {/* Nav */}
-          <nav className="flex-1 flex flex-col items-center gap-2">
+          <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
             {navItems.map((item) => {
               const Icon = item.icon;
-              if (item.isLink) {
-                return (
-                  <button
-                    key={item.id}
-                    onClick={() => navigate(item.path)}
-                    title={item.label}
-                    className="w-11 h-11 rounded-xl flex items-center justify-center transition-all duration-150 text-gray-400 hover:text-gray-800 hover:bg-gray-100"
-                  >
-                    <Icon className="w-[18px] h-[18px]" />
-                  </button>
-                );
-              }
               return (
                 <button
                   key={item.id}
                   onClick={() => setActiveNav(item.id)}
-                  title={item.label}
-                  className={`w-11 h-11 rounded-xl flex items-center justify-center transition-all duration-150 ${
-                    activeNav === item.id
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${activeNav === item.id
                       ? "bg-gray-900 text-white shadow-sm"
-                      : "text-gray-400 hover:text-gray-800 hover:bg-gray-100"
-                  }`}
+                      : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"
+                    }`}
                 >
-                  <Icon className="w-[18px] h-[18px]" />
+                  <Icon className="w-4 h-4 shrink-0" />
+                  {item.label}
                 </button>
               );
             })}
           </nav>
 
           {/* Bottom */}
-          <div className="flex flex-col items-center gap-3">
-            <button
-              className="w-9 h-9 rounded-xl flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
-              title="Notifications"
-            >
-              <Bell className="w-4 h-4" />
-            </button>
-            <button
-              className="w-9 h-9 rounded-xl flex items-center justify-center bg-gray-900 text-white text-xs font-bold hover:bg-gray-700 transition-colors"
-              title="Pham Trung Tin (Admin)"
-            >
-              PT
-            </button>
+          <div className="px-4 py-4 border-t border-gray-100">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-violet-100 to-purple-200 flex items-center justify-center text-xs font-bold text-violet-700 shrink-0">
+                {getInitials(user?.fullName || 'Admin')}
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-gray-900 truncate">{user?.fullName || 'Admin'}</p>
+                <p className="text-[10px] text-gray-400 uppercase">System Admin</p>
+              </div>
+            </div>
             <button
               onClick={handleLogout}
-              className="w-9 h-9 rounded-xl flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
-              title="Logout"
+              className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors"
             >
-              <LogOut className="w-4 h-4" />
+              <LogOut className="w-3.5 h-3.5" />
+              Logout
             </button>
           </div>
         </div>
@@ -319,7 +310,7 @@ export default function AdminPortal() {
                       className="w-full pl-11 pr-4 py-3 bg-white border border-gray-100 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition shadow-sm"
                     />
                   </div>
-                  
+
                   {/* Role Selector */}
                   <select
                     onChange={(e) => updateFilters({ role: e.target.value })}
@@ -379,11 +370,10 @@ export default function AdminPortal() {
                     users.map((user, i) => (
                       <div
                         key={user.id || user._id}
-                        className={`grid grid-cols-[1fr_140px_110px_130px] px-6 py-4 items-center hover:bg-gray-50/60 transition-colors ${
-                          i !== users.length - 1
+                        className={`grid grid-cols-[1fr_140px_110px_130px] px-6 py-4 items-center hover:bg-gray-50/60 transition-colors ${i !== users.length - 1
                             ? "border-b border-gray-100"
                             : ""
-                        }`}
+                          }`}
                       >
                         {/* Account */}
                         <div className="flex items-center gap-3">
@@ -411,9 +401,8 @@ export default function AdminPortal() {
                         {/* Role */}
                         <div>
                           <span
-                            className={`inline-block text-xs font-medium px-2.5 py-1 rounded-lg ${
-                              ROLE_COLORS[mapRoleToUI(user.role)] || "bg-gray-100 text-gray-700"
-                            }`}
+                            className={`inline-block text-xs font-medium px-2.5 py-1 rounded-lg ${ROLE_COLORS[mapRoleToUI(user.role)] || "bg-gray-100 text-gray-700"
+                              }`}
                           >
                             {ROLE_META[mapRoleToUI(user.role)]?.label || user.role}
                           </span>
@@ -425,18 +414,16 @@ export default function AdminPortal() {
                             onClick={() =>
                               handleToggleUserStatus(user.id || user._id, user.status)
                             }
-                            className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-lg transition-colors ${
-                              user.status === "active"
+                            className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-lg transition-colors ${user.status === "active"
                                 ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
                                 : "bg-rose-50 text-rose-600 hover:bg-rose-100"
-                            }`}
+                              }`}
                           >
                             <span
-                              className={`w-1.5 h-1.5 rounded-full ${
-                                user.status === "active"
+                              className={`w-1.5 h-1.5 rounded-full ${user.status === "active"
                                   ? "bg-emerald-500"
                                   : "bg-rose-400"
-                              }`}
+                                }`}
                             />
                             {mapStatusToUI(user.status)}
                           </button>
@@ -484,11 +471,10 @@ export default function AdminPortal() {
                         <button
                           key={pageNo}
                           onClick={() => updateFilters({ page: pageNo })}
-                          className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors cursor-pointer ${
-                            pageNo === pagination.page
+                          className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors cursor-pointer ${pageNo === pagination.page
                               ? "bg-gray-900 text-white border-gray-900"
                               : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
-                          }`}
+                            }`}
                         >
                           {pageNo}
                         </button>
@@ -527,11 +513,10 @@ export default function AdminPortal() {
                         setPermSaved(true);
                         showToast("Permission matrix saved");
                       }}
-                      className={`flex items-center gap-2 px-5 py-2.5 text-sm font-medium rounded-xl transition-all shadow-sm ${
-                        permSaved
+                      className={`flex items-center gap-2 px-5 py-2.5 text-sm font-medium rounded-xl transition-all shadow-sm ${permSaved
                           ? "bg-emerald-600 text-white hover:bg-emerald-700"
                           : "bg-gray-900 text-white hover:bg-gray-700"
-                      }`}
+                        }`}
                     >
                       <Check className="w-4 h-4" />
                       {permSaved ? "Saved!" : "Save Changes"}
@@ -629,9 +614,8 @@ export default function AdminPortal() {
                         {perms.map((perm, pi) => (
                           <div
                             key={perm.id}
-                            className={`group grid grid-cols-[1fr_repeat(4,88px)] gap-0 items-center hover:bg-blue-50/20 transition-colors duration-150 ${
-                              pi !== perms.length - 1 ? "border-b border-gray-50" : ""
-                            }`}
+                            className={`group grid grid-cols-[1fr_repeat(4,88px)] gap-0 items-center hover:bg-blue-50/20 transition-colors duration-150 ${pi !== perms.length - 1 ? "border-b border-gray-50" : ""
+                              }`}
                           >
                             {/* Permission label */}
                             <div className="px-6 py-4 flex items-center gap-3">
@@ -646,9 +630,8 @@ export default function AdminPortal() {
                               return (
                                 <div
                                   key={role}
-                                  className={`py-4 flex justify-center border-l border-gray-100 transition-colors ${
-                                    perm[role] ? meta.colBg : ""
-                                  }`}
+                                  className={`py-4 flex justify-center border-l border-gray-100 transition-colors ${perm[role] ? meta.colBg : ""
+                                    }`}
                                 >
                                   <RoleToggle
                                     checked={perm[role]}
@@ -914,7 +897,7 @@ export default function AdminPortal() {
                         </div>
                         <Toggle
                           checked={true}
-                          onChange={() => {}}
+                          onChange={() => { }}
                         />
                       </div>
                     </div>
@@ -925,6 +908,10 @@ export default function AdminPortal() {
 
             {activeNav === "reports" && (
               <ReportsDashboard />
+            )}
+
+            {activeNav === "staff-assignment" && (
+              <StaffAssignmentPage isTab={true} />
             )}
           </div>
         </div>

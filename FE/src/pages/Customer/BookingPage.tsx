@@ -906,7 +906,7 @@ const BookingPage = () => {
             setCheckoutProcessing(false);
             setShowConfirmModal(false);
 
-            // Navigate to /checkout page — same UX as Monthly Pass flow
+            // Navigate to /checkout page — CheckoutPage handles payment method selection
             navigate('/checkout', {
                 state: {
                     isBooking: true,
@@ -920,7 +920,6 @@ const BookingPage = () => {
                     entryDate,
                     exitDate,
                     totalAmount: estimatedPrice,
-                    payMethod,
                 }
             });
         } catch (error: any) {
@@ -3094,8 +3093,20 @@ const BookingPage = () => {
                                         <button className="modal-cancel" onClick={() => setShowConfirmModal(false)}>
                                             ← Edit
                                         </button>
-                                        <button id="confirm-booking-btn" className="modal-confirm" onClick={() => setCheckoutPhase('payment')}>
-                                            Proceed to Payment →
+                                        <button
+                                            id="confirm-booking-btn"
+                                            className={`modal-pay-btn ${checkoutProcessing ? 'processing' : 'active'}`}
+                                            onClick={handleConfirmPayment}
+                                            disabled={checkoutProcessing}
+                                        >
+                                            {checkoutProcessing ? (
+                                                <>
+                                                    <div className="bk-spin" style={{ width: 16, height: 16, borderWidth: 2 }} />
+                                                    Processing...
+                                                </>
+                                            ) : (
+                                                'Proceed to Payment →'
+                                            )}
                                         </button>
                                     </div>
                                 </>
