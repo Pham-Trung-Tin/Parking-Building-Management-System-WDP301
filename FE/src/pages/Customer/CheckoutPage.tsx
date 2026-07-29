@@ -131,11 +131,21 @@ const CheckoutPage = () => {
 
             const parseDateTime = (dStr: string, tStr: string) => {
                 if (!dStr || !tStr) return null;
-                const d = new Date(dStr);
+                const datePart = dStr.slice(0, 10);
+                const d = new Date(`${datePart}T00:00:00`);
                 const [hh, mm] = tStr.split(':').map(Number);
                 if (!isNaN(hh)) d.setHours(hh, mm || 0, 0, 0);
                 return d.toISOString();
             };
+
+            const parsedEntry = parseDateTime(b.scheduledDate, b.startTime);
+            let parsedExit = parseDateTime(b.scheduledDate, b.endTime || b.startTime);
+
+            if (parsedEntry && parsedExit && new Date(parsedExit) < new Date(parsedEntry)) {
+                const exitD = new Date(parsedExit);
+                exitD.setDate(exitD.getDate() + 1);
+                parsedExit = exitD.toISOString();
+            }
 
             setBookingDetail({
                 bookingCode: b.bookingCode || b._id,
@@ -143,8 +153,8 @@ const CheckoutPage = () => {
                 floorName: floorObj ? (floorObj.name || `Floor ${floorObj.floorNumber}`) : '—',
                 slotCode: slotObj?.slotCode || '—',
                 vehicleTypeName: vtObj?.name || '—',
-                entryDate: parseDateTime(b.scheduledDate, b.startTime),
-                exitDate: parseDateTime(b.scheduledDate, b.endTime || b.startTime),
+                entryDate: parsedEntry,
+                exitDate: parsedExit,
                 totalAmount: b.estimatedFee ?? data.totalAmount ?? 0,
                 licensePlate: b.vehicleInfo?.licensePlate || data.licensePlate,
                 createdAt: b.createdAt,
