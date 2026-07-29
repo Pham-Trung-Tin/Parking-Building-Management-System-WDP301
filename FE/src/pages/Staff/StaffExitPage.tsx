@@ -186,7 +186,7 @@ const StaffExitPage = () => {
 
     // Has Booking
     if (activeSession.booking?.endTime && activeSession.booking?.scheduledDate) {
-      baseFee = activeSession.baseFee || activeSession.advancePayment || 0;
+      baseFee = activeSession.booking.estimatedFee || activeSession.baseFee || activeSession.advancePayment || 0;
       
       const dStr = activeSession.booking.scheduledDate;
       const [startH, startM] = activeSession.booking.startTime.split(':').map(Number);
