@@ -182,6 +182,7 @@ const StaffExitPage = () => {
 
     let baseFee = 0;
     let overtimeFee = 0;
+    let earlyArrivalFee = 0;
 
     // Has Booking
     if (activeSession.booking?.endTime && activeSession.booking?.scheduledDate) {
@@ -190,7 +191,19 @@ const StaffExitPage = () => {
       const scheduledDateStr = typeof activeSession.booking.scheduledDate === 'string'
         ? activeSession.booking.scheduledDate.split('T')[0]
         : new Date(activeSession.booking.scheduledDate).toISOString().split('T')[0];
+        
+      const [startH, startM] = activeSession.booking.startTime.split(':');
+      const scheduledStart = new Date(`${scheduledDateStr}T${startH}:${startM}:00`);
+      
       const scheduledEnd = new Date(`${scheduledDateStr}T${activeSession.booking.endTime}:00`);
+      if (scheduledEnd < scheduledStart) {
+         scheduledEnd.setDate(scheduledEnd.getDate() + 1);
+      }
+
+      // Early arrival logic: > 15 mins early gets charged extra blocks
+      if (scheduledStart.getTime() - entryTime.getTime() > 15 * 60 * 1000) {
+        earlyArrivalFee = countBlockFee(entryTime, scheduledStart);
+      }
 
       if (now > scheduledEnd) {
         const otHours = (now.getTime() - scheduledEnd.getTime()) / (1000 * 60 * 60);
@@ -203,11 +216,11 @@ const StaffExitPage = () => {
       baseFee = countBlockFee(entryTime, now);
     }
 
-    const totalFee = baseFee + overtimeFee;
+    const totalFee = baseFee + earlyArrivalFee + overtimeFee;
     const advancePayment = activeSession.advancePayment || 0;
     const balanceDue = Math.max(0, totalFee - advancePayment);
 
-    return { baseFee, overtimeFee, totalFee: balanceDue };
+    return { baseFee, earlyArrivalFee, overtimeFee, totalFee: balanceDue };
   }, [activeSession]);
 
   useEffect(() => {
@@ -893,6 +906,14 @@ const StaffExitPage = () => {
                         {sessionFound && activeSession ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(estimatedFees.baseFee || 0) : '0 ₫'}
                       </span>
                     </div>
+                    {sessionFound && activeSession && (estimatedFees.earlyArrivalFee || 0) > 0 && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-orange-500 font-medium">Early Arrival Fee</span>
+                        <span className="font-medium text-orange-600">
+                          {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(estimatedFees.earlyArrivalFee || 0)}
+                        </span>
+                      </div>
+                    )}
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-500">Overtime Fee</span>
                       <span className={`font-medium ${sessionFound ? 'text-gray-900' : 'text-gray-400'}`}>
