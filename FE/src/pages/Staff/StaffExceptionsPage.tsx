@@ -36,7 +36,7 @@ const StaffExceptionsPage = () => {
     if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) {
       return url;
     }
-    const base = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000').replace(/\/api\/v1\/?$/, '');
+    const base = (import.meta.env.VITE_API_BASE_URL || 'https://parking-backend-ynok.onrender.com').replace(/\/api\/v1\/?$/, '');
     return `${base}${url.startsWith('/') ? '' : '/'}${url}`;
   };
 
