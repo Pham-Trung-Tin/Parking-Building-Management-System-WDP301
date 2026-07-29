@@ -906,14 +906,12 @@ const StaffExitPage = () => {
                         {sessionFound && activeSession ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(estimatedFees.baseFee || 0) : '0 ₫'}
                       </span>
                     </div>
-                    {sessionFound && activeSession && (estimatedFees.earlyArrivalFee || 0) > 0 && (
-                      <div className="flex justify-between text-sm">
-                        <span className="text-orange-500 font-medium">Early Arrival Fee</span>
-                        <span className="font-medium text-orange-600">
-                          {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(estimatedFees.earlyArrivalFee || 0)}
-                        </span>
-                      </div>
-                    )}
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">Early Arrival Fee</span>
+                      <span className={`font-medium ${sessionFound ? 'text-gray-900' : 'text-gray-400'}`}>
+                        {sessionFound && activeSession ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(estimatedFees.earlyArrivalFee || 0) : '0 ₫'}
+                      </span>
+                    </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-500">Overtime Fee</span>
                       <span className={`font-medium ${sessionFound ? 'text-gray-900' : 'text-gray-400'}`}>
