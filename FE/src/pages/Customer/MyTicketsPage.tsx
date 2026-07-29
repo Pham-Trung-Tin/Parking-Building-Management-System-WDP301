@@ -442,7 +442,8 @@ const MyTicketsPage = () => {
     };
 
     const hasActiveSessions = activeSessions.length > 0;
-    const hasTickets = tickets.length > 0;
+    const visibleTickets = tickets.filter(t => !hiddenTickets.includes(t.receiptId));
+    const hasTickets = visibleTickets.length > 0;
     const isEmpty = !hasActiveSessions && !hasTickets && !sessionsLoading;
 
     return (
@@ -992,7 +993,7 @@ const MyTicketsPage = () => {
                         )}
 
                         {!bookingsLoading && hasTickets && (
-                            <span className="t-section-count">{tickets.length} tickets</span>
+                            <span className="t-section-count">{visibleTickets.length} ticket{visibleTickets.length !== 1 ? 's' : ''}</span>
                         )}
                     </div>
 
@@ -1025,7 +1026,7 @@ const MyTicketsPage = () => {
                     ) : (
                         <>
                             <div className="t-list">
-                                {tickets.filter(t => !hiddenTickets.includes(t.receiptId)).map(ticket => {
+                                {visibleTickets.map(ticket => {
                                     const isPaid = ticket.paymentStatus === 'paid';
                                     const isUnpaid = !isPaid;
                                     let remainingSeconds = 0;
