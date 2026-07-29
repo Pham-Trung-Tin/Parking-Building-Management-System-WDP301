@@ -198,8 +198,8 @@ const MyTicketsPage = () => {
             const res = await bookingService.getMyBookings({ limit: 50 });
             let list = Array.isArray(res) ? res : (res?.data ?? res?.docs ?? []);
 
-            // Only show active bookings (pending/approved) or no_show that are paid
-            list = list.filter((b: any) => b.paymentStatus === 'paid' && ['pending', 'approved', 'no_show'].includes(b.status));
+            // Show active bookings that are either paid (online) OR pending payment (pay-at-counter)
+            list = list.filter((b: any) => ['pending', 'approved', 'no_show'].includes(b.status) && ['paid', 'pending'].includes(b.paymentStatus));
 
             // Map backend booking objects to our local Ticket interface for rendering
             const mappedTickets: Ticket[] = list.map((b: any) => {
@@ -209,13 +209,11 @@ const MyTicketsPage = () => {
                 const vTypeName = typeof b.vehicleType === 'object' ? b.vehicleType?.name : 'Vehicle';
 
                 // Combine date and time strings into valid ISO strings
+                // Use only the date part (YYYY-MM-DD) to avoid UTC timezone offset issues
                 const parseDateTime = (dStr: string, tStr: string) => {
                     if (!dStr || !tStr) return new Date().toISOString();
-                    const d = new Date(dStr);
-                    const [hh, mm] = tStr.split(':').map(Number);
-                    if (!isNaN(hh)) d.setHours(hh);
-                    if (!isNaN(mm)) d.setMinutes(mm);
-                    return d.toISOString();
+                    const datePart = dStr.slice(0, 10); // 'YYYY-MM-DD' (UTC date from DB)
+                    return new Date(`${datePart}T${tStr}:00`).toISOString(); // parsed as local time
                 };
 
                 return {
@@ -230,7 +228,8 @@ const MyTicketsPage = () => {
                     exitTime: parseDateTime(b.scheduledDate, b.endTime || b.startTime),
                     elapsed: 0,
                     totalAmount: b.estimatedFee || 0,
-                    payMethod: b.paymentMethod || 'card',
+                    // paymentMethod is on Payment doc, not Booking — infer from paymentStatus
+                    payMethod: b.paymentStatus === 'paid' ? (b.payment?.method || 'bank_transfer') : 'cash',
                     status: b.status,
                     paymentStatus: b.paymentStatus,
                     createdAt: b.createdAt,
@@ -282,8 +281,8 @@ const MyTicketsPage = () => {
                 const res = await bookingService.getMyBookings({ limit: 50 });
                 let list = Array.isArray(res) ? res : (res?.data ?? res?.docs ?? []);
 
-                // Only show active bookings (pending/approved) or no_show that are paid
-                list = list.filter((b: any) => b.paymentStatus === 'paid' && ['pending', 'approved', 'no_show'].includes(b.status));
+                // Show active bookings that are either paid (online) OR pending payment (pay-at-counter)
+                list = list.filter((b: any) => ['pending', 'approved', 'no_show'].includes(b.status) && ['paid', 'pending'].includes(b.paymentStatus));
 
                 // Map backend booking objects to our local Ticket interface for rendering
                 const mappedTickets: Ticket[] = list.map((b: any) => {
@@ -292,14 +291,11 @@ const MyTicketsPage = () => {
                     const slotCode = typeof b.assignedSlot === 'object' ? b.assignedSlot?.slotCode : '—';
                     const vTypeName = typeof b.vehicleType === 'object' ? b.vehicleType?.name : 'Vehicle';
 
-                    // Combine date and time strings into valid ISO strings
+                    // Combine date and time — use date part only to avoid UTC timezone offset issues
                     const parseDateTime = (dStr: string, tStr: string) => {
                         if (!dStr || !tStr) return new Date().toISOString();
-                        const d = new Date(dStr);
-                        const [hh, mm] = tStr.split(':').map(Number);
-                        if (!isNaN(hh)) d.setHours(hh);
-                        if (!isNaN(mm)) d.setMinutes(mm);
-                        return d.toISOString();
+                        const datePart = dStr.slice(0, 10); // 'YYYY-MM-DD' from DB
+                        return new Date(`${datePart}T${tStr}:00`).toISOString(); // local time
                     };
 
                     return {
@@ -314,7 +310,7 @@ const MyTicketsPage = () => {
                         exitTime: parseDateTime(b.scheduledDate, b.endTime || b.startTime),
                         elapsed: 0,
                         totalAmount: b.estimatedFee || 0,
-                        payMethod: b.paymentMethod || 'card',
+                        payMethod: b.paymentStatus === 'paid' ? (b.payment?.method || 'bank_transfer') : 'cash',
                         status: b.status,
                         paymentStatus: b.paymentStatus,
                         createdAt: b.createdAt,
@@ -1039,12 +1035,20 @@ const MyTicketsPage = () => {
                                                         <span className="t-list-item-meta">{ticket.floorName} — {ticket.slotCode}</span>
                                                         <span style={{ color: '#cbd5e1' }}>|</span>
                                                         <span>In: {fmtDateTime(ticket.entryDate)}</span>
-                                                        {isUnpaid && remainingSeconds > 0 && (
+                                                        {isUnpaid && remainingSeconds > 0 && ticket.payMethod !== 'cash' && (
                                                             <>
                                                                 <span style={{ color: '#cbd5e1' }}>|</span>
                                                                 <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700 }}>
                                                                     <span className="ls-pulse-dot" style={{ width: 6, height: 6, background: '#ef4444', boxShadow: '0 0 0 0 rgba(239,68,68,0.6)', animation: 'none' }} />
-                                                                    <span style={{ color: '#ef4444' }}>{mm}:{ss} (Đang chờ thanh toán)</span>
+                                                                    <span style={{ color: '#ef4444' }}>{mm}:{ss} (Chờ thanh toán QR)</span>
+                                                                </span>
+                                                            </>
+                                                        )}
+                                                        {isUnpaid && ticket.payMethod === 'cash' && (
+                                                            <>
+                                                                <span style={{ color: '#cbd5e1' }}>|</span>
+                                                                <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, color: '#d97706', fontSize: 12 }}>
+                                                                    🎫 Pay at exit
                                                                 </span>
                                                             </>
                                                         )}
@@ -1052,8 +1056,17 @@ const MyTicketsPage = () => {
                                                 </div>
                                             </div>
                                             <div className="t-list-item-right">
-                                                <span className={`t-badge ${isUnpaid ? 'unpaid' : ''}`} style={isNoShow ? { background: '#f1f5f9', color: '#64748b', border: '1px solid #cbd5e1' } : {}}>
-                                                    {isNoShow ? 'VÉ QUÁ GIỜ' : (isUnpaid ? 'PENDING' : 'PAID')}
+                                                <span
+                                                    className={`t-badge ${isUnpaid ? 'unpaid' : ''}`}
+                                                    style={
+                                                        isNoShow
+                                                            ? { background: '#f1f5f9', color: '#64748b', border: '1px solid #cbd5e1' }
+                                                            : (isUnpaid && ticket.payMethod === 'cash')
+                                                                ? { background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a' }
+                                                                : {}
+                                                    }
+                                                >
+                                                    {isNoShow ? 'VÉ QUÁ GIỜ' : (isUnpaid && ticket.payMethod === 'cash' ? 'PAY AT COUNTER' : (isUnpaid ? 'PENDING' : 'PAID'))}
                                                 </span>
                                                 {!isNoShow && (
                                                     <button className="t-list-item-btn" onClick={(e) => { e.stopPropagation(); setSelectedTicket(ticket); }}>View Ticket</button>
