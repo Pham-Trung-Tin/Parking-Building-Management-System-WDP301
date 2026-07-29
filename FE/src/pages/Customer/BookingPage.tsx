@@ -509,7 +509,7 @@ const TEMP_PRICES: Record<string, { dayBlockRate: number, dailyRate: number }> =
 const BookingPage = () => {
     const navigate = useNavigate();
     const location = useLocation();
-    const { joinParkingLot, leaveParkingLot, onSlotUpdate } = useSocket();
+    const { isConnected, joinParkingLot, leaveParkingLot, onSlotUpdate } = useSocket();
     const [parkingSpot, setParkingSpot] = useState<any>(location.state?.spot || { title: 'Bitexco Financial Tower Parking', price: 50000 });
 
     useEffect(() => {
@@ -527,13 +527,14 @@ const BookingPage = () => {
 
     // ── Real-time: join / leave parking lot socket room ──
     useEffect(() => {
-        if (!parkingSpot._id) return;
+        if (!parkingSpot._id || !isConnected) return;
         joinParkingLot(parkingSpot._id);
         return () => leaveParkingLot(parkingSpot._id);
-    }, [parkingSpot._id, joinParkingLot, leaveParkingLot]);
+    }, [parkingSpot._id, joinParkingLot, leaveParkingLot, isConnected]);
 
     // ── Real-time: patch slot status AND lock fields when backend broadcasts ──
     useEffect(() => {
+        if (!isConnected) return;
         const unsubscribe = onSlotUpdate((payload: any) => {
             setFloorSlots(prev =>
                 prev.map(s =>
@@ -549,7 +550,7 @@ const BookingPage = () => {
             );
         });
         return unsubscribe;
-    }, [onSlotUpdate]);
+    }, [onSlotUpdate, isConnected]);
 
 
 
@@ -1036,6 +1037,8 @@ const BookingPage = () => {
     const nightRate = vehicleType?.pricing?.nightBlockRate || baseRate * 1.5;
 
     let calculatedEstCost = 0;
+    let hasDayBlock = false;
+    let hasNightBlock = false;
     let tempStart = new Date(entryDate);
     const tempExit = new Date(exitTime);
 
@@ -1047,6 +1050,8 @@ const BookingPage = () => {
         const isStartNight = startHour >= 18 || startHour < 6;
         const isEndNight = endHour >= 18 || endHour < 6;
         const isNightBlock = isStartNight || isEndNight;
+        if (isNightBlock) hasNightBlock = true;
+        else hasDayBlock = true;
         calculatedEstCost += isNightBlock ? nightRate : baseRate;
         tempStart = new Date(tempStart.getTime() + 4 * 60 * 60 * 1000);
     }
@@ -2152,7 +2157,16 @@ const BookingPage = () => {
                                                     <VehicleSvgIcon code={vt.code} size={38} />
                                                 </div>
                                                 <div className="vt-name">{vt.name}</div>
-                                                <div className="vt-price">{fmtVND(vt.pricing?.dayBlockRate || TEMP_PRICES[vt.code?.toUpperCase()]?.dayBlockRate || (vt.pricing?.hourlyRate ? vt.pricing.hourlyRate * 4 : 0))}/4h</div>
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', alignItems: 'center' }}>
+                                                    <div className="vt-price" style={{ fontSize: '12px' }}>
+                                                        <span style={{ color: '#64748b', marginRight: '4px' }}>Day:</span>
+                                                        <span style={{ fontWeight: 600 }}>{fmtVND(vt.pricing?.dayBlockRate || TEMP_PRICES[vt.code?.toUpperCase()]?.dayBlockRate || (vt.pricing?.hourlyRate ? vt.pricing.hourlyRate * 4 : 20000))}</span>/4h
+                                                    </div>
+                                                    <div className="vt-price" style={{ fontSize: '12px' }}>
+                                                        <span style={{ color: '#64748b', marginRight: '4px' }}>Night:</span>
+                                                        <span style={{ fontWeight: 600 }}>{fmtVND(vt.pricing?.nightBlockRate || (vt.pricing?.dayBlockRate || TEMP_PRICES[vt.code?.toUpperCase()]?.dayBlockRate || (vt.pricing?.hourlyRate ? vt.pricing.hourlyRate * 4 : 20000)) * 1.5)}</span>/4h
+                                                    </div>
+                                                </div>
                                                 {vehicleType?._id === vt._id && (
                                                     <div className="vt-check">✓</div>
                                                 )}
@@ -3057,10 +3071,18 @@ const BookingPage = () => {
                                             <span className="modal-row-label">Duration</span>
                                             <span className="modal-row-value">{duration} hour{duration !== 1 ? 's' : ''}</span>
                                         </div>
-                                        <div className="modal-row">
-                                            <span className="modal-row-label">Rate</span>
-                                            <span className="modal-row-value">{fmtVND(baseRate)}/4h</span>
-                                        </div>
+                                        {hasDayBlock && (
+                                            <div className="modal-row">
+                                                <span className="modal-row-label">Day Rate</span>
+                                                <span className="modal-row-value">{fmtVND(baseRate)}/4h</span>
+                                            </div>
+                                        )}
+                                        {hasNightBlock && (
+                                            <div className="modal-row">
+                                                <span className="modal-row-label">Night Rate (18:00 - 06:00)</span>
+                                                <span className="modal-row-value">{fmtVND(nightRate)}/4h</span>
+                                            </div>
+                                        )}
                                     </div>
 
                                     <div className="modal-total">
