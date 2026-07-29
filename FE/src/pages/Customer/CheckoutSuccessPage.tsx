@@ -562,7 +562,7 @@ const CheckoutSuccessPage = () => {
                                         fontWeight: 600,
                                         lineHeight: 1.6,
                                     }}>
-                                        ⚠️ Phí trên là ước tính. Phí <strong>thực tế</strong> sẽ được tính dựa trên thời gian đỗ thực khi xe ra và thu tại quầy.
+                                        ⚠️ The fee above is an estimate. The <strong>actual</strong> fee will be calculated based on the actual parking duration upon exit and collected at the counter.
                                     </div>
                                 ) : (
                                     <div className="r-total">
