@@ -571,7 +571,7 @@ const BookingPage = () => {
 
     const [entryDate, setEntryDate] = useState(() => {
         const d = new Date();
-        d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+        d.setMinutes(d.getMinutes() + 5 - d.getTimezoneOffset());
         return d.toISOString().slice(0, 16);
     });
     const [exitDate, setExitDate] = useState(() => {
@@ -588,13 +588,19 @@ const BookingPage = () => {
     const exitSelMin = parseInt(exitDate.slice(14, 16)) || 0;
     const handleSetEntryDate = (dateStr: string, h: number, m: number) => {
         const now = new Date();
+        now.setMinutes(now.getMinutes() + 5);
         const localNow = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
         const todayStr = localNow.toISOString().slice(0, 10);
 
         let finalH = h;
         let finalM = m;
+        let finalDateStr = dateStr;
 
-        if (dateStr === todayStr) {
+        if (dateStr < todayStr) {
+            finalDateStr = todayStr;
+            finalH = now.getHours();
+            finalM = now.getMinutes();
+        } else if (dateStr === todayStr) {
             const currentHour = now.getHours();
             const currentMin = now.getMinutes();
             if (finalH < currentHour) {
@@ -604,7 +610,7 @@ const BookingPage = () => {
                 finalM = currentMin;
             }
         }
-        setEntryDate(`${dateStr}T${String(finalH).padStart(2, '0')}:${String(finalM).padStart(2, '0')}`);
+        setEntryDate(`${finalDateStr}T${String(finalH).padStart(2, '0')}:${String(finalM).padStart(2, '0')}`);
     };
 
     const handleSetExitDate = (h: number, m: number) => {
@@ -3469,9 +3475,11 @@ const BookingPage = () => {
                         }}>
                             {(() => {
                                 const now = new Date();
+                                now.setMinutes(now.getMinutes() + 5);
                                 const currentHour = now.getHours();
                                 const currentMin = now.getMinutes();
-                                const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+                                const localNow = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
+                                const todayStr = localNow.toISOString().slice(0, 10);
                                 const isTodaySelection = entryDate.slice(0, 10) === todayStr;
 
                                 return (
