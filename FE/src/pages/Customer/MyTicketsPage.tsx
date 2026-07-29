@@ -208,13 +208,22 @@ const MyTicketsPage = () => {
                 const slotCode = typeof b.assignedSlot === 'object' ? b.assignedSlot?.slotCode : '—';
                 const vTypeName = typeof b.vehicleType === 'object' ? b.vehicleType?.name : 'Vehicle';
 
-                // Combine date and time strings into valid ISO strings
-                // Use only the date part (YYYY-MM-DD) to avoid UTC timezone offset issues
+                // Combine date and time — use date part only to avoid UTC timezone offset issues
                 const parseDateTime = (dStr: string, tStr: string) => {
                     if (!dStr || !tStr) return new Date().toISOString();
-                    const datePart = dStr.slice(0, 10); // 'YYYY-MM-DD' (UTC date from DB)
-                    return new Date(`${datePart}T${tStr}:00`).toISOString(); // parsed as local time
+                    const datePart = dStr.slice(0, 10); // 'YYYY-MM-DD' from DB
+                    return new Date(`${datePart}T${tStr}:00`).toISOString(); // local time
                 };
+
+                const entryDt = parseDateTime(b.scheduledDate, b.startTime);
+                const exitTimeStr = b.endTime || b.startTime;
+                let exitDt = parseDateTime(b.scheduledDate, exitTimeStr);
+                // If exit time is earlier than start time, exit is the NEXT day (overnight booking)
+                if (b.endTime && b.endTime < b.startTime) {
+                    const nextDay = new Date(exitDt);
+                    nextDay.setDate(nextDay.getDate() + 1);
+                    exitDt = nextDay.toISOString();
+                }
 
                 return {
                     receiptId: b.bookingCode || b._id,
@@ -224,8 +233,8 @@ const MyTicketsPage = () => {
                     floorName: floorName,
                     slotCode: slotCode,
                     licensePlate: b.vehicleInfo?.licensePlate || '—',
-                    entryDate: parseDateTime(b.scheduledDate, b.startTime),
-                    exitTime: parseDateTime(b.scheduledDate, b.endTime || b.startTime),
+                    entryDate: entryDt,
+                    exitTime: exitDt,
                     elapsed: 0,
                     totalAmount: b.estimatedFee || 0,
                     // paymentMethod is on Payment doc, not Booking — infer from paymentStatus
@@ -298,6 +307,16 @@ const MyTicketsPage = () => {
                         return new Date(`${datePart}T${tStr}:00`).toISOString(); // local time
                     };
 
+                    const entryDt = parseDateTime(b.scheduledDate, b.startTime);
+                    const exitTimeStr = b.endTime || b.startTime;
+                    let exitDt = parseDateTime(b.scheduledDate, exitTimeStr);
+                    // If exit time is earlier than start time, exit is the NEXT day (overnight booking)
+                    if (b.endTime && b.endTime < b.startTime) {
+                        const nextDay = new Date(exitDt);
+                        nextDay.setDate(nextDay.getDate() + 1);
+                        exitDt = nextDay.toISOString();
+                    }
+
                     return {
                         receiptId: b.bookingCode || b._id,
                         bookingId: b._id,
@@ -306,8 +325,8 @@ const MyTicketsPage = () => {
                         floorName: floorName,
                         slotCode: slotCode,
                         licensePlate: b.vehicleInfo?.licensePlate || '—',
-                        entryDate: parseDateTime(b.scheduledDate, b.startTime),
-                        exitTime: parseDateTime(b.scheduledDate, b.endTime || b.startTime),
+                        entryDate: entryDt,
+                        exitTime: exitDt,
                         elapsed: 0,
                         totalAmount: b.estimatedFee || 0,
                         payMethod: b.paymentStatus === 'paid' ? (b.payment?.method || 'bank_transfer') : 'cash',
