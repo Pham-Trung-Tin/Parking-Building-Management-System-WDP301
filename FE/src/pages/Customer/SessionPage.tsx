@@ -1027,7 +1027,6 @@ const SessionPage = () => {
                                         <div className="stat-value green" style={{ color: '#059669' }}>
                                             {fmtVND(currentFee)}
                                         </div>
-                                        <div className="stat-sub green" style={{ marginBottom: '6px' }}>{fmtVND(blockRate)} / 4-hour block</div>
                                     </div>
                                 </div>
 
