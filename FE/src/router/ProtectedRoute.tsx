@@ -103,10 +103,7 @@ export const AdminRoute: React.FC = () => {
         return <Navigate to="/staff/profile" replace />;
       }
 
-      // If admin tries to access staff assignment, kick them to /admin
-      if (user.role === 'system_admin' && location.pathname === '/admin/staff-assignment') {
-        return <Navigate to="/admin" replace />;
-      }
+
 
       // If manager tries to access staff or admin pages, kick them to /manager
       if (user.role === 'parking_manager' && (location.pathname === '/admin' || location.pathname.startsWith('/staff'))) {

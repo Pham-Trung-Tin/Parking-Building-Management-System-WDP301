@@ -153,6 +153,7 @@ export default function AdminPortal() {
   const navItems = [
     { id: "users", icon: Users, label: "Users" },
     { id: "permissions", icon: Key, label: "Permissions" },
+    { id: "staff-assignment", icon: Building2, label: "Staff & Manager Assignment", isLink: true, path: "/admin/staff-assignment" },
     { id: "config", icon: Settings, label: "Configuration" },
     { id: "reports", icon: BarChart2, label: "Reports" },
   ];
@@ -186,20 +187,35 @@ export default function AdminPortal() {
 
           {/* Nav */}
           <nav className="flex-1 flex flex-col items-center gap-2">
-            {navItems.map(({ id, icon: Icon, label }) => (
-              <button
-                key={id}
-                onClick={() => setActiveNav(id)}
-                title={label}
-                className={`w-11 h-11 rounded-xl flex items-center justify-center transition-all duration-150 ${
-                  activeNav === id
-                    ? "bg-gray-900 text-white shadow-sm"
-                    : "text-gray-400 hover:text-gray-800 hover:bg-gray-100"
-                }`}
-              >
-                <Icon className="w-[18px] h-[18px]" />
-              </button>
-            ))}
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              if (item.isLink) {
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => navigate(item.path)}
+                    title={item.label}
+                    className="w-11 h-11 rounded-xl flex items-center justify-center transition-all duration-150 text-gray-400 hover:text-gray-800 hover:bg-gray-100"
+                  >
+                    <Icon className="w-[18px] h-[18px]" />
+                  </button>
+                );
+              }
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => setActiveNav(item.id)}
+                  title={item.label}
+                  className={`w-11 h-11 rounded-xl flex items-center justify-center transition-all duration-150 ${
+                    activeNav === item.id
+                      ? "bg-gray-900 text-white shadow-sm"
+                      : "text-gray-400 hover:text-gray-800 hover:bg-gray-100"
+                  }`}
+                >
+                  <Icon className="w-[18px] h-[18px]" />
+                </button>
+              );
+            })}
           </nav>
 
           {/* Bottom */}

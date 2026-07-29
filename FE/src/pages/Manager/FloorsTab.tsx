@@ -73,11 +73,17 @@ export default function FloorsTab({ globalLotId, setGlobalLotId }: any) {
   const [saving, setSaving] = useState(false);
   const [modal, setModal] = useState<any>(null);
   const { toast, showToast } = useToast();
+  const user = (() => { try { return JSON.parse(localStorage.getItem('user') || '{}'); } catch { return {}; } })();
+  const isManager = user?.role === 'parking_manager';
 
   const fetchDeps = async () => {
     try {
       const rl = await parkingLotService.getParkingLots({ limit: 100 });
-      setLots(rl.data || rl.docs || rl || []);
+      let fetchedLots = rl.data || rl.docs || rl || [];
+      if (isManager && user?.assignedParkingLot) {
+        fetchedLots = fetchedLots.filter((l: any) => l._id === user.assignedParkingLot);
+      }
+      setLots(fetchedLots);
     } catch { }
   };
 
@@ -124,8 +130,8 @@ export default function FloorsTab({ globalLotId, setGlobalLotId }: any) {
           <h1 className="text-2xl font-semibold text-gray-900 flex items-center gap-2"><Layers className="w-6 h-6" /> Floors</h1>
         </div>
         <div className="flex items-center gap-3">
-          <select value={filterLot || ''} onChange={e => setFilterLot?.(e.target.value)} className="border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none bg-white">
-            <option value="">All Buildings</option>
+          <select value={filterLot || ''} onChange={e => setFilterLot?.(e.target.value)} disabled={isManager} className={`border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none ${isManager ? 'opacity-70 cursor-not-allowed bg-gray-50' : 'bg-white'}`}>
+            {!isManager && <option value="">All Buildings</option>}
             {lots.map(l => <option key={l._id} value={l._id}>{l.name}</option>)}
           </select>
           <button onClick={() => setModal({ ...EMPTY, parkingLot: filterLot })} className="flex items-center gap-2 px-4 py-2.5 bg-gray-900 text-white text-sm font-medium rounded-xl hover:bg-gray-700">

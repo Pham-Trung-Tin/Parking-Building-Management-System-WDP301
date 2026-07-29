@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
   Shield,
@@ -377,7 +377,10 @@ export default function StaffAssignmentPage({ isTab, globalLotId, setGlobalLotId
       const user = getCurrentUser();
       const params: any = { limit: 100, status: 'active' };
       const res = await parkingLotService.getParkingLots(params);
-      const lots = res.data || res || [];
+      let lots = res.data || res || [];
+      if (user?.role === 'parking_manager' && user?.assignedParkingLot) {
+        lots = lots.filter((l: any) => l._id === user.assignedParkingLot);
+      }
       setParkingLots(lots);
       if (lots.length > 0) {
         if (preserveSelected) {
@@ -426,6 +429,19 @@ export default function StaffAssignmentPage({ isTab, globalLotId, setGlobalLotId
   useEffect(() => {
     fetchStaff();
   }, [fetchStaff]);
+
+  const allManagers = useMemo(() => {
+    if (!selectedLot) return [];
+    const list = [];
+    if (selectedLot.manager) list.push({ ...selectedLot.manager, isLegacyHead: true });
+    const coManagers = assignedStaff.filter(s => s.role === 'parking_manager');
+    for (const m of coManagers) list.push({ ...m, isLegacyHead: false });
+    return list;
+  }, [selectedLot, assignedStaff]);
+
+  const onlyStaff = useMemo(() => {
+    return assignedStaff.filter(s => s.role !== 'parking_manager');
+  }, [assignedStaff]);
 
   const handleRemoveStaff = (staffId: string, staffName: string) => {
     if (!selectedLot) return;
@@ -574,7 +590,7 @@ export default function StaffAssignmentPage({ isTab, globalLotId, setGlobalLotId
             </div>
           </div>
         )}
-        
+
         {/* ── Main ── */}
         <div className="flex-1 overflow-auto">
           <div className={`${isTab ? 'px-0 py-0' : 'max-w-6xl mx-auto px-12 py-10'}`}>
@@ -602,7 +618,8 @@ export default function StaffAssignmentPage({ isTab, globalLotId, setGlobalLotId
               <div className="relative">
                 <button
                   onClick={() => setLotDropdownOpen(!lotDropdownOpen)}
-                  className="w-full max-w-md flex items-center justify-between px-5 py-3.5 bg-white border border-gray-200 rounded-xl text-left hover:border-gray-300 transition-colors shadow-sm"
+                  disabled={user?.role === 'parking_manager'}
+                  className={`w-full max-w-md flex items-center justify-between px-5 py-3.5 bg-white border border-gray-200 rounded-xl text-left transition-colors shadow-sm ${user?.role === 'parking_manager' ? 'opacity-70 cursor-not-allowed bg-gray-50' : 'hover:border-gray-300 cursor-pointer'}`}
                 >
                   {loadingLots ? (
                     <span className="text-sm text-gray-400 flex items-center gap-2">
@@ -657,6 +674,106 @@ export default function StaffAssignmentPage({ isTab, globalLotId, setGlobalLotId
 
 
 
+            {/* Manager Section */}
+            {selectedLot && (
+              <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden mb-6">
+                {/* Section Header */}
+                <div className="px-7 py-5 border-b border-gray-100 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-100 to-blue-100 flex items-center justify-center">
+                      <Shield className="w-5 h-5 text-indigo-700" />
+                    </div>
+                    <div>
+                      <h2 className="text-base font-semibold text-gray-900">Assigned Managers</h2>
+                      <p className="text-xs text-gray-400">Management team for this building</p>
+                    </div>
+                  </div>
+                  {user?.role !== 'parking_manager' && (
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setShowAssignModal(true)}
+                        className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-xl hover:bg-indigo-700 transition-colors shadow-sm"
+                      >
+                        <UserPlus className="w-4 h-4" />
+                        Add Manager
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                <div className="p-7">
+                  {allManagers.length > 0 ? (
+                    <div className="space-y-4">
+                      {allManagers.map((m: any) => (
+                        <div key={m._id} className="flex items-center justify-between group py-2 border-b border-gray-50 last:border-0">
+                          <div className="flex items-center gap-4 min-w-0">
+                            {m.avatar?.url || m.avatarUrl ? (
+                              <img
+                                src={m.avatar?.url || m.avatarUrl}
+                                alt={m.fullName || 'Manager'}
+                                className="w-12 h-12 rounded-full object-cover border-2 border-indigo-100"
+                              />
+                            ) : (
+                              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-indigo-100 to-blue-200 flex items-center justify-center text-sm font-bold text-indigo-700 border-2 border-indigo-100">
+                                {getInitials(m.fullName || 'M')}
+                              </div>
+                            )}
+                            <div className="min-w-0">
+                              <p className="text-sm font-bold text-gray-900 truncate">
+                                {m.fullName}
+                              </p>
+                              <div className="flex items-center gap-3 mt-0.5">
+                                <span className="text-xs text-gray-500 flex items-center gap-1 truncate">
+                                  <Mail className="w-3.5 h-3.5 shrink-0" />
+                                  {m.email}
+                                </span>
+                                {m.phone && (
+                                  <span className="text-xs text-gray-500 flex items-center gap-1">
+                                    <Phone className="w-3.5 h-3.5 shrink-0" />
+                                    {m.phone}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                          
+                          {user?.role !== 'parking_manager' && (
+                            <div className="flex items-center gap-3 shrink-0">
+                              <span className="bg-indigo-50 text-indigo-700 text-[10px] font-bold px-2.5 py-1 rounded-lg border border-indigo-100 uppercase tracking-wider">
+                                Manager
+                              </span>
+                              <button
+                                onClick={() => m.isLegacyHead ? handleRemoveManager() : handleRemoveStaff(m._id, m.fullName)}
+                                disabled={removingManager || removingStaff === m._id}
+                                className="opacity-0 group-hover:opacity-100 flex items-center gap-1.5 px-3 py-2 text-red-600 bg-red-50 hover:bg-red-100 text-xs font-medium rounded-lg transition-all disabled:opacity-50"
+                              >
+                                {(removingManager && m.isLegacyHead) || removingStaff === m._id ? (
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                ) : (
+                                  <UserMinus className="w-3.5 h-3.5" />
+                                )}
+                                Remove
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="py-6 text-center">
+                      <div className="w-14 h-14 rounded-full bg-indigo-50 flex items-center justify-center mx-auto mb-3 border border-indigo-100 border-dashed">
+                        <Shield className="w-6 h-6 text-indigo-300" />
+                      </div>
+                      <p className="text-sm font-medium text-gray-500">No managers assigned</p>
+                      {user?.role !== 'parking_manager' && (
+                        <p className="text-xs text-gray-400 mt-1">Assign managers to oversee this building</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Staff Section */}
             {selectedLot && (
               <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
@@ -667,8 +784,8 @@ export default function StaffAssignmentPage({ isTab, globalLotId, setGlobalLotId
                       <Users className="w-5 h-5 text-violet-700" />
                     </div>
                     <div>
-                      <h2 className="text-base font-semibold text-gray-900">Assigned Staff</h2>
-                      <p className="text-xs text-gray-400">{assignedStaff.length} member{assignedStaff.length !== 1 ? 's' : ''} assigned</p>
+                      <h2 className="text-base font-semibold text-gray-900">Assigned Personnel</h2>
+                      <p className="text-xs text-gray-400">{onlyStaff.length} member{onlyStaff.length !== 1 ? 's' : ''} assigned (Staff)</p>
                     </div>
                   </div>
                   <button
@@ -687,7 +804,7 @@ export default function StaffAssignmentPage({ isTab, globalLotId, setGlobalLotId
                       <Loader2 className="w-6 h-6 animate-spin mx-auto text-gray-400 mb-3" />
                       <span className="text-sm text-gray-400">Loading staff...</span>
                     </div>
-                  ) : assignedStaff.length === 0 ? (
+                  ) : onlyStaff.length === 0 ? (
                     <div className="py-16 text-center">
                       <div className="w-16 h-16 rounded-2xl bg-gray-100 flex items-center justify-center mx-auto mb-4">
                         <Users className="w-8 h-8 text-gray-300" />
@@ -703,7 +820,7 @@ export default function StaffAssignmentPage({ isTab, globalLotId, setGlobalLotId
                       </button>
                     </div>
                   ) : (
-                    assignedStaff.map((staff) => (
+                    onlyStaff.map((staff) => (
                       <div
                         key={staff._id}
                         className="px-7 py-4 flex items-center justify-between hover:bg-gray-50/50 transition-colors group"

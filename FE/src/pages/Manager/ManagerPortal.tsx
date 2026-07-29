@@ -10,21 +10,26 @@ import StaffAssignmentTab from './StaffAssignmentTab';
 import RevenueTab from './RevenueTab';
 
 const NAV = [
-  { id: 'buildings',    label: 'Buildings',       icon: Building },
-  { id: 'vehicleTypes', label: 'Vehicle Types',   icon: Car      },
-  { id: 'floors',       label: 'Floors',          icon: Layers   },
-  { id: 'zones',        label: 'Zones',           icon: Grid     },
-  { id: 'slots',        label: 'Parking Slots',   icon: MapPin   },
-  { id: 'staff',        label: 'Staff Assignment', icon: Users    },
-  { id: 'revenue',      label: 'Revenue',         icon: DollarSign },
+  { id: 'buildings', label: 'Buildings', icon: Building },
+  { id: 'vehicleTypes', label: 'Vehicle Types', icon: Car },
+  { id: 'floors', label: 'Floors', icon: Layers },
+  { id: 'zones', label: 'Zones', icon: Grid },
+  { id: 'slots', label: 'Parking Slots', icon: MapPin },
+  { id: 'staff', label: 'Staff Assignment', icon: Users },
+  { id: 'revenue', label: 'Revenue', icon: DollarSign },
 ];
 
 export default function ManagerPortal() {
   const navigate = useNavigate();
   const [tab, setTab] = useState('buildings');
-  const [globalLotId, setGlobalLotId] = useState('');
-
   const user = (() => { try { return JSON.parse(localStorage.getItem('user') || '{}'); } catch { return {}; } })();
+
+  const [globalLotId, setGlobalLotId] = useState(() => {
+    if (user?.role === 'parking_manager' && user?.assignedParkingLot) {
+      return user.assignedParkingLot;
+    }
+    return '';
+  });
 
   const handleLogout = () => {
     localStorage.removeItem('accessToken');
@@ -53,11 +58,10 @@ export default function ManagerPortal() {
             <button
               key={id}
               onClick={() => setTab(id)}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                tab === id
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${tab === id
                   ? 'bg-gray-900 text-white shadow-sm'
                   : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'
-              }`}
+                }`}
             >
               <Icon className="w-4 h-4 shrink-0" />
               {label}
@@ -88,13 +92,13 @@ export default function ManagerPortal() {
       {/* Main */}
       <div className="flex-1 overflow-auto">
         <div className="max-w-6xl mx-auto px-10 py-8">
-          {tab === 'buildings'    && <BuildingsTab globalLotId={globalLotId} setGlobalLotId={setGlobalLotId} />}
+          {tab === 'buildings' && <BuildingsTab globalLotId={globalLotId} setGlobalLotId={setGlobalLotId} />}
           {tab === 'vehicleTypes' && <VehicleTypesTab />}
-          {tab === 'floors'       && <FloorsTab globalLotId={globalLotId} setGlobalLotId={setGlobalLotId} />}
-          {tab === 'zones'        && <ZonesTab globalLotId={globalLotId} setGlobalLotId={setGlobalLotId} />}
-          { tab === 'slots'        && <SlotsTab globalLotId={globalLotId} setGlobalLotId={setGlobalLotId} /> }
-          { tab === 'staff'        && <StaffAssignmentTab globalLotId={globalLotId} setGlobalLotId={setGlobalLotId} /> }
-          { tab === 'revenue'      && <RevenueTab globalLotId={globalLotId} /> }
+          {tab === 'floors' && <FloorsTab globalLotId={globalLotId} setGlobalLotId={setGlobalLotId} />}
+          {tab === 'zones' && <ZonesTab globalLotId={globalLotId} setGlobalLotId={setGlobalLotId} />}
+          {tab === 'slots' && <SlotsTab globalLotId={globalLotId} setGlobalLotId={setGlobalLotId} />}
+          {tab === 'staff' && <StaffAssignmentTab globalLotId={globalLotId} setGlobalLotId={setGlobalLotId} />}
+          {tab === 'revenue' && <RevenueTab globalLotId={globalLotId} />}
         </div>
       </div>
     </div>

@@ -102,13 +102,18 @@ export default function SlotsTab({ globalLotId, setGlobalLotId }: any) {
   const [saving, setSaving] = useState(false);
   const [modal, setModal] = useState<any>(null);
   const { toast, showToast } = useToast();
+  const user = (() => { try { return JSON.parse(localStorage.getItem('user') || '{}'); } catch { return {}; } })();
+  const isManager = user?.role === 'parking_manager';
 
   const fetchDeps = async () => {
     try {
       const rl = await parkingLotService.getParkingLots({ limit: 100 });
-      const ls = rl.data || rl.docs || rl || [];
+      let ls = rl.data || rl.docs || rl || [];
+      if (isManager && user?.assignedParkingLot) {
+        ls = ls.filter((l: any) => l._id === user.assignedParkingLot);
+      }
       setLots(ls);
-      
+
       const [rf, rz, rv] = await Promise.all([
         floorService.getFloors({ limit: 500 }),
         zoneService.getZones({ limit: 500 }),
@@ -159,12 +164,12 @@ export default function SlotsTab({ globalLotId, setGlobalLotId }: any) {
   };
 
   const stats = useMemo(() => ({
-    total:       items.length,
-    occupied:    items.filter(s => s.status === 'occupied').length,
-    available:   items.filter(s => s.status === 'available').length,
-    reserved:    items.filter(s => s.status === 'reserved').length,
+    total: items.length,
+    occupied: items.filter(s => s.status === 'occupied').length,
+    available: items.filter(s => s.status === 'available').length,
+    reserved: items.filter(s => s.status === 'reserved').length,
     maintenance: items.filter(s => s.status === 'maintenance').length,
-    locked:      items.filter(s => s.status === 'locked').length,
+    locked: items.filter(s => s.status === 'locked').length,
   }), [items]);
 
   return (
@@ -175,8 +180,8 @@ export default function SlotsTab({ globalLotId, setGlobalLotId }: any) {
           <h1 className="text-2xl font-semibold text-gray-900 flex items-center gap-2"><MapPin className="w-6 h-6" /> Parking Slots</h1>
         </div>
         <div className="flex items-center gap-3">
-          <select value={filterLot || ''} onChange={e => setFilterLot?.(e.target.value)} className="border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none bg-white">
-            <option value="">All Buildings</option>
+          <select value={filterLot || ''} onChange={e => setFilterLot?.(e.target.value)} disabled={isManager} className={`border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none ${isManager ? 'opacity-70 cursor-not-allowed bg-gray-50' : 'bg-white'}`}>
+            {!isManager && <option value="">All Buildings</option>}
             {lots.map(l => <option key={l._id} value={l._id}>{l.name}</option>)}
           </select>
           <button onClick={() => setModal({ ...EMPTY, parkingLot: filterLot })} className="flex items-center gap-2 px-4 py-2.5 bg-gray-900 text-white text-sm font-medium rounded-xl hover:bg-gray-700">

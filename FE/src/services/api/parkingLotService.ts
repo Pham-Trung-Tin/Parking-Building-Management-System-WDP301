@@ -55,6 +55,7 @@ export interface StaffMember {
     avatar?: { url: string; publicId: string };
     avatarUrl?: string;
     status: string;
+    role?: string;
     createdAt: string;
 }
 
