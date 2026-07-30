@@ -558,15 +558,26 @@ const StaffPage = () => {
       return;
     }
 
-    const lotId = (profile as any)?.assignedParkingLot?._id || (profile as any)?.assignedParkingLot || defaultLotId;
+    const lotId = (profile as any)?.assignedParkingLot?._id
+      || (typeof (profile as any)?.assignedParkingLot === 'string' ? (profile as any)?.assignedParkingLot : null)
+      || defaultLotId;
+
+    if (!lotId) {
+      showNotification('No parking lot assigned. Please contact your manager.', 'error');
+      setIsProcessingQR(false);
+      return;
+    }
+
+    console.log('[DEBUG] QR check-in | lotId:', lotId, '| modalData:', modalData);
 
     try {
       if (modalData.monthlyPassCode) {
-        await parkingSessionService.checkIn({
+        const res = await parkingSessionService.checkIn({
           monthlyPassCode: modalData.monthlyPassCode,
           licensePlate: modalData.plate,
           parkingLotId: lotId
         });
+        console.log('[DEBUG] Monthly pass check-in response:', res);
       } else {
         await parkingSessionService.checkIn({
           bookingId: modalData.bookingId,
@@ -584,7 +595,9 @@ const StaffPage = () => {
         setIsProcessingQR(false);
       }, 3000);
     } catch (err: any) {
-      showNotification(err?.response?.data?.message || err?.message || 'Failed to check in from QR', 'error');
+      const msg = err?.response?.data?.message || err?.message || 'Failed to check in from QR';
+      console.error('[DEBUG] QR check-in error:', err?.response?.data || err);
+      showNotification(msg, 'error');
       setIsProcessingQR(false);
     }
   };
