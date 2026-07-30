@@ -8,6 +8,8 @@ import ZonesTab from './ZonesTab';
 import SlotsTab from './SlotsTab';
 import StaffAssignmentTab from './StaffAssignmentTab';
 import RevenueTab from './RevenueTab';
+import ManagerWorkScheduleTab from './ManagerWorkScheduleTab';
+import { Calendar } from 'lucide-react';
 
 const NAV = [
   { id: 'buildings', label: 'Buildings', icon: Building },
@@ -16,6 +18,7 @@ const NAV = [
   { id: 'zones', label: 'Zones', icon: Grid },
   { id: 'slots', label: 'Parking Slots', icon: MapPin },
   { id: 'staff', label: 'Staff Assignment', icon: Users },
+  { id: 'schedules', label: 'Work Schedules', icon: Calendar },
   { id: 'revenue', label: 'Revenue', icon: DollarSign },
 ];
 
@@ -98,6 +101,7 @@ export default function ManagerPortal() {
           {tab === 'zones' && <ZonesTab globalLotId={globalLotId} setGlobalLotId={setGlobalLotId} />}
           {tab === 'slots' && <SlotsTab globalLotId={globalLotId} setGlobalLotId={setGlobalLotId} />}
           {tab === 'staff' && <StaffAssignmentTab globalLotId={globalLotId} setGlobalLotId={setGlobalLotId} />}
+          {tab === 'schedules' && <ManagerWorkScheduleTab globalLotId={globalLotId} />}
           {tab === 'revenue' && <RevenueTab globalLotId={globalLotId} />}
         </div>
       </div>

@@ -21,6 +21,7 @@ import StaffExitPage from './pages/Staff/StaffExitPage';
 import StaffExceptionsPage from './pages/Staff/StaffExceptionsPage';
 import StaffLiveViewPage from './pages/Staff/StaffLiveViewPage';
 import StaffManageSlotPage from './pages/Staff/StaffManageSlotPage';
+import StaffWorkSchedulePage from './pages/Staff/StaffWorkSchedulePage';
 import ManagerPortal from './pages/Manager/ManagerPortal';
 import { GuestRoute, CustomerRoute, RequireAuthRoute, AdminRoute } from './router/ProtectedRoute';
 import FloatingSessionWidget from './components/FloatingSessionWidget';
@@ -72,6 +73,8 @@ function App() {
                     <Route path="/staff/live-view" element={<StaffLiveViewPage />} />
                     <Route path="/staff/exceptions" element={<StaffExceptionsPage />} />
                     <Route path="/staff/manage-slots" element={<StaffManageSlotPage />} />
+                    <Route path="/staff/assignments" element={<StaffAssignmentPage />} />
+                    <Route path="/staff/schedule" element={<StaffWorkSchedulePage />} />
                     <Route path="/staff/profile" element={<ProfilePage />} />
                     <Route path="/manager" element={<ManagerPortal />} />
                 </Route>
