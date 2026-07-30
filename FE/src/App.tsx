@@ -8,6 +8,7 @@ import ForgotPasswordPage from './pages/HomePage/ForgotPasswordPage';
 import ResetPasswordPage from './pages/HomePage/ResetPasswordPage';
 import ProfilePage from './pages/HomePage/ProfilePage';
 import ParkingSpotPage from './pages/Customer/ParkingSpotPage';
+import PublicMapPage from './pages/Customer/PublicMapPage';
 import BookingPage from './pages/Customer/BookingPage';
 import SessionPage from './pages/Customer/SessionPage';
 import CheckoutPage from './pages/Customer/CheckoutPage';
@@ -51,6 +52,7 @@ function App() {
                     {/* Public customer pages */}
                     <Route path="/" element={<HomePage />} />
                     <Route path="/find-parking" element={<ParkingSpotPage />} />
+                    <Route path="/public-map/:lotId" element={<PublicMapPage />} />
 
                     {/* Authenticated customer pages */}
                     <Route element={<RequireAuthRoute />}>

@@ -32,9 +32,9 @@ interface SocketContextValue {
 const SocketContext = createContext<SocketContextValue>({
   socket: null,
   isConnected: false,
-  joinParkingLot: () => {},
-  leaveParkingLot: () => {},
-  onSlotUpdate: () => () => {},
+  joinParkingLot: () => { },
+  leaveParkingLot: () => { },
+  onSlotUpdate: () => () => { },
 });
 
 // ──────────────────────────────────────────────
@@ -99,7 +99,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const onSlotUpdate = useCallback((handler: (payload: SlotUpdatePayload) => void) => {
     const socket = socketRef.current;
-    if (!socket) return () => {};
+    if (!socket) return () => { };
     socket.on('slotStatusUpdated', handler);
     return () => socket.off('slotStatusUpdated', handler);
   }, []);

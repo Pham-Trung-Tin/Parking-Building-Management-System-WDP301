@@ -5,7 +5,7 @@ import { Loader2, Check, Calendar, LogOut, CheckCircle2, AlertTriangle, Clock, M
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
 import { Link, useNavigate } from 'react-router-dom';
-import { Car, Video, AlertCircle, User, Users } from 'lucide-react';
+import { Car, Video, AlertCircle, User, Users, LogIn, Eye, LayoutGrid } from 'lucide-react';
 
 dayjs.extend(isoWeek);
 
@@ -159,43 +159,52 @@ export default function StaffWorkSchedulePage() {
   return (
     <div className="flex h-screen bg-gray-100 font-sans">
       {/* Sidebar */}
-      <div className="w-64 bg-white border-r border-gray-200 flex flex-col justify-between shrink-0 h-full">
-        <div className="overflow-y-auto">
-          <div className="p-6 border-b border-gray-200">
-            <h1 className="text-2xl font-black text-gray-900 tracking-tight">Parking<span className="text-blue-600">Ops</span></h1>
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mt-1">Staff Portal</p>
+      <div className="w-64 bg-white border-r border-gray-200 flex flex-col justify-between shrink-0 z-20">
+        <div>
+          <div className="p-6">
+            <h1 className="text-xl font-bold tracking-tight text-gray-900">ParkingOps</h1>
+            <p className="text-xs text-gray-500 uppercase tracking-wider mt-1">Staff Suite</p>
           </div>
 
-          <nav className="p-4 space-y-1">
-            <Link to="/staff" className="flex items-center px-6 py-3 text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition-colors w-full text-left whitespace-nowrap">
-              <Car className="w-5 h-5 mr-3 text-gray-400 shrink-0" />
-              <span className="truncate">Vehicle Entry</span>
-            </Link>
-            <Link to="/staff/exit" className="flex items-center px-6 py-3 text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition-colors w-full text-left whitespace-nowrap">
-              <LogOut className="w-5 h-5 mr-3 text-gray-400 shrink-0" />
-              <span className="truncate">Vehicle Exit</span>
-            </Link>
-            <Link to="/staff/live" className="flex items-center px-6 py-3 text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition-colors w-full text-left whitespace-nowrap">
-              <Video className="w-5 h-5 mr-3 text-gray-400 shrink-0" />
-              <span className="truncate">Live Cameras</span>
-            </Link>
-            <Link to="/staff/exceptions" className="flex items-center px-6 py-3 text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition-colors w-full text-left whitespace-nowrap">
-              <AlertCircle className="w-5 h-5 mr-3 text-gray-400 shrink-0" />
-              <span className="truncate">Exceptions</span>
-            </Link>
-            <Link to="/staff/manage-slots" className="flex items-center px-6 py-3 text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition-colors w-full text-left whitespace-nowrap">
-              <MapPin className="w-5 h-5 mr-3 text-gray-400 shrink-0" />
-              <span className="truncate">Manage Slots</span>
-            </Link>
-            <Link to="/staff/schedule" className="flex items-center px-6 py-3 bg-blue-50 text-blue-700 font-bold transition-colors w-full text-left whitespace-nowrap rounded-lg">
-              <Calendar className="w-5 h-5 mr-3 text-blue-600 shrink-0" />
-              <span className="truncate">My Schedule</span>
-            </Link>
-
-            {profile?.role === 'system_admin' && (
-              <Link to="/admin/staff-assignment" className="flex items-center px-6 py-3 text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition-colors w-full text-left whitespace-nowrap">
-                <Users className="w-5 h-5 mr-3 text-gray-400 shrink-0" />
-                <span className="truncate">Staff Assignment</span>
+          <nav className="mt-6 flex flex-col space-y-1">
+            {(profile?.role === 'parking_manager' || (profile?.role === 'parking_staff' && profile?.assignedParkingLot)) && (
+              <>
+                <Link to="/staff" className="flex items-center px-6 py-3 text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition-colors w-full text-left">
+                  <LogIn className="w-5 h-5 mr-3 text-gray-400" />
+                  Entry
+                </Link>
+                <Link to="/staff/exit" className="flex items-center px-6 py-3 text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition-colors w-full text-left">
+                  <LogOut className="w-5 h-5 mr-3 text-gray-400" />
+                  Exit
+                </Link>
+                <Link to="/staff/live-view" className="flex items-center px-6 py-3 text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition-colors w-full text-left">
+                  <Eye className="w-5 h-5 mr-3 text-gray-400" />
+                  Live View
+                </Link>
+                <Link to="/staff/manage-slots" className="flex items-center px-6 py-3 text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition-colors w-full text-left">
+                  <LayoutGrid className="w-5 h-5 mr-3 text-gray-400" />
+                  Manage Slots
+                </Link>
+                <Link to="/staff/exceptions" className="flex items-center px-6 py-3 text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition-colors w-full text-left">
+                  <AlertTriangle className="w-5 h-5 mr-3 text-gray-400" />
+                  Exceptions
+                </Link>
+                <Link to="/staff/schedule" className="flex items-center px-6 py-3 bg-gray-50 border-r-4 border-gray-900 text-gray-900 font-medium w-full text-left">
+                  <Calendar className="w-5 h-5 mr-3 text-gray-700" />
+                  My Schedule
+                </Link>
+              </>
+            )}
+            {profile?.role !== 'parking_manager' && (
+              <Link to="/staff/profile" className="flex items-center px-6 py-3 text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition-colors w-full text-left">
+                <User className="w-5 h-5 mr-3 text-gray-400" />
+                My Profile
+              </Link>
+            )}
+            {profile?.role === 'parking_manager' && (
+              <Link to="/admin/staff-assignment" className="flex items-center px-6 py-3 text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition-colors w-full text-left">
+                <Users className="w-5 h-5 mr-3 text-gray-400" />
+                Staff Assignment
               </Link>
             )}
           </nav>
@@ -203,7 +212,7 @@ export default function StaffWorkSchedulePage() {
 
         <div className="p-6 border-t border-gray-200 flex items-center justify-between">
           <div className="flex items-center overflow-hidden">
-            <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 mr-3 shrink-0 overflow-hidden">
+            <div className="w-10 h-10 rounded-full bg-gray-900 flex items-center justify-center text-white mr-3 shrink-0 overflow-hidden">
               {profile?.avatarUrl ? (
                 <img src={profile.avatarUrl} alt={profile.fullName} className="w-full h-full object-cover" />
               ) : (

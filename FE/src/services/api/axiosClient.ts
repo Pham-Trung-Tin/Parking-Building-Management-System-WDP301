@@ -51,11 +51,11 @@ axiosClient.interceptors.response.use(
         if (status === 401 && !originalRequest._retry) {
             // Bỏ qua các API auth để trả về lỗi validation hoặc thông tin đăng nhập sai bình thường
             const isAuthRequest = originalRequest.url?.includes('/auth/login') ||
-                                  originalRequest.url?.includes('/auth/register') ||
-                                  originalRequest.url?.includes('/auth/verify-email') ||
-                                  originalRequest.url?.includes('/auth/forgot-password') ||
-                                  originalRequest.url?.includes('/auth/reset-password') ||
-                                  originalRequest.url?.includes('/auth/refresh-token');
+                originalRequest.url?.includes('/auth/register') ||
+                originalRequest.url?.includes('/auth/verify-email') ||
+                originalRequest.url?.includes('/auth/forgot-password') ||
+                originalRequest.url?.includes('/auth/reset-password') ||
+                originalRequest.url?.includes('/auth/refresh-token');
 
             if (isAuthRequest) {
                 return Promise.reject({ status, message, raw: error });

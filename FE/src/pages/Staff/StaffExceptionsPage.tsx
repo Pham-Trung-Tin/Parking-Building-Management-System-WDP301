@@ -311,17 +311,17 @@ const StaffExceptionsPage = () => {
 
     if (foundSession.booking?.endTime && foundSession.booking?.scheduledDate) {
       baseFee = foundSession.booking.estimatedFee || foundSession.baseFee || foundSession.advancePayment || 0;
-      
+
       const dStr = foundSession.booking.scheduledDate;
       const [startH, startM] = foundSession.booking.startTime.split(':').map(Number);
       const scheduledStart = new Date(dStr);
       scheduledStart.setHours(startH, startM, 0, 0);
-      
+
       const [endH, endM] = foundSession.booking.endTime.split(':').map(Number);
       const scheduledEnd = new Date(dStr);
       scheduledEnd.setHours(endH, endM, 0, 0);
       if (scheduledEnd < scheduledStart) {
-         scheduledEnd.setDate(scheduledEnd.getDate() + 1);
+        scheduledEnd.setDate(scheduledEnd.getDate() + 1);
       }
 
       if (scheduledStart.getTime() - entryTime.getTime() > 15 * 60 * 1000) {
@@ -509,7 +509,7 @@ const StaffExceptionsPage = () => {
                           QR Transfer
                         </button>
                       </div>
-                      
+
                       {identityData.paymentMethod === 'qr' && (
                         <div style={{
                           marginTop: 16, padding: '20px',
@@ -520,45 +520,45 @@ const StaffExceptionsPage = () => {
                           animation: 'fade-in-up 0.2s ease-out'
                         }}>
                           <div style={{ fontSize: 15, fontWeight: 800, color: '#0f172a', marginBottom: 4 }}>
-                              Scan QR to Pay
+                            Scan QR to Pay
                           </div>
                           <div style={{ fontSize: 12, color: '#64748b', marginBottom: 16 }}>
-                              Use any banking app that supports VietQR
+                            Use any banking app that supports VietQR
                           </div>
 
                           <div style={{
-                              display: 'inline-block', padding: 10, background: 'white',
-                              borderRadius: 16, border: '2px solid #e2e8f0',
-                              boxShadow: '0 8px 24px rgba(0,0,0,0.06)'
+                            display: 'inline-block', padding: 10, background: 'white',
+                            borderRadius: 16, border: '2px solid #e2e8f0',
+                            boxShadow: '0 8px 24px rgba(0,0,0,0.06)'
                           }}>
-                              <img 
-                                src={`https://img.vietqr.io/image/MB-0342347435-compact2.jpg?amount=${Math.max(0, estimatedFees.totalFee + (Number(resolveCharge) || 0))}&addInfo=FEE%20${resolveModal.incident?.incidentCode}&accountName=PARKINGBUILDING`}
-                                alt="VietQR" 
-                                style={{ width: 200, height: 200, borderRadius: 8, objectFit: 'contain' }} 
-                              />
+                            <img
+                              src={`https://img.vietqr.io/image/MB-0342347435-compact2.jpg?amount=${Math.max(0, estimatedFees.totalFee + (Number(resolveCharge) || 0))}&addInfo=FEE%20${resolveModal.incident?.incidentCode}&accountName=PARKINGBUILDING`}
+                              alt="VietQR"
+                              style={{ width: 200, height: 200, borderRadius: 8, objectFit: 'contain' }}
+                            />
                           </div>
 
                           <div style={{ marginTop: 20, padding: '12px', background: '#eff6ff', borderRadius: 10, border: '1px solid #bfdbfe', textAlign: 'left' }}>
-                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 12px', fontSize: 12 }}>
-                                  <div style={{ color: '#64748b', fontWeight: 600 }}>Bank:</div>
-                                  <div style={{ fontWeight: 700, color: '#1e3a8a' }}>MBBank</div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 12px', fontSize: 12 }}>
+                              <div style={{ color: '#64748b', fontWeight: 600 }}>Bank:</div>
+                              <div style={{ fontWeight: 700, color: '#1e3a8a' }}>MBBank</div>
 
-                                  <div style={{ color: '#64748b', fontWeight: 600 }}>Account Name:</div>
-                                  <div style={{ fontWeight: 700, color: '#1e3a8a' }}>PARKINGBUILDING</div>
+                              <div style={{ color: '#64748b', fontWeight: 600 }}>Account Name:</div>
+                              <div style={{ fontWeight: 700, color: '#1e3a8a' }}>PARKINGBUILDING</div>
 
-                                  <div style={{ color: '#64748b', fontWeight: 600 }}>Account No:</div>
-                                  <div style={{ fontWeight: 800, color: '#1d4ed8', fontFamily: 'monospace', fontSize: 13 }}>0342347435</div>
+                              <div style={{ color: '#64748b', fontWeight: 600 }}>Account No:</div>
+                              <div style={{ fontWeight: 800, color: '#1d4ed8', fontFamily: 'monospace', fontSize: 13 }}>0342347435</div>
 
-                                  <div style={{ color: '#64748b', fontWeight: 600 }}>Amount:</div>
-                                  <div style={{ fontWeight: 800, color: '#ef4444', fontSize: 14 }}>
-                                    {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Math.max(0, estimatedFees.totalFee + (Number(resolveCharge) || 0)))}
-                                  </div>
-
-                                  <div style={{ color: '#64748b', fontWeight: 600 }}>Content:</div>
-                                  <div style={{ fontWeight: 800, color: '#0f172a', fontFamily: 'monospace', fontSize: 13, background: '#f1f5f9', padding: '2px 6px', borderRadius: 4, display: 'inline-block' }}>
-                                      FEE {resolveModal.incident?.incidentCode}
-                                  </div>
+                              <div style={{ color: '#64748b', fontWeight: 600 }}>Amount:</div>
+                              <div style={{ fontWeight: 800, color: '#ef4444', fontSize: 14 }}>
+                                {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Math.max(0, estimatedFees.totalFee + (Number(resolveCharge) || 0)))}
                               </div>
+
+                              <div style={{ color: '#64748b', fontWeight: 600 }}>Content:</div>
+                              <div style={{ fontWeight: 800, color: '#0f172a', fontFamily: 'monospace', fontSize: 13, background: '#f1f5f9', padding: '2px 6px', borderRadius: 4, display: 'inline-block' }}>
+                                FEE {resolveModal.incident?.incidentCode}
+                              </div>
+                            </div>
                           </div>
                         </div>
                       )}
