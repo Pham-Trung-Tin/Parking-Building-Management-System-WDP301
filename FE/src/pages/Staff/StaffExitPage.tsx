@@ -829,30 +829,31 @@ const StaffExitPage = () => {
               {/* Right Column (Amount Due & Camera) */}
               <div className="w-[380px] flex flex-col space-y-6">
 
-                {/* Camera View */}
+                {/* Camera View for Comparison */}
                 <section>
                   <div className="flex justify-between items-center mb-3">
+                    <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Live Exit Cam</span>
                     <div className="flex gap-2">
                       <button
                         onClick={() => setCamMode('lpr')}
-                        className={`text-[10px] px-3 py-1.5 rounded font-bold uppercase tracking-wider transition-colors ${camMode === 'lpr' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
+                        className={`text-[10px] px-2 py-1 rounded font-bold uppercase tracking-wider transition-colors ${camMode === 'lpr' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
                       >
-                        LPR Camera
+                        LPR
                       </button>
                       <button
                         onClick={() => setCamMode('qr')}
-                        className={`text-[10px] px-3 py-1.5 rounded font-bold uppercase tracking-wider transition-colors ${camMode === 'qr' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
+                        className={`text-[10px] px-2 py-1 rounded font-bold uppercase tracking-wider transition-colors ${camMode === 'qr' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
                       >
-                        QR Scanner
+                        QR
+                      </button>
+                      <button
+                        onClick={() => setIsExitCamActive(!isExitCamActive)}
+                        className={`text-[10px] px-2 py-1 rounded font-bold uppercase tracking-wider transition-colors ${isExitCamActive ? 'bg-red-100 text-red-700 hover:bg-red-200' : 'bg-green-100 text-green-700 hover:bg-green-200'
+                          }`}
+                      >
+                        {isExitCamActive ? 'Off' : 'On'}
                       </button>
                     </div>
-                    <button
-                      onClick={() => setIsExitCamActive(!isExitCamActive)}
-                      className={`text-[10px] px-2 py-1 rounded font-bold uppercase tracking-wider transition-colors ${isExitCamActive ? 'bg-red-100 text-red-700 hover:bg-red-200' : 'bg-green-100 text-green-700 hover:bg-green-200'
-                        }`}
-                    >
-                      {isExitCamActive ? 'Turn Off Cam' : 'Turn On Cam'}
-                    </button>
                   </div>
                   <div className="relative bg-black aspect-video rounded-xl overflow-hidden border border-gray-200 shadow-sm flex items-center justify-center">
                     {isExitCamActive ? (
@@ -882,13 +883,49 @@ const StaffExitPage = () => {
                         <span className="text-xs font-bold tracking-widest uppercase">Camera Disabled</span>
                       </div>
                     )}
-                    <div className="absolute top-3 left-3 bg-black/80 text-white text-[10px] font-bold px-2 py-1 rounded flex items-center tracking-wider">
+                    <div className="absolute top-3 left-3 bg-black/80 text-white text-[10px] font-bold px-2 py-1 rounded flex items-center tracking-wider z-10">
                       <span className={`w-1.5 h-1.5 rounded-full mr-2 ${isExitCamActive ? 'bg-red-500 animate-pulse' : 'bg-gray-500'}`}></span>
-                      LPR-CAM-02
+                      LPR-CAM-EXIT
                     </div>
                   </div>
+                  
                   {/* Hidden canvas for capturing camera frame */}
                   <canvas ref={canvasRef} className="hidden" />
+
+                  {/* Entry Image for Comparison */}
+                  <div className="mt-4">
+                    <div className="flex justify-between items-center mb-3">
+                      <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Entry Image (Captured)</span>
+                    </div>
+                    <div className="relative bg-black aspect-video rounded-xl overflow-hidden border border-gray-200 shadow-sm flex items-center justify-center">
+                      {(() => {
+                         const entryImg = sessionFound ? activeSession?.evidenceImages?.find((img: any) => img.type === 'entry') : null;
+                         if (entryImg?.url) {
+                           // Resolve backend local storage URL
+                           let imgUrl = entryImg.url;
+                           if (!imgUrl.startsWith('http')) {
+                             const baseUrl = import.meta.env.VITE_API_BASE_URL?.replace(/\/api\/v1\/?$/, '') || '';
+                             imgUrl = `${baseUrl}${imgUrl.startsWith('/') ? '' : '/'}${imgUrl}`;
+                           }
+                           return <img src={imgUrl} alt="Entry Snapshot" className="w-full h-full object-cover opacity-90" />;
+                         }
+                         return (
+                           <div className="flex flex-col items-center text-gray-500">
+                             <Camera className="w-10 h-10 mb-2 opacity-50" />
+                             <span className="text-xs font-bold tracking-widest uppercase">No Entry Image</span>
+                           </div>
+                         );
+                      })()}
+                      <div className="absolute top-3 left-3 bg-black/80 text-white text-[10px] font-bold px-2 py-1 rounded flex items-center tracking-wider z-10">
+                        ENTRY-CAM-SNAPSHOT
+                      </div>
+                      {sessionFound && activeSession?.entryTime && (
+                        <div className="absolute bottom-3 right-3 bg-black/80 text-white text-[10px] font-bold px-2 py-1 rounded tracking-wider z-10">
+                           {new Date(activeSession.entryTime).toLocaleString()}
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </section>
 
                 <div className="bg-white border border-gray-200 shadow-sm p-8 flex flex-col space-y-6">

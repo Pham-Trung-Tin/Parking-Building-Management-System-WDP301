@@ -70,6 +70,10 @@ const StaffLiveViewPage = () => {
     const sessionStatus = session.status === 'active' ? 'Parked' : (session.status === 'completed' ? 'Exited' : session.status);
     const matchesStatus = filterStatus === 'All' || sessionStatus.toLowerCase() === filterStatus.toLowerCase();
     return matchesSearch && matchesStatus;
+  }).sort((a, b) => {
+    const timeA = a.exitTime ? new Date(a.exitTime).getTime() : new Date(a.entryTime).getTime();
+    const timeB = b.exitTime ? new Date(b.exitTime).getTime() : new Date(b.entryTime).getTime();
+    return timeB - timeA;
   });
 
   const handleRefresh = () => {
@@ -263,6 +267,7 @@ const StaffLiveViewPage = () => {
                     <th className="px-6 py-4 font-bold">Plate Number</th>
                     <th className="px-6 py-4 font-bold">Type</th>
                     <th className="px-6 py-4 font-bold">Entry Time</th>
+                    <th className="px-6 py-4 font-bold">Exit Time</th>
                     <th className="px-6 py-4 font-bold">Zone/Location</th>
                     <th className="px-6 py-4 font-bold">Duration</th>
                     <th className="px-6 py-4 font-bold">Status</th>
@@ -278,6 +283,7 @@ const StaffLiveViewPage = () => {
                           <td className="px-6 py-4 font-bold text-gray-900">{session.vehicleInfo?.licensePlate}</td>
                           <td className="px-6 py-4">{session.vehicleType?.name}</td>
                           <td className="px-6 py-4">{new Date(session.entryTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
+                          <td className="px-6 py-4 font-medium text-gray-900">{session.exitTime ? new Date(session.exitTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}</td>
                           <td className="px-6 py-4">
                             {session.zone?.name ? `${session.zone.name}${session.slot?.slotCode ? ` - Slot ${session.slot.slotCode}` : ''}` : (session.slot?.slotCode ? `Slot ${session.slot.slotCode}` : 'Unassigned')}
                           </td>
@@ -303,7 +309,7 @@ const StaffLiveViewPage = () => {
                     })
                   ) : (
                     <tr>
-                      <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
+                      <td colSpan={8} className="px-6 py-8 text-center text-gray-500">
                         No sessions found matching your criteria.
                       </td>
                     </tr>
