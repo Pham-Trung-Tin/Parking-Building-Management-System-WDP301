@@ -152,6 +152,10 @@ export default function StaffWorkSchedulePage() {
   const calendarDays = generateCalendarGrid();
   const weekDayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
+  const shiftCountInView = scheduleData 
+    ? scheduleData.shifts.filter((s: any) => calendarDays.some(d => s.date.startsWith(d.dateStr))).length 
+    : 0;
+
   return (
     <div className="flex h-screen bg-gray-100 font-sans">
       {/* Sidebar */}
@@ -309,6 +313,20 @@ export default function StaffWorkSchedulePage() {
                       {!scheduleData ? 'Not Registered' : scheduleData.status}
                     </span>
                   </p>
+                  
+                  {activeTab === 'view' && (
+                    <div className="mt-2.5">
+                      {shiftCountInView > 0 ? (
+                        <span className="text-[11px] font-bold text-blue-700 bg-blue-50 px-2.5 py-1 rounded-md border border-blue-200">
+                          You have {shiftCountInView} assigned shift{shiftCountInView !== 1 ? 's' : ''} this {viewMode}.
+                        </span>
+                      ) : (
+                        <span className="text-[11px] font-bold text-gray-500 bg-gray-50 px-2.5 py-1 rounded-md border border-gray-200">
+                          You have no assigned shifts this {viewMode}.
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
               {scheduleData && scheduleData.managerNote && (
