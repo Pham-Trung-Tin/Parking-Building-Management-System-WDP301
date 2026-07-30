@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   LogIn,
@@ -215,6 +215,7 @@ const StaffExceptionsPage = () => {
       const formData = new FormData();
       formData.append('description', desc);
       formData.append('extraCharge', String(Number(resolveCharge) || 0));
+      formData.append('parkingSession', foundSession._id);
       if (identityData.documentFile) {
         formData.append('image', identityData.documentFile);
       }
@@ -256,6 +257,7 @@ const StaffExceptionsPage = () => {
       const formData = new FormData();
       formData.append('description', desc);
       formData.append('extraCharge', String(Number(resolveCharge) || 0));
+      formData.append('parkingSession', foundSession._id);
 
       await parkingSessionService.updateLicensePlate(foundSession._id, mismatchData.actualPlate.toUpperCase());
       await parkingSessionService.checkOut(foundSession._id);
@@ -274,6 +276,71 @@ const StaffExceptionsPage = () => {
       setIsResolving(false);
     }
   };
+
+  const estimatedFees = useMemo(() => {
+    if (!foundSession) return { totalFee: 0 };
+    if (foundSession.monthlyPass) return { totalFee: 0 };
+    if (!foundSession.entryTime || !foundSession.vehicleType?.pricing) {
+      return { totalFee: foundSession.totalFee || 0 };
+    }
+
+    const now = new Date();
+    const entryTime = new Date(foundSession.entryTime);
+    const pricing = foundSession.vehicleType.pricing;
+    const dayBlockRate = pricing.dayBlockRate || 0;
+    const nightBlockRate = pricing.nightBlockRate || dayBlockRate * 1.5;
+    const BLOCK_MS = 4 * 60 * 60 * 1000;
+
+    const countBlockFee = (start: Date, end: Date): number => {
+      if (end <= start) return 0;
+      let fee = 0;
+      let cur = new Date(start);
+      while (cur < end) {
+        const h = cur.getHours();
+        const isDaytime = h >= 6 && h < 18;
+        fee += isDaytime ? dayBlockRate : nightBlockRate;
+        cur = new Date(cur.getTime() + BLOCK_MS);
+      }
+      return fee;
+    };
+
+    let baseFee = 0;
+    let overtimeFee = 0;
+    let earlyArrivalFee = 0;
+
+    if (foundSession.booking?.endTime && foundSession.booking?.scheduledDate) {
+      baseFee = foundSession.booking.estimatedFee || foundSession.baseFee || foundSession.advancePayment || 0;
+      
+      const dStr = foundSession.booking.scheduledDate;
+      const [startH, startM] = foundSession.booking.startTime.split(':').map(Number);
+      const scheduledStart = new Date(dStr);
+      scheduledStart.setHours(startH, startM, 0, 0);
+      
+      const [endH, endM] = foundSession.booking.endTime.split(':').map(Number);
+      const scheduledEnd = new Date(dStr);
+      scheduledEnd.setHours(endH, endM, 0, 0);
+      if (scheduledEnd < scheduledStart) {
+         scheduledEnd.setDate(scheduledEnd.getDate() + 1);
+      }
+
+      if (scheduledStart.getTime() - entryTime.getTime() > 15 * 60 * 1000) {
+        earlyArrivalFee = countBlockFee(entryTime, scheduledStart);
+      }
+
+      if (now > scheduledEnd) {
+        const otHours = (now.getTime() - scheduledEnd.getTime()) / (1000 * 60 * 60);
+        if (otHours > 15 / 60) {
+          overtimeFee = countBlockFee(scheduledEnd, now);
+        }
+      }
+    } else {
+      baseFee = countBlockFee(entryTime, now);
+    }
+
+    const totalFee = baseFee + earlyArrivalFee + overtimeFee;
+    const advancePayment = foundSession.advancePayment || 0;
+    return { totalFee: Math.max(0, totalFee - advancePayment) };
+  }, [foundSession]);
 
   const renderResolveModal = () => {
     if (!resolveModal.isOpen) return null;
@@ -409,7 +476,11 @@ const StaffExceptionsPage = () => {
                   <div className="bg-gray-50 border border-gray-200 p-4 rounded text-sm space-y-3">
                     <div className="flex justify-between items-center">
                       <span className="text-gray-500">Parking Fee:</span>
-                      <span className="font-bold">Automated on checkout</span>
+                      <span className="font-bold">
+                        {foundSession ? (
+                          new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(estimatedFees.totalFee)
+                        ) : 'Pending Lookup'}
+                      </span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-gray-500">Lost Ticket Fine (VND):</span>
@@ -437,6 +508,59 @@ const StaffExceptionsPage = () => {
                           QR Transfer
                         </button>
                       </div>
+                      
+                      {identityData.paymentMethod === 'qr' && (
+                        <div style={{
+                          marginTop: 16, padding: '20px',
+                          background: '#f8fafc',
+                          borderRadius: 14,
+                          border: '1px solid #e2e8f0',
+                          textAlign: 'center',
+                          animation: 'fade-in-up 0.2s ease-out'
+                        }}>
+                          <div style={{ fontSize: 15, fontWeight: 800, color: '#0f172a', marginBottom: 4 }}>
+                              Scan QR to Pay
+                          </div>
+                          <div style={{ fontSize: 12, color: '#64748b', marginBottom: 16 }}>
+                              Use any banking app that supports VietQR
+                          </div>
+
+                          <div style={{
+                              display: 'inline-block', padding: 10, background: 'white',
+                              borderRadius: 16, border: '2px solid #e2e8f0',
+                              boxShadow: '0 8px 24px rgba(0,0,0,0.06)'
+                          }}>
+                              <img 
+                                src={`https://img.vietqr.io/image/MB-0342347435-compact2.jpg?amount=${Math.max(0, estimatedFees.totalFee + (Number(resolveCharge) || 0))}&addInfo=FEE%20${resolveModal.incident?.incidentCode}&accountName=PARKINGBUILDING`}
+                                alt="VietQR" 
+                                style={{ width: 200, height: 200, borderRadius: 8, objectFit: 'contain' }} 
+                              />
+                          </div>
+
+                          <div style={{ marginTop: 20, padding: '12px', background: '#eff6ff', borderRadius: 10, border: '1px solid #bfdbfe', textAlign: 'left' }}>
+                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 12px', fontSize: 12 }}>
+                                  <div style={{ color: '#64748b', fontWeight: 600 }}>Bank:</div>
+                                  <div style={{ fontWeight: 700, color: '#1e3a8a' }}>MBBank</div>
+
+                                  <div style={{ color: '#64748b', fontWeight: 600 }}>Account Name:</div>
+                                  <div style={{ fontWeight: 700, color: '#1e3a8a' }}>PARKINGBUILDING</div>
+
+                                  <div style={{ color: '#64748b', fontWeight: 600 }}>Account No:</div>
+                                  <div style={{ fontWeight: 800, color: '#1d4ed8', fontFamily: 'monospace', fontSize: 13 }}>0342347435</div>
+
+                                  <div style={{ color: '#64748b', fontWeight: 600 }}>Amount:</div>
+                                  <div style={{ fontWeight: 800, color: '#ef4444', fontSize: 14 }}>
+                                    {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Math.max(0, estimatedFees.totalFee + (Number(resolveCharge) || 0)))}
+                                  </div>
+
+                                  <div style={{ color: '#64748b', fontWeight: 600 }}>Content:</div>
+                                  <div style={{ fontWeight: 800, color: '#0f172a', fontFamily: 'monospace', fontSize: 13, background: '#f1f5f9', padding: '2px 6px', borderRadius: 4, display: 'inline-block' }}>
+                                      FEE {resolveModal.incident?.incidentCode}
+                                  </div>
+                              </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </section>
@@ -691,6 +815,21 @@ const StaffExceptionsPage = () => {
                   </div>
                 </div>
               </div>
+
+              {inc.parkingSession?.evidenceImages && inc.parkingSession.evidenceImages.length > 0 && (
+                <div>
+                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Entry Evidence</h4>
+                  <div className="border border-gray-100 rounded-lg p-4 shadow-sm bg-white">
+                    <div className="grid grid-cols-2 gap-2">
+                      {inc.parkingSession.evidenceImages.map((img: any, idx: number) => (
+                        <div key={idx} className="rounded overflow-hidden border border-gray-200">
+                          <img src={getImageUrl(img.url)} alt={`Evidence ${idx + 1}`} className="w-full h-auto object-cover aspect-video" />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="space-y-6">
