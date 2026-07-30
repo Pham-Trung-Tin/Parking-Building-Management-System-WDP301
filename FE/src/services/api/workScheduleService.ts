@@ -1,7 +1,7 @@
 import axiosClient from './axiosClient';
 
 class WorkScheduleService {
-  createOrUpdate(data: { parkingLotId: string, weekStartDate: string, shifts: any[] }) {
+  createOrUpdate(data: { parkingLotId: string, monthYear: string, shifts: any[] }) {
     return axiosClient.post('/work-schedules', data);
   }
   
