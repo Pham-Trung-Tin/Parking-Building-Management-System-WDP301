@@ -40,6 +40,7 @@ import { AddUserModal } from "./components/AddUserModal";
 import { UserDetailModal } from "./components/UserDetailModal";
 import { ReportsDashboard } from "./components/ReportsDashboard";
 import StaffAssignmentPage from '../Staff/StaffAssignmentPage';
+import AdminBuildingTab from './AdminBuildingTab';
 
 /* ─────────────────── Main Component ─────────────────── */
 export default function AdminPortal() {
@@ -154,8 +155,8 @@ export default function AdminPortal() {
 
   const navItems = [
     { id: "users", icon: Users, label: "Users" },
+    { id: "buildings", icon: Building2, label: "Buildings" },
     // { id: "permissions", icon: Key, label: "Permissions" },
-    { id: "staff-assignment", icon: Building2, label: "Assignment" },
     { id: "config", icon: Settings, label: "Configuration" },
     // { id: "reports", icon: BarChart2, label: "Reports" },
   ];
@@ -906,12 +907,12 @@ export default function AdminPortal() {
               </div>
             )}
 
-            {activeNav === "reports" && (
-              <ReportsDashboard />
+            {activeNav === "buildings" && (
+              <AdminBuildingTab />
             )}
 
-            {activeNav === "staff-assignment" && (
-              <StaffAssignmentPage isTab={true} />
+            {activeNav === "reports" && (
+              <ReportsDashboard />
             )}
           </div>
         </div>

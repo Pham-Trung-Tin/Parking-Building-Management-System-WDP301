@@ -94,6 +94,14 @@ const parkingLotService = {
     updateManager: (parkingLotId: string, managerId: string | null): Promise<any> => {
         return axiosClient.put(`/parking-lots/${parkingLotId}`, { manager: managerId });
     },
+    // Admin: Assign manager by email → upgrades user role to parking_manager + sends email
+    assignManagerByEmail: (parkingLotId: string, email: string): Promise<any> => {
+        return axiosClient.post(`/parking-lots/${parkingLotId}/assign-manager`, { email });
+    },
+    // Manager: Add staff by email → assigns user as staff to this building + sends email
+    addStaffByEmail: (parkingLotId: string, email: string): Promise<any> => {
+        return axiosClient.post(`/parking-lots/${parkingLotId}/add-staff`, { email });
+    },
 };
 
 export default parkingLotService;
