@@ -20,14 +20,16 @@ export interface VehicleType {
     pricing: VehicleTypePricing;
     isActive: boolean;
     isDeleted?: boolean;
+    parkingLot?: string | null;
     createdAt?: string;
     updatedAt?: string;
 }
 
 const vehicleTypeService = {
-    /** GET /vehicle-types — List all active vehicle types */
-    getAll: (): Promise<VehicleType[]> => {
-        return axiosClient.get('/vehicle-types');
+    /** GET /vehicle-types — List active vehicle types, optionally filtered by parkingLot */
+    getAll: (params?: { parkingLot?: string }): Promise<VehicleType[]> => {
+        const query = params?.parkingLot ? `?parkingLot=${params.parkingLot}` : '';
+        return axiosClient.get(`/vehicle-types${query}`);
     },
 
     /** GET /vehicle-types/:id */
@@ -35,7 +37,7 @@ const vehicleTypeService = {
         return axiosClient.get(`/vehicle-types/${id}`);
     },
 
-    /** POST /vehicle-types — system_admin only */
+    /** POST /vehicle-types — system_admin or parking_manager */
     create: (data: {
         name: string;
         code: string;
@@ -43,6 +45,7 @@ const vehicleTypeService = {
         pricing: VehicleTypePricing;
         description?: string;
         icon?: string;
+        parkingLot?: string;
     }): Promise<any> => {
         return axiosClient.post('/vehicle-types', data);
     },

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Users, UserPlus, UserMinus, Mail, Loader2, Check, X, Phone, Search, Shield } from 'lucide-react';
 import parkingLotService from '../../services/api/parkingLotService';
 import type { StaffMember } from '../../services/api/parkingLotService';
+import { useConfirm } from '../../components/ConfirmDialog';
 
 function Toast({ msg, ok }: { msg: string; ok: boolean }) {
   return (
@@ -103,6 +104,7 @@ export default function StaffAssignmentTab({ globalLotId, setGlobalLotId }: { gl
     setToast({ msg, ok });
     setTimeout(() => setToast(null), 3000);
   };
+  const { askConfirm, ConfirmNode } = useConfirm();
 
   /* Fetch lots */
   const fetchLots = useCallback(async () => {
@@ -110,13 +112,15 @@ export default function StaffAssignmentTab({ globalLotId, setGlobalLotId }: { gl
     try {
       const res = await parkingLotService.getParkingLots({ limit: 100 });
       let data: any[] = res.data || res.docs || (Array.isArray(res) ? res : []);
-      // Manager only sees their own building
-      if (user?.role === 'parking_manager' && user?.assignedParkingLot) {
-        data = data.filter(l => l._id === user.assignedParkingLot);
+      // Manager only sees their own buildings (support both string and string[])
+      if (user?.role === 'parking_manager') {
+        const raw = user?.assignedParkingLot;
+        const ids: string[] = Array.isArray(raw) ? raw.filter(Boolean) : (raw ? [raw] : []);
+        if (ids.length > 0) data = data.filter(l => ids.includes(l._id));
       }
       setLots(data);
       // Auto-select
-      const target = data.find(l => l._id === (globalLotId || user?.assignedParkingLot)) || data[0];
+      const target = data.find(l => l._id === (globalLotId || (Array.isArray(user?.assignedParkingLot) ? user.assignedParkingLot[0] : user?.assignedParkingLot))) || data[0];
       if (target) { setSelectedLot(target); setGlobalLotId?.(target._id); }
     } catch (e: any) { showToast(e.message || 'Failed to load buildings', false); }
     finally { setLoadingLots(false); }
@@ -144,14 +148,20 @@ export default function StaffAssignmentTab({ globalLotId, setGlobalLotId }: { gl
 
   const handleRemove = async (s: StaffMember) => {
     if (!selectedLot) return;
-    if (!window.confirm(`Remove ${s.fullName} from ${selectedLot.name}?`)) return;
-    setRemoving(s._id);
-    try {
-      await parkingLotService.removeStaff(selectedLot._id, s._id);
-      showToast(`${s.fullName} removed`);
-      fetchStaff();
-    } catch (e: any) { showToast(e.message || 'Failed to remove', false); }
-    finally { setRemoving(null); }
+    askConfirm(
+      `Remove ${s.fullName}?`,
+      async () => {
+        setRemoving(s._id);
+        try {
+          await parkingLotService.removeStaff(selectedLot._id, s._id);
+          showToast(`${s.fullName} removed`);
+          fetchStaff();
+        } catch (e: any) { showToast(e.message || 'Failed to remove', false); }
+        finally { setRemoving(null); }
+      },
+      `This will unassign them from ${selectedLot.name}.`,
+      'Remove'
+    );
   };
 
   const onlyStaff = useMemo(() => staff.filter(s => s.role !== 'parking_manager'), [staff]);
@@ -320,6 +330,7 @@ export default function StaffAssignmentTab({ globalLotId, setGlobalLotId }: { gl
           onDone={() => { setShowAddModal(false); showToast('Staff added successfully'); fetchStaff(); }}
         />
       )}
+      {ConfirmNode}
       {toast && <Toast msg={toast.msg} ok={toast.ok} />}
     </div>
   );

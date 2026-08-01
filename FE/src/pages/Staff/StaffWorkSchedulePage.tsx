@@ -90,9 +90,10 @@ export default function StaffWorkSchedulePage() {
   };
 
   const handleSave = async () => {
-    const lotId = typeof profile?.assignedParkingLot === 'string' 
-      ? profile.assignedParkingLot 
-      : (profile?.assignedParkingLot as any)?._id;
+    const raw = profile?.assignedParkingLot;
+    const lotId = Array.isArray(raw)
+      ? (raw as any[]).filter(Boolean).map((v: any) => v?._id || v)[0]
+      : (typeof raw === 'string' ? raw : (raw as any)?._id);
 
     if (!lotId) {
       setError('You are not assigned to any parking lot');

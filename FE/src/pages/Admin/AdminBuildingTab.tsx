@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Plus, Pencil, Trash2, X, Building2, MapPin, Mail, UserPlus, Search, Check, Loader2, Shield, UserMinus, Navigation } from 'lucide-react';
 import parkingLotService from '../../services/api/parkingLotService';
+import { useConfirm } from '../../components/ConfirmDialog';
 import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -214,15 +215,17 @@ function AssignManagerModal({ lot, onClose, onDone }: { lot: any; onClose: () =>
     } finally { setLoading(false); }
   };
 
+  const [confirmRemove, setConfirmRemove] = useState(false);
+
   const handleRemove = async () => {
-    if (!window.confirm(`Remove manager from "${lot.name}"?`)) return;
+    if (!confirmRemove) { setConfirmRemove(true); return; }
     setRemoving(true);
     try {
       await parkingLotService.updateManager(lot._id, null);
       onDone();
     } catch (e: any) {
       setError(e?.response?.data?.message || e.message || 'Failed to remove manager');
-    } finally { setRemoving(false); }
+    } finally { setRemoving(false); setConfirmRemove(false); }
   };
 
   const mgr = lot.manager;
@@ -254,9 +257,11 @@ function AssignManagerModal({ lot, onClose, onDone }: { lot: any; onClose: () =>
               </div>
             </div>
             <button onClick={handleRemove} disabled={removing}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-red-600 bg-red-50 hover:bg-red-100 text-xs font-medium rounded-lg transition-colors disabled:opacity-50">
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors disabled:opacity-50 ${
+                confirmRemove ? 'bg-red-500 text-white hover:bg-red-600' : 'text-red-600 bg-red-50 hover:bg-red-100'
+              }`}>
               {removing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserMinus className="w-3.5 h-3.5" />}
-              Remove
+              {confirmRemove ? 'Confirm?' : 'Remove'}
             </button>
           </div>
         )}
@@ -313,6 +318,7 @@ export default function AdminBuildingTab() {
     setToast({ msg, ok });
     setTimeout(() => setToast(null), 3000);
   };
+  const { askConfirm, ConfirmNode } = useConfirm();
 
   const fetchLots = useCallback(async () => {
     setLoading(true);
@@ -338,12 +344,18 @@ export default function AdminBuildingTab() {
   };
 
   const handleDelete = async (lot: any) => {
-    if (!window.confirm(`Delete "${lot.name}"? This action cannot be undone.`)) return;
-    try {
-      await parkingLotService.deleteParkingLot(lot._id);
-      showToast('Building deleted');
-      fetchLots();
-    } catch (e: any) { showToast(e.message || 'Error deleting', false); }
+    askConfirm(
+      `Delete "${lot.name}"?`,
+      async () => {
+        try {
+          await parkingLotService.deleteParkingLot(lot._id);
+          showToast('Building deleted');
+          fetchLots();
+        } catch (e: any) { showToast(e.message || 'Error deleting', false); }
+      },
+      'This action cannot be undone.',
+      'Delete Building'
+    );
   };
 
   const filtered = lots.filter(l =>
@@ -483,6 +495,7 @@ export default function AdminBuildingTab() {
         />
       )}
       {toast && <Toast msg={toast.msg} ok={toast.ok} />}
+      {ConfirmNode}
     </div>
   );
 }

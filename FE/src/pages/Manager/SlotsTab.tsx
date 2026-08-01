@@ -1,271 +1,509 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Plus, Pencil, Trash2, X, MapPin, RefreshCw, Search, Car, CircleCheck, Wrench, Lock } from 'lucide-react';
+import { Plus, Pencil, Trash2, X, MapPin, RefreshCw, Car, CircleCheck, Wrench } from 'lucide-react';
 import parkingSlotService from '../../services/api/parkingSlotService';
 import parkingLotService from '../../services/api/parkingLotService';
 import floorService from '../../services/api/floorService';
 import zoneService from '../../services/api/zoneService';
 import vehicleTypeService from '../../services/api/vehicleTypeService';
-import { Toast, useToast } from './shared';
+import { Toast, useToast, useConfirm } from './shared';
 
-
-const EMPTY = { slotCode: '', status: 'available', parkingLot: '', floor: '', zone: '', vehicleType: '' };
-
-const STATUS_MAP: Record<string, { l: string, c: string }> = {
-  available: { l: 'Available', c: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-  occupied: { l: 'Occupied', c: 'bg-rose-50 text-rose-700 border-rose-200' },
-  reserved: { l: 'Reserved', c: 'bg-amber-50 text-amber-700 border-amber-200' },
-  maintenance: { l: 'Maintenance', c: 'bg-gray-100 text-gray-600 border-gray-300' },
-  locked: { l: 'Locked', c: 'bg-slate-800 text-slate-100 border-slate-900' },
+// ─── Status config ─────────────────────────────────────────────────────────────
+const S: Record<string, { label: string; bg: string; border: string; text: string }> = {
+  available:   { label: 'Available',   bg: 'bg-emerald-50',  border: 'border-emerald-300', text: 'text-emerald-700' },
+  occupied:    { label: 'Occupied',    bg: 'bg-rose-50',     border: 'border-rose-400',    text: 'text-rose-700' },
+  reserved:    { label: 'Reserved',    bg: 'bg-amber-50',    border: 'border-amber-300',   text: 'text-amber-700' },
+  maintenance: { label: 'Maintenance', bg: 'bg-gray-100',    border: 'border-gray-300',    text: 'text-gray-500' },
+  locked:      { label: 'Locked',      bg: 'bg-slate-800',   border: 'border-slate-900',   text: 'text-slate-100' },
 };
 
-function SlotModal({ initial, lots, floors, zones, vTypes, onSave, onClose, loading }: any) {
-  const [form, setForm] = useState(initial);
-  const set = (k: string, v: any) => setForm((f: any) => ({ ...f, [k]: v }));
+// ─── Add Slots Modal (Bulk + Single) ──────────────────────────────────────────
+function AddSlotsModal({ floorId, zoneId, zones, vTypes, lotId, onDone, onClose }: any) {
+  const [mode, setMode] = useState<'bulk' | 'single'>('bulk');
+  // Shared
+  const [selZone, setSelZone] = useState(zoneId || '');
+  const [selVT, setSelVT] = useState('');
+  const [saving, setSaving] = useState(false);
+  const { showToast } = useToast();
+  // Bulk
+  const [prefix, setPrefix] = useState('');
+  const [count, setCount] = useState(10);
+  const [startNum, setStartNum] = useState(1);
+  // Single
+  const [slotCode, setSlotCode] = useState('');
 
-  const lotFloors = floors.filter((f: any) => f.parkingLot?._id === form.parkingLot || f.parkingLot === form.parkingLot);
-  const floorZones = zones.filter((z: any) => z.floor?._id === form.floor || z.floor === form.floor);
+  // Compute available vehicle types based on selected zone
+  const availableVTypes = useMemo(() => {
+    if (!selZone) return vTypes;
+    const zone = zones.find((z: any) => z._id === selZone);
+    if (!zone || !zone.allowedVehicleTypes?.length) return vTypes;
+    const allowedIds = zone.allowedVehicleTypes.map((v: any) => v._id || v);
+    return vTypes.filter((vt: any) => allowedIds.includes(vt._id));
+  }, [selZone, zones, vTypes]);
+
+  // Auto-select vehicle type when zone changes
+  useEffect(() => {
+    if (availableVTypes.length === 1) {
+      setSelVT(availableVTypes[0]._id);
+    } else if (!availableVTypes.find((vt: any) => vt._id === selVT)) {
+      setSelVT('');
+    }
+  }, [availableVTypes]);
+
+  const preview = useMemo(() => {
+    if (!prefix || count < 1) return [];
+    return Array.from({ length: Math.min(count, 6) }, (_, i) =>
+      `${prefix.toUpperCase()}-${String(startNum + i).padStart(3, '0')}`
+    );
+  }, [prefix, count, startNum]);
+
+  const handleBulk = async () => {
+    if (!prefix || !selVT) return showToast('Prefix and vehicle type are required', false);
+    if (count < 1 || count > 200) return showToast('Count must be 1–200', false);
+    setSaving(true);
+    try {
+      const slots = Array.from({ length: count }, (_, i) => ({
+        slotCode: `${prefix.toUpperCase()}-${String(startNum + i).padStart(3, '0')}`,
+        floor: floorId,
+        zone: selZone || undefined,
+        vehicleType: selVT,
+        status: 'available',
+      }));
+      const res = await parkingSlotService.bulkCreate(slots, lotId);
+      showToast(`Created ${(res as any[]).length || count} slots`);
+      onDone();
+    } catch (e: any) { showToast(e.message || 'Error', false); }
+    finally { setSaving(false); }
+  };
+
+  const handleSingle = async () => {
+    if (!slotCode.trim() || !selVT) return showToast('Slot code and vehicle type are required', false);
+    setSaving(true);
+    try {
+      await parkingSlotService.createSlot({
+        slotCode: slotCode.trim().toUpperCase(),
+        parkingLot: lotId,
+        floor: floorId,
+        zone: selZone || undefined,
+        vehicleType: selVT,
+      });
+      showToast('Slot created');
+      onDone();
+    } catch (e: any) { showToast(e.message || 'Error', false); }
+    finally { setSaving(false); }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 p-7 anim-fade overflow-y-auto max-h-[90vh]">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-lg font-semibold text-gray-900">{initial._id ? 'Edit Slot' : 'Add Slot'}</h2>
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-7">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-gray-900">Add Slots</h2>
           <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100"><X className="w-4 h-4" /></button>
         </div>
-        <div className="space-y-4">
+
+        {/* Mode toggle */}
+        <div className="flex gap-1 bg-gray-100 rounded-xl p-1 mb-5">
+          {(['bulk', 'single'] as const).map(m => (
+            <button key={m} onClick={() => setMode(m)}
+              className={`flex-1 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                mode === m ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'
+              }`}>
+              {m === 'bulk' ? '⚡ Bulk (auto generate)' : '+ Single slot'}
+            </button>
+          ))}
+        </div>
+
+        {/* Shared: Zone + VehicleType */}
+        <div className="grid grid-cols-2 gap-3 mb-3">
           <div>
-            <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">Building *</label>
-            <select value={form.parkingLot} onChange={e => { set('parkingLot', e.target.value); set('floor', ''); set('zone', ''); }} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 bg-white">
-              <option value="">-- Select --</option>
-              {lots.map((l: any) => <option key={l._id} value={l._id}>{l.name}</option>)}
+            <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Zone</label>
+            <select value={selZone} onChange={e => setSelZone(e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-gray-900">
+              <option value="">None</option>
+              {zones.map((z: any) => <option key={z._id} value={z._id}>{z.name} ({z.code})</option>)}
             </select>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">Floor *</label>
-              <select value={form.floor} onChange={e => { set('floor', e.target.value); set('zone', ''); }} disabled={!form.parkingLot} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 bg-white disabled:bg-gray-50">
-                <option value="">-- Select --</option>
-                {lotFloors.map((f: any) => <option key={f._id} value={f._id}>{f.name}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">Zone</label>
-              <select value={form.zone} onChange={e => set('zone', e.target.value)} disabled={!form.floor} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 bg-white disabled:bg-gray-50">
-                <option value="">-- None --</option>
-                {floorZones.map((z: any) => <option key={z._id} value={z._id}>{z.name}</option>)}
-              </select>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">Slot Code (e.g. A12) *</label>
-              <input type="text" value={form.slotCode || ''} onChange={e => set('slotCode', e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 uppercase" />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">Vehicle Type *</label>
-              <select value={form.vehicleType} onChange={e => set('vehicleType', e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 bg-white">
-                <option value="">-- Select --</option>
-                {vTypes.map((v: any) => <option key={v._id} value={v._id}>{v.name}</option>)}
-              </select>
-            </div>
-          </div>
           <div>
-            <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">Status</label>
-            <select value={form.status} onChange={e => set('status', e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 bg-white">
-              {Object.entries(STATUS_MAP).map(([k, v]) => <option key={k} value={k}>{v.l}</option>)}
+            <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Vehicle Type *</label>
+            <select value={selVT} onChange={e => setSelVT(e.target.value)}
+              disabled={availableVTypes.length === 1}
+              className={`w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-gray-900 ${availableVTypes.length === 1 ? 'opacity-70 cursor-not-allowed bg-gray-50' : ''}` }>
+              <option value="">{selZone ? '-- Select --' : '-- Select zone first --'}</option>
+              {availableVTypes.map((v: any) => <option key={v._id} value={v._id}>{v.code}</option>)}
             </select>
+            {selZone && availableVTypes.length === 1 && (
+              <p className="text-[10px] text-emerald-600 mt-1">Auto-selected from zone settings</p>
+            )}
           </div>
         </div>
-        <div className="flex gap-3 mt-6">
+
+        {mode === 'bulk' ? (
+          <div className="space-y-3">
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Prefix *</label>
+                <input value={prefix} onChange={e => setPrefix(e.target.value)} placeholder="e.g. A" maxLength={5}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm uppercase focus:outline-none focus:ring-2 focus:ring-gray-900" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Start #</label>
+                <input type="number" min={1} value={startNum} onChange={e => setStartNum(parseInt(e.target.value) || 1)}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Quantity *</label>
+                <input type="number" min={1} max={200} value={count} onChange={e => setCount(parseInt(e.target.value) || 1)}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+              </div>
+            </div>
+            {preview.length > 0 && (
+              <div className="bg-gray-50 rounded-xl p-3">
+                <p className="text-[10px] font-medium text-gray-400 uppercase tracking-wider mb-2">Preview — {count} slots total</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {preview.map(code => (
+                    <span key={code} className="text-xs font-mono font-bold bg-white border border-gray-200 px-2 py-0.5 rounded-md text-gray-700">{code}</span>
+                  ))}
+                  {count > 6 && <span className="text-xs text-gray-400 self-center">+{count - 6} more…</span>}
+                </div>
+              </div>
+            )}
+            <div className="flex gap-3 pt-1">
+              <button onClick={onClose} className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50">Cancel</button>
+              <button onClick={handleBulk} disabled={saving || !prefix || !selVT}
+                className="flex-1 py-2.5 bg-gray-900 text-white rounded-xl text-sm font-medium hover:bg-gray-700 disabled:opacity-50">
+                {saving ? 'Creating...' : `Create ${count} Slots`}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Slot Code * (e.g. A-001)</label>
+              <input value={slotCode} onChange={e => setSlotCode(e.target.value)} placeholder="A-001"
+                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm uppercase focus:outline-none focus:ring-2 focus:ring-gray-900" />
+            </div>
+            <div className="flex gap-3 pt-1">
+              <button onClick={onClose} className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50">Cancel</button>
+              <button onClick={handleSingle} disabled={saving || !slotCode || !selVT}
+                className="flex-1 py-2.5 bg-gray-900 text-white rounded-xl text-sm font-medium hover:bg-gray-700 disabled:opacity-50">
+                {saving ? 'Saving...' : 'Add Slot'}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Edit Slot Modal ───────────────────────────────────────────────────────────
+function EditSlotModal({ slot, vTypes, onSave, onClose, loading }: any) {
+  const [form, setForm] = useState({ status: slot.status, vehicleType: slot.vehicleType?._id || slot.vehicleType, slotCode: slot.slotCode, notes: slot.notes || '' });
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-base font-semibold text-gray-900">Edit Slot <span className="font-mono text-gray-500">{slot.slotCode}</span></h2>
+          <button onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100"><X className="w-4 h-4" /></button>
+        </div>
+        <div className="space-y-3">
+          <div>
+            <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Status</label>
+            <select value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-gray-900">
+              {Object.entries(S).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Vehicle Type</label>
+            <select value={form.vehicleType} onChange={e => setForm(f => ({ ...f, vehicleType: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-gray-900">
+              <option value="">-- Select --</option>
+              {vTypes.map((v: any) => <option key={v._id} value={v._id}>{v.code}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Notes</label>
+            <input value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+          </div>
+        </div>
+        <div className="flex gap-3 mt-5">
           <button onClick={onClose} className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50">Cancel</button>
-          <button onClick={() => onSave(form)} disabled={loading} className="flex-1 py-2.5 bg-gray-900 text-white rounded-xl text-sm font-medium hover:bg-gray-700 disabled:opacity-50">
-            {loading ? 'Saving...' : 'Save'}
-          </button>
+          <button onClick={() => onSave(form)} disabled={loading} className="flex-1 py-2.5 bg-gray-900 text-white rounded-xl text-sm font-medium hover:bg-gray-700 disabled:opacity-50">{loading ? 'Saving...' : 'Save'}</button>
         </div>
       </div>
     </div>
   );
 }
 
+// ─── Main ──────────────────────────────────────────────────────────────────────
 export default function SlotsTab({ globalLotId, setGlobalLotId }: any) {
-  const [items, setItems] = useState<any[]>([]);
-  const [lots, setLots] = useState<any[]>([]);
   const [floors, setFloors] = useState<any[]>([]);
   const [zones, setZones] = useState<any[]>([]);
+  const [slots, setSlots] = useState<any[]>([]);
+  const [lots, setLots] = useState<any[]>([]);
   const [vTypes, setVTypes] = useState<any[]>([]);
 
-  const filterLot = globalLotId;
-  const setFilterLot = setGlobalLotId;
-  const [search, setSearch] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [selFloor, setSelFloor] = useState<any>(null);
+  const [selZone, setSelZone] = useState<string>('');
+  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [modal, setModal] = useState<any>(null);
+  const [editModal, setEditModal] = useState<any>(null);
+  const [addModal, setAddModal] = useState(false);
   const { toast, showToast } = useToast();
+  const { askConfirm, ConfirmNode } = useConfirm();
+
   const user = (() => { try { return JSON.parse(localStorage.getItem('user') || '{}'); } catch { return {}; } })();
   const isManager = user?.role === 'parking_manager';
 
-  const fetchDeps = async () => {
-    try {
-      const rl = await parkingLotService.getParkingLots({ limit: 100 });
-      let ls = rl.data || rl.docs || rl || [];
-      if (isManager && user?.assignedParkingLot) {
-        ls = ls.filter((l: any) => l._id === user.assignedParkingLot);
+  // Fetch lots
+  useEffect(() => {
+    parkingLotService.getParkingLots({ limit: 100 }).then(res => {
+      let ls = res.data || res.docs || res || [];
+      if (isManager) {
+        const raw = user?.assignedParkingLot;
+        const ids: string[] = Array.isArray(raw) ? raw.filter(Boolean) : (raw ? [raw] : []);
+        if (ids.length) ls = ls.filter((l: any) => ids.includes(l._id));
       }
       setLots(ls);
+    }).catch(() => {});
+  }, []);
 
-      const [rf, rz, rv] = await Promise.all([
-        floorService.getFloors({ limit: 500 }),
-        zoneService.getZones({ limit: 500 }),
-        vehicleTypeService.getAll()
-      ]);
-      setFloors(rf.data || rf.docs || rf || []);
-      setZones(rz.data || rz.docs || rz || []);
-      setVTypes(Array.isArray(rv) ? rv : (rv as any).data || []);
-    } catch (e: any) { }
-  };
+  // Fetch vehicle types for this lot
+  useEffect(() => {
+    vehicleTypeService.getAll(globalLotId ? { parkingLot: globalLotId } : undefined)
+      .then(res => setVTypes(Array.isArray(res) ? res : (res as any).data || []))
+      .catch(() => {});
+  }, [globalLotId]);
 
+  // Fetch floors when lot changes
+  useEffect(() => {
+    if (!globalLotId) { setFloors([]); setSelFloor(null); return; }
+    floorService.getFloors({ limit: 100, parkingLot: globalLotId }).then(res => {
+      const list = (res.data || res.docs || res || []).sort((a: any, b: any) => a.floorNumber - b.floorNumber);
+      setFloors(list);
+      setSelFloor(list[0] || null);
+    }).catch(() => {});
+  }, [globalLotId]);
+
+  // Fetch zones when floor changes
+  useEffect(() => {
+    if (!selFloor) { setZones([]); setSelZone(''); return; }
+    zoneService.getZones({ floor: selFloor._id, limit: 100 }).then(res => {
+      setZones(res.data || res.docs || res || []);
+      setSelZone('');
+    }).catch(() => {});
+  }, [selFloor?._id]);
+
+  // Fetch slots
   const fetchSlots = useCallback(async () => {
+    if (!globalLotId || !selFloor) { setSlots([]); return; }
     setLoading(true);
     try {
-      const res = await parkingSlotService.getSlots({ limit: 100, parkingLot: filterLot || undefined, search: search || undefined });
-      setItems(res.data || res.docs || res || []);
-    } catch (e: any) { showToast(e.message || 'Error loading data', false); }
+      const res = await parkingSlotService.getSlots({
+        parkingLot: globalLotId,
+        floor: selFloor._id,
+        zone: selZone || undefined,
+        limit: 500,
+      });
+      setSlots(res.data || res.docs || res || []);
+    } catch (e: any) { showToast(e.message || 'Error', false); }
     finally { setLoading(false); }
-  }, [filterLot, search]);
+  }, [globalLotId, selFloor?._id, selZone]);
 
-  useEffect(() => { fetchDeps(); }, []);
-  useEffect(() => {
-    const t = setTimeout(() => { fetchSlots(); }, 300);
-    return () => clearTimeout(t);
-  }, [fetchSlots]);
+  useEffect(() => { fetchSlots(); }, [fetchSlots]);
 
-  const handleSave = async (form: any) => {
-    if (!form.slotCode || !form.parkingLot || !form.floor || !form.vehicleType) return showToast('Please fill all required fields', false);
+  const handleEdit = async (form: any) => {
     setSaving(true);
     try {
-      const payload = { ...form, parkingLot: form.parkingLot._id || form.parkingLot, floor: form.floor._id || form.floor, zone: form.zone?._id || form.zone || undefined, vehicleType: form.vehicleType._id || form.vehicleType };
-      if (form._id) await parkingSlotService.updateSlot(form._id, payload);
-      else await parkingSlotService.createSlot(payload);
-      showToast(form._id ? 'Updated successfully' : 'Created successfully');
-      setModal(null);
+      await parkingSlotService.updateSlot(editModal._id, form);
+      showToast('Slot updated');
+      setEditModal(null);
       fetchSlots();
-    } catch (e: any) { showToast(e.message || 'Error saving data', false); }
+    } catch (e: any) { showToast(e.message || 'Error', false); }
     finally { setSaving(false); }
   };
 
-  const handleDelete = async (item: any) => {
-    if (!window.confirm(`Delete slot "${item.slotCode}"?`)) return;
-    try {
-      await parkingSlotService.deleteSlot(item._id);
-      showToast('Slot deleted');
-      fetchSlots();
-    } catch (e: any) { showToast(e.message || 'Error deleting', false); }
+  const handleDelete = async (slot: any) => {
+    if (slot.status === 'occupied') return showToast('Cannot delete an occupied slot', false);
+    askConfirm(
+      `Delete slot "${slot.slotCode}"?`,
+      async () => {
+        try {
+          await parkingSlotService.deleteSlot(slot._id);
+          showToast('Slot deleted');
+          fetchSlots();
+        } catch (e: any) { showToast(e.message || 'Error', false); }
+      }
+    );
   };
 
+  // Stats
   const stats = useMemo(() => ({
-    total: items.length,
-    occupied: items.filter(s => s.status === 'occupied').length,
-    available: items.filter(s => s.status === 'available').length,
-    reserved: items.filter(s => s.status === 'reserved').length,
-    maintenance: items.filter(s => s.status === 'maintenance').length,
-    locked: items.filter(s => s.status === 'locked').length,
-  }), [items]);
+    total: slots.length,
+    available: slots.filter(s => s.status === 'available').length,
+    occupied: slots.filter(s => s.status === 'occupied').length,
+    maintenance: slots.filter(s => s.status === 'maintenance').length,
+  }), [slots]);
+
+  const floorLabel = (f: any) => {
+    if (f.floorType === 'basement') return `B${Math.abs(f.floorNumber)}`;
+    if (f.floorNumber === 0) return 'G';
+    return `F${f.floorNumber}`;
+  };
+
+  const noLot = !globalLotId;
 
   return (
     <div>
+      {/* Header */}
       <div className="flex items-end justify-between mb-6">
         <div>
           <p className="text-xs font-medium text-gray-400 uppercase tracking-widest mb-1">Management</p>
           <h1 className="text-2xl font-semibold text-gray-900 flex items-center gap-2"><MapPin className="w-6 h-6" /> Parking Slots</h1>
         </div>
         <div className="flex items-center gap-3">
-          <select value={filterLot || ''} onChange={e => setFilterLot?.(e.target.value)} disabled={isManager} className={`border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none ${isManager ? 'opacity-70 cursor-not-allowed bg-gray-50' : 'bg-white'}`}>
-            {!isManager && <option value="">All Buildings</option>}
+          <select value={globalLotId || ''} onChange={e => setGlobalLotId?.(e.target.value)}
+            disabled={isManager && lots.length <= 1}
+            className="border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none bg-white">
+            {!isManager && <option value="">-- Select Building --</option>}
             {lots.map(l => <option key={l._id} value={l._id}>{l.name}</option>)}
           </select>
-          <button onClick={() => setModal({ ...EMPTY, parkingLot: filterLot })} className="flex items-center gap-2 px-4 py-2.5 bg-gray-900 text-white text-sm font-medium rounded-xl hover:bg-gray-700">
-            <Plus className="w-4 h-4" /> Add Slot
-          </button>
+          {!noLot && selFloor && (
+            <button onClick={() => setAddModal(true)}
+              className="flex items-center gap-2 px-4 py-2.5 bg-gray-900 text-white text-sm font-medium rounded-xl hover:bg-gray-700">
+              <Plus className="w-4 h-4" /> Add Slots
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Stats summary */}
-      {!loading && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-5">
-          <div className="bg-white border border-gray-100 rounded-xl p-4 shadow-sm">
-            <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">Total Slots</p>
-            <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
-          </div>
-          <div className="bg-rose-50 border border-rose-100 rounded-xl p-4 shadow-sm">
-            <div className="flex items-center gap-1.5 mb-1">
-              <Car className="w-3 h-3 text-rose-500" />
-              <p className="text-[10px] font-semibold text-rose-400 uppercase tracking-wider">Occupied</p>
-            </div>
-            <p className="text-2xl font-bold text-rose-600">{stats.occupied}</p>
-          </div>
-          <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4 shadow-sm">
-            <div className="flex items-center gap-1.5 mb-1">
-              <CircleCheck className="w-3 h-3 text-emerald-500" />
-              <p className="text-[10px] font-semibold text-emerald-400 uppercase tracking-wider">Available</p>
-            </div>
-            <p className="text-2xl font-bold text-emerald-600">{stats.available}</p>
-          </div>
-          <div className="bg-amber-50 border border-amber-100 rounded-xl p-4 shadow-sm">
-            <p className="text-[10px] font-semibold text-amber-400 uppercase tracking-wider mb-1">Reserved</p>
-            <p className="text-2xl font-bold text-amber-600">{stats.reserved}</p>
-          </div>
-          <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 shadow-sm">
-            <div className="flex items-center gap-1.5 mb-1">
-              <Wrench className="w-3 h-3 text-gray-400" />
-              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Maintenance</p>
-            </div>
-            <p className="text-2xl font-bold text-gray-600">{stats.maintenance}</p>
-          </div>
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm">
-            <div className="flex items-center gap-1.5 mb-1">
-              <Lock className="w-3 h-3 text-slate-400" />
-              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Locked</p>
-            </div>
-            <p className="text-2xl font-bold text-slate-100">{stats.locked}</p>
-          </div>
+      {noLot ? (
+        <div className="py-24 text-center text-gray-400">
+          <MapPin className="w-10 h-10 mx-auto mb-3 opacity-30" />
+          <p className="text-sm">Select a building to view parking slots</p>
         </div>
+      ) : (
+        <>
+          {/* Floor tabs */}
+          <div className="flex gap-1 border-b border-gray-100 mb-0 overflow-x-auto pb-0">
+            {floors.map(f => (
+              <button key={f._id} onClick={() => setSelFloor(f)}
+                className={`px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition-colors -mb-px ${selFloor?._id === f._id ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+                {f.floorType === 'basement' ? `Basement B${Math.abs(f.floorNumber)}` : f.floorNumber === 0 ? `Ground Floor` : `Floor ${f.floorNumber}`}
+                {f.name !== floorLabel(f) && ` (${f.name})`}
+              </button>
+            ))}
+          </div>
+
+          {/* Zone filter chips */}
+          {zones.length > 0 && (
+            <div className="flex gap-2 mt-3 mb-4 flex-wrap">
+              <button onClick={() => setSelZone('')}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${!selZone ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                All Zones
+              </button>
+              {zones.map(z => (
+                <button key={z._id} onClick={() => setSelZone(z._id)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${selZone === z._id ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                  {z.name}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Stats bar */}
+          {!loading && slots.length > 0 && (
+            <div className="flex items-center gap-4 mb-4 px-1 text-xs text-gray-500">
+              <span className="font-semibold text-gray-800">{stats.total} slots</span>
+              <span className="flex items-center gap-1 text-emerald-600"><CircleCheck className="w-3.5 h-3.5" />{stats.available} available</span>
+              <span className="flex items-center gap-1 text-rose-500"><Car className="w-3.5 h-3.5" />{stats.occupied} occupied</span>
+              {stats.maintenance > 0 && <span className="flex items-center gap-1 text-gray-400"><Wrench className="w-3.5 h-3.5" />{stats.maintenance} maintenance</span>}
+            </div>
+          )}
+
+          {/* Legend */}
+          {!loading && slots.length > 0 && (
+            <div className="flex items-center gap-3 mb-4 text-xs text-gray-500 flex-wrap">
+              {Object.entries(S).map(([k, v]) => (
+                <div key={k} className="flex items-center gap-1.5">
+                  <div className={`w-3 h-3 rounded border ${v.bg} ${v.border}`} />
+                  <span>{v.label}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Visual Slot Grid */}
+          {loading ? (
+            <div className="py-16 text-center text-gray-400"><RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2" />Loading slots...</div>
+          ) : slots.length === 0 ? (
+            <div className="py-16 text-center text-gray-400">
+              <MapPin className="w-8 h-8 mx-auto mb-2 opacity-30" />
+              <p className="text-sm">No slots on this floor/zone</p>
+              {selFloor && (
+                <button onClick={() => setAddModal(true)} className="mt-3 flex items-center gap-1.5 text-xs text-gray-700 font-semibold mx-auto hover:underline">
+                  <Plus className="w-3.5 h-3.5" /> Add slots
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+              {/* Entry/Exit labels */}
+              <div className="flex justify-between text-xs font-bold text-gray-400 mb-3 px-1">
+                <span>← ENTRY</span>
+                <span>EXIT →</span>
+              </div>
+
+              {/* Slot grid */}
+              <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))' }}>
+                {slots.map(slot => {
+                  const st = S[slot.status] || S.available;
+                  return (
+                    <div key={slot._id} className="group relative">
+                      <div
+                        onClick={() => setEditModal(slot)}
+                        className={`cursor-pointer rounded-xl border-2 p-2 text-center transition-all hover:shadow-md hover:-translate-y-0.5 ${st.bg} ${st.border}`}>
+                        <p className={`text-[10px] font-mono font-bold leading-tight ${st.text}`}>{slot.slotCode}</p>
+                        {slot.vehicleType?.code && (
+                          <p className={`text-[9px] mt-0.5 opacity-60 ${st.text}`}>{slot.vehicleType.code}</p>
+                        )}
+                      </div>
+                      {/* Delete on hover */}
+                      <button
+                        onClick={() => handleDelete(slot)}
+                        className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full text-[8px] items-center justify-center hidden group-hover:flex shadow-sm z-10">
+                        ×
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Aisle divider visual */}
+              <div className="my-4 flex items-center gap-2">
+                <div className="flex-1 border-t border-dashed border-gray-200" />
+                <span className="text-[10px] text-gray-300 font-medium">AISLE</span>
+                <div className="flex-1 border-t border-dashed border-gray-200" />
+              </div>
+            </div>
+          )}
+        </>
       )}
 
-      <div className="relative mb-5">
-        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by code..." className="w-full pl-11 pr-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 shadow-sm" />
-      </div>
-
-      <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
-        <div className="grid grid-cols-[80px_1fr_100px_100px_100px_80px] px-6 py-3 border-b border-gray-100 bg-gray-50 text-xs font-medium text-gray-400 uppercase tracking-wider">
-          {['Code', 'Status', 'Type', 'Floor', 'Zone', ''].map(h => <div key={h}>{h}</div>)}
-        </div>
-        {loading ? (
-          <div className="py-16 text-center text-sm text-gray-400"><RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2" />Loading...</div>
-        ) : items.length === 0 ? (
-          <div className="py-16 text-center text-sm text-gray-400">No data available</div>
-        ) : items.map((item, i) => {
-          const st = STATUS_MAP[item.status] || STATUS_MAP.available;
-          return (
-            <div key={item._id} className={`grid grid-cols-[80px_1fr_100px_100px_100px_80px] px-6 py-4 items-center hover:bg-gray-50/60 transition-colors ${i < items.length - 1 ? 'border-b border-gray-100' : ''}`}>
-              <span className="text-sm font-mono font-bold text-gray-900">{item.slotCode}</span>
-              <div>
-                <span className={`text-[10px] font-bold px-2.5 py-1 rounded-md border ${st.c}`}>{st.l}</span>
-              </div>
-              <span className="text-xs text-gray-600">{item.vehicleType?.name || '—'}</span>
-              <span className="text-xs font-medium text-gray-500">{item.floor?.name || '—'}</span>
-              <span className="text-xs font-medium text-gray-500">{item.zone?.code || '—'}</span>
-              <div className="flex items-center gap-2 justify-end">
-                <button onClick={() => setModal({ ...item, parkingLot: item.parkingLot?._id || item.parkingLot, floor: item.floor?._id || item.floor, zone: item.zone?._id || item.zone, vehicleType: item.vehicleType?._id || item.vehicleType })} className="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg"><Pencil className="w-3.5 h-3.5" /></button>
-                <button onClick={() => handleDelete(item)} className="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg"><Trash2 className="w-3.5 h-3.5" /></button>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {modal && <SlotModal initial={modal} lots={lots} floors={floors} zones={zones} vTypes={vTypes} onSave={handleSave} onClose={() => setModal(null)} loading={saving} />}
+      {addModal && selFloor && (
+        <AddSlotsModal
+          floorId={selFloor._id}
+          zoneId={selZone}
+          zones={zones}
+          vTypes={vTypes}
+          lotId={globalLotId}
+          onDone={() => { setAddModal(false); fetchSlots(); }}
+          onClose={() => setAddModal(false)}
+        />
+      )}
+      {editModal && (
+        <EditSlotModal slot={editModal} vTypes={vTypes} onSave={handleEdit} onClose={() => setEditModal(null)} loading={saving} />
+      )}
+      {ConfirmNode}
       {toast && <Toast msg={toast.msg} ok={toast.ok} />}
     </div>
   );

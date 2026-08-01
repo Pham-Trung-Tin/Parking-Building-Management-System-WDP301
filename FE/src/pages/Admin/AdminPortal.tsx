@@ -21,6 +21,7 @@ import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import useUsers from "../../hooks/useUsers";
 import { userService } from "../../services/api";
+import { useConfirm } from '../../components/ConfirmDialog';
 
 // Import custom helpers
 import {
@@ -102,6 +103,7 @@ export default function AdminPortal() {
     setToast(msg);
     setTimeout(() => setToast(null), 3000);
   };
+  const { askConfirm, ConfirmNode } = useConfirm();
 
   const togglePermission = (id, role) => {
     setPermissions(
@@ -131,15 +133,18 @@ export default function AdminPortal() {
     }
   };
 
-  const handleDeleteUser = async (id: string) => {
-    if (window.confirm("Are you sure you want to delete this user?")) {
-      try {
-        await deleteUser(id);
-        showToast("User removed");
-      } catch (err: any) {
-        showToast(err.message || "Failed to delete user");
+  const handleDeleteUser = (id: string) => {
+    askConfirm(
+      'Delete this user?',
+      async () => {
+        try {
+          await deleteUser(id);
+          showToast('User removed');
+        } catch (err: any) {
+          showToast(err.message || 'Failed to delete user');
+        }
       }
-    }
+    );
   };
 
   const handleCreateUser = async (userData) => {
@@ -936,6 +941,7 @@ export default function AdminPortal() {
 
       {/* ── Toast ── */}
       {toast && <Toast message={toast} onDone={() => setToast(null)} />}
+      {ConfirmNode}
     </>
   );
 }

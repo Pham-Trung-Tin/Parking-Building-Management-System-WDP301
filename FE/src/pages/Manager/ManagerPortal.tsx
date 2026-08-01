@@ -1,21 +1,20 @@
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Building, Car, Layers, Grid, MapPin, Users, LogOut, Shield, DollarSign } from 'lucide-react';
+import { Building, Car, Layers, MapPin, Users, LogOut, Shield, DollarSign, ChevronDown } from 'lucide-react';
 import BuildingsTab from './BuildingsTab';
 import VehicleTypesTab from './VehicleTypesTab';
 import FloorsTab from './FloorsTab';
-import ZonesTab from './ZonesTab';
 import SlotsTab from './SlotsTab';
 import StaffAssignmentTab from './StaffAssignmentTab';
 import RevenueTab from './RevenueTab';
 import ManagerWorkScheduleTab from './ManagerWorkScheduleTab';
 import { Calendar } from 'lucide-react';
+import parkingLotService from '../../services/api/parkingLotService';
 
 const NAV = [
   { id: 'buildings', label: 'Buildings', icon: Building },
   { id: 'vehicleTypes', label: 'Vehicle Types', icon: Car },
-  { id: 'floors', label: 'Floors', icon: Layers },
-  { id: 'zones', label: 'Zones', icon: Grid },
+  { id: 'floors', label: 'Floors & Zones', icon: Layers },
   { id: 'slots', label: 'Parking Slots', icon: MapPin },
   { id: 'staff', label: 'Staff Assignment', icon: Users },
   { id: 'schedules', label: 'Work Schedules', icon: Calendar },
@@ -25,14 +24,36 @@ const NAV = [
 export default function ManagerPortal() {
   const navigate = useNavigate();
   const [tab, setTab] = useState('buildings');
-  const user = (() => { try { return JSON.parse(localStorage.getItem('user') || '{}'); } catch { return {}; } })();
+  const user = useMemo(() => { try { return JSON.parse(localStorage.getItem('user') || '{}'); } catch { return {}; } }, []);
 
-  const [globalLotId, setGlobalLotId] = useState(() => {
-    if (user?.role === 'parking_manager' && user?.assignedParkingLot) {
-      return user.assignedParkingLot;
-    }
-    return '';
-  });
+  // assignedParkingLot can be string (legacy) or string[] (new)
+  const assignedIds: string[] = useMemo(() => {
+    const raw = user?.assignedParkingLot;
+    if (!raw) return [];
+    if (Array.isArray(raw)) return raw.filter(Boolean);
+    return [raw];
+  }, [user]);
+
+  const [assignedLots, setAssignedLots] = useState<any[]>([]);
+  const [globalLotId, setGlobalLotId] = useState('');
+
+  // Fetch the actual lot objects for the assigned IDs
+  useEffect(() => {
+    if (!assignedIds.length) return;
+    parkingLotService.getParkingLots({ limit: 100 }).then((res) => {
+      const all: any[] = res.data || res.docs || (Array.isArray(res) ? res : []);
+      const filtered = all.filter((l: any) => assignedIds.includes(l._id));
+      setAssignedLots(filtered);
+      // Default to first lot if none selected yet
+      if (!globalLotId && filtered.length > 0) {
+        setGlobalLotId(filtered[0]._id);
+      }
+    }).catch(() => {});
+  }, [assignedIds.join(',')]);
+
+  const isManager = user?.role === 'parking_manager';
+  const multiLot = isManager && assignedLots.length > 1;
+  const activeLot = assignedLots.find(l => l._id === globalLotId);
 
   const handleLogout = () => {
     localStorage.removeItem('accessToken');
@@ -54,6 +75,8 @@ export default function ManagerPortal() {
               <p className="text-[10px] text-gray-400 uppercase tracking-wider">Parking Management</p>
             </div>
           </div>
+
+
         </div>
 
         <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
@@ -96,9 +119,8 @@ export default function ManagerPortal() {
       <div className="flex-1 overflow-auto">
         <div className="max-w-6xl mx-auto px-10 py-8">
           {tab === 'buildings' && <BuildingsTab globalLotId={globalLotId} setGlobalLotId={setGlobalLotId} />}
-          {tab === 'vehicleTypes' && <VehicleTypesTab />}
+          {tab === 'vehicleTypes' && <VehicleTypesTab globalLotId={globalLotId} />}
           {tab === 'floors' && <FloorsTab globalLotId={globalLotId} setGlobalLotId={setGlobalLotId} />}
-          {tab === 'zones' && <ZonesTab globalLotId={globalLotId} setGlobalLotId={setGlobalLotId} />}
           {tab === 'slots' && <SlotsTab globalLotId={globalLotId} setGlobalLotId={setGlobalLotId} />}
           {tab === 'staff' && <StaffAssignmentTab globalLotId={globalLotId} setGlobalLotId={setGlobalLotId} />}
           {tab === 'schedules' && <ManagerWorkScheduleTab globalLotId={globalLotId} />}
