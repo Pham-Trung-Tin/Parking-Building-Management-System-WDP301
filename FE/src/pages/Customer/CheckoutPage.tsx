@@ -137,14 +137,23 @@ const CheckoutPage = () => {
                 return d.toISOString();
             };
 
+            const parsedEntry = parseDateTime(b.scheduledDate, b.startTime);
+            let parsedExit = parseDateTime(b.scheduledDate, b.endTime || b.startTime);
+
+            if (parsedEntry && parsedExit && new Date(parsedExit) < new Date(parsedEntry)) {
+                const exitD = new Date(parsedExit);
+                exitD.setDate(exitD.getDate() + 1);
+                parsedExit = exitD.toISOString();
+            }
+
             setBookingDetail({
                 bookingCode: b.bookingCode || b._id,
                 parkingLotName: typeof b.parkingLot === 'object' ? b.parkingLot?.name : data.parkingLotName,
                 floorName: floorObj ? (floorObj.name || `Floor ${floorObj.floorNumber}`) : '—',
                 slotCode: slotObj?.slotCode || '—',
                 vehicleTypeName: vtObj?.name || '—',
-                entryDate: parseDateTime(b.scheduledDate, b.startTime),
-                exitDate: parseDateTime(b.scheduledDate, b.endTime || b.startTime),
+                entryDate: parsedEntry,
+                exitDate: parsedExit,
                 totalAmount: b.estimatedFee ?? data.totalAmount ?? 0,
                 licensePlate: b.vehicleInfo?.licensePlate || data.licensePlate,
                 createdAt: b.createdAt,
@@ -246,6 +255,8 @@ const CheckoutPage = () => {
 
     // ── Countdown timer ───────────────────────────────────────────────────────
     useEffect(() => {
+        // Cash payment doesn't need a countdown — customer pays at counter on arrival
+        if (payMethod === 'cash') return;
         // For isBooking flow, count down even before polling (show remaining booking window)
         const shouldCount = polling || (data.isBooking && countdown > 0 && !countdownExpired);
         if (!shouldCount) {
@@ -267,7 +278,7 @@ const CheckoutPage = () => {
             });
         }, 1000);
         return () => clearInterval(tick);
-    }, [polling, data.isBooking, countdownExpired]);
+    }, [polling, data.isBooking, countdownExpired, payMethod]);
 
     // Track whether the booking was ALREADY expired when we arrived (don't auto-nav in that case)
     const countdownStartedPositiveRef = useRef(false);
@@ -278,12 +289,14 @@ const CheckoutPage = () => {
     }, [countdown, data.isBooking]);
 
     // Auto-cancel booking when countdown expires (only if it was counting down while on this page)
+    // NOTE: Don't cancel if payMethod is 'cash' — customer will pay at counter on arrival
     useEffect(() => {
         if (!data.isBooking || !bookingId || !countdownExpired) return;
         if (!countdownStartedPositiveRef.current) return; // was already expired on arrival — BookingPage handled it
+        if (payMethod === 'cash') return; // cash: no timeout cancel, booking stays alive
         bookingService.cancel(bookingId, 'Payment timeout').catch(() => { });
         navigate('/booking', { replace: true });
-    }, [countdownExpired, data.isBooking, bookingId, navigate]);
+    }, [countdownExpired, data.isBooking, bookingId, navigate, payMethod]);
 
 
     // ── HTTP Polling fallback (in case socket misses the event) ───────────────
@@ -371,13 +384,20 @@ const CheckoutPage = () => {
         setProcessing(true);
         setTimeout(() => {
             setProcessing(false);
-            navigate('/checkoutsuccess', {
-                state: {
+            // For booking with cash: merge bookingDetail so success page has all fields
+            const stateToPass = data.isBooking && bookingDetail
+                ? {
                     ...data,
+                    ...bookingDetail,
                     payMethod,
                     cardLast4: payMethod === 'card' ? cardNumber.replace(/\s/g, '').slice(-4) : null,
                 }
-            });
+                : {
+                    ...data,
+                    payMethod,
+                    cardLast4: payMethod === 'card' ? cardNumber.replace(/\s/g, '').slice(-4) : null,
+                };
+            navigate('/checkoutsuccess', { state: stateToPass });
         }, 1800);
     };
 

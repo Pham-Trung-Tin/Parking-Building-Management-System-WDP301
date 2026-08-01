@@ -260,12 +260,15 @@ const SessionPage = () => {
     const feeLogs: { type: 'early' | 'late' | 'fallback', timestamp: Date, amount: number, label: string }[] = [];
 
     if (bookingInfo && (bookingInfo as any).endTime && (bookingInfo as any).scheduledDate) {
-        const scheduledDateObj = new Date((bookingInfo as any).scheduledDate);
+        const dStr = (bookingInfo as any).scheduledDate;
         const [startH, startM] = (bookingInfo as any).startTime.split(':').map(Number);
         const [endH, endM] = (bookingInfo as any).endTime.split(':').map(Number);
 
-        const scheduledStart = new Date(scheduledDateObj.getFullYear(), scheduledDateObj.getMonth(), scheduledDateObj.getDate(), startH, startM, 0, 0);
-        let scheduledEnd = new Date(scheduledDateObj.getFullYear(), scheduledDateObj.getMonth(), scheduledDateObj.getDate(), endH, endM, 0, 0);
+        const scheduledStart = new Date(dStr);
+        scheduledStart.setHours(startH, startM, 0, 0);
+        
+        let scheduledEnd = new Date(dStr);
+        scheduledEnd.setHours(endH, endM, 0, 0);
 
         // ── Fix cross-midnight: nếu endTime < startTime (ví dụ 22:00 → 01:03)
         //    thì scheduledEnd thực ra là ngày hôm sau ─────────────────────────
@@ -351,10 +354,11 @@ const SessionPage = () => {
         }
     }
 
-    // Vì khách đã thanh toán lúc book nên phí hiện tại chỉ hiện Overtime Fee
-    const currentFee = overtimeFee;
-    // Số tiền cần thanh toán thêm cũng chỉ là phần overtime chưa thanh toán
-    const amountDue = overtimeFee;
+    // Vì khách đã thanh toán lúc book nên phí hiện tại chỉ hiện Overtime Fee, ngoại trừ chọn Pay at counter (pending)
+    const baseUnpaidFee = bookingInfo?.paymentStatus === 'pending' ? (bookingInfo?.estimatedFee || 0) : 0;
+    const currentFee = baseUnpaidFee + overtimeFee;
+    // Số tiền cần thanh toán thêm cũng bao gồm tiền vé gốc nếu chưa thanh toán
+    const amountDue = baseUnpaidFee + overtimeFee;
 
     // ── Lắng nghe sự kiện Checkout từ Staff qua Socket ────────────────────────
     useEffect(() => {
@@ -931,6 +935,13 @@ const SessionPage = () => {
                                                 const d = new Date(b.scheduledDate);
                                                 const [h, m] = b.endTime.split(':').map(Number);
                                                 d.setHours(h, m);
+                                                
+                                                const [startH, startM] = b.startTime.split(':').map(Number);
+                                                const startD = new Date(b.scheduledDate);
+                                                startD.setHours(startH, startM);
+                                                if (d < startD) {
+                                                    d.setDate(d.getDate() + 1);
+                                                }
                                                 return (
                                                     <>
                                                         {d.toLocaleDateString('vi-VN')}
@@ -1016,7 +1027,6 @@ const SessionPage = () => {
                                         <div className="stat-value green" style={{ color: '#059669' }}>
                                             {fmtVND(currentFee)}
                                         </div>
-                                        <div className="stat-sub green" style={{ marginBottom: '6px' }}>{fmtVND(blockRate)} / 4-hour block</div>
                                     </div>
                                 </div>
 
@@ -1060,6 +1070,10 @@ const SessionPage = () => {
                                             <span className="pricing-label">Surcharge (4-hour block)</span>
                                             <span className="pricing-value" style={{ color: '#2563eb' }}>{fmtVND(blockRate)} / block</span>
                                         </div>
+                                        <div className="pricing-row">
+                                            <span className="pricing-label">Night Surcharge (4-hour block)</span>
+                                            <span className="pricing-value" style={{ color: '#2563eb' }}>{fmtVND(resolvedNightBlockRate)} / block</span>
+                                        </div>
                                         {earlyOtFee > 0 && (
                                             <div className="pricing-row">
                                                 <span className="pricing-label">Early Arrival Surcharge</span>
@@ -1085,6 +1099,14 @@ const SessionPage = () => {
                                                 <span className="pricing-label" style={{ color: '#10b981' }}>Prepaid (Booking)</span>
                                                 <span className="pricing-value" style={{ color: '#10b981' }}>
                                                     - {fmtVND(advancePayment)}
+                                                </span>
+                                            </div>
+                                        )}
+                                        {baseUnpaidFee > 0 && (
+                                            <div className="pricing-row">
+                                                <span className="pricing-label" style={{ color: '#b45309', fontWeight: 600 }}>Unpaid Base Fee</span>
+                                                <span className="pricing-value" style={{ color: '#b45309', fontWeight: 700 }}>
+                                                    {fmtVND(baseUnpaidFee)}
                                                 </span>
                                             </div>
                                         )}
@@ -1136,14 +1158,6 @@ const SessionPage = () => {
                                     </div>
                                 </div>
 
-                                {/* Actions */}
-                                <div className="action-group s-in-3">
-                                    {amountDue > 0 && (
-                                        <button className="btn-primary" onClick={handlePayCheckout}>
-                                            <PayIcon /> Pay Surcharge: {fmtVND(amountDue)}
-                                        </button>
-                                    )}
-                                </div>
 
                             </div>
                         )}

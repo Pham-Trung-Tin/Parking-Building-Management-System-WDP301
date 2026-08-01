@@ -13,7 +13,8 @@ import {
   RefreshCw,
   VideoOff,
   Camera,
-  LayoutGrid
+  LayoutGrid,
+  Calendar
 } from 'lucide-react';
 import useProfile from '../../hooks/useProfile';
 import lprService from '../../services/api/lprService';
@@ -147,15 +148,23 @@ const StaffExitPage = () => {
   }, [isExitCamActive, profile]);
   // Estimated Fee Calculation — Block-based pricing (4h blocks)
   const estimatedFees = useMemo(() => {
-    if (!activeSession) return { baseFee: 0, overtimeFee: 0, totalFee: 0 };
+    if (!activeSession) return { baseFee: 0, overtimeFee: 0, totalFee: 0, logs: [] };
     
     // Vé tháng thì không tính phí checkout
     if (activeSession.monthlyPass) {
-      return { baseFee: 0, overtimeFee: 0, totalFee: 0 };
+      return { 
+        baseFee: 0, overtimeFee: 0, totalFee: 0, 
+        logs: [{ time: new Date(activeSession.entryTime), message: 'Monthly Pass - No Fee', amount: 0 }] 
+      };
     }
 
     if (!activeSession.entryTime || !activeSession.vehicleType?.pricing) {
-      return { baseFee: activeSession.baseFee || 0, overtimeFee: activeSession.overtimeFee || 0, totalFee: activeSession.totalFee || 0 };
+      return { 
+        baseFee: activeSession.baseFee || 0, 
+        overtimeFee: activeSession.overtimeFee || 0, 
+        totalFee: activeSession.totalFee || 0,
+        logs: []
+      };
     }
 
     const now = new Date();
@@ -165,49 +174,88 @@ const StaffExitPage = () => {
     const nightBlockRate = pricing.nightBlockRate || dayBlockRate * 1.5;
     const BLOCK_MS = 4 * 60 * 60 * 1000;
 
+    const logs: any[] = [];
+
     // Helper: count blocks between two dates using same logic as BE calculateParkingFee
-    const countBlockFee = (start: Date, end: Date): number => {
+    const countBlockFee = (start: Date, end: Date, labelPrefix: string): number => {
       if (end <= start) return 0;
       let fee = 0;
       let cur = new Date(start);
+      let blockCount = 1;
       while (cur < end) {
         const h = cur.getHours();
         // 06:00–17:59 daytime, 18:00–05:59 nighttime
         const isDaytime = h >= 6 && h < 18;
-        fee += isDaytime ? dayBlockRate : nightBlockRate;
+        const blockFee = isDaytime ? dayBlockRate : nightBlockRate;
+        fee += blockFee;
+        
+        logs.push({
+          time: new Date(cur),
+          message: `${labelPrefix} - Block ${blockCount} (${isDaytime ? 'Day' : 'Night'})`,
+          amount: blockFee
+        });
+        
         cur = new Date(cur.getTime() + BLOCK_MS);
+        blockCount++;
       }
       return fee;
     };
 
     let baseFee = 0;
     let overtimeFee = 0;
+    let earlyArrivalFee = 0;
 
     // Has Booking
     if (activeSession.booking?.endTime && activeSession.booking?.scheduledDate) {
-      baseFee = activeSession.baseFee || activeSession.advancePayment || 0;
+      baseFee = activeSession.booking.estimatedFee || activeSession.baseFee || activeSession.advancePayment || 0;
       
-      const scheduledDateStr = typeof activeSession.booking.scheduledDate === 'string'
-        ? activeSession.booking.scheduledDate.split('T')[0]
-        : new Date(activeSession.booking.scheduledDate).toISOString().split('T')[0];
-      const scheduledEnd = new Date(`${scheduledDateStr}T${activeSession.booking.endTime}:00`);
+      logs.push({
+        time: entryTime,
+        message: 'Pre-booked Base Fee',
+        amount: baseFee
+      });
+
+      const dStr = activeSession.booking.scheduledDate;
+      const [startH, startM] = activeSession.booking.startTime.split(':').map(Number);
+      const scheduledStart = new Date(dStr);
+      scheduledStart.setHours(startH, startM, 0, 0);
+      
+      const [endH, endM] = activeSession.booking.endTime.split(':').map(Number);
+      const scheduledEnd = new Date(dStr);
+      scheduledEnd.setHours(endH, endM, 0, 0);
+      if (scheduledEnd < scheduledStart) {
+         scheduledEnd.setDate(scheduledEnd.getDate() + 1);
+      }
+
+      // Early arrival logic: > 15 mins early gets charged extra blocks
+      if (scheduledStart.getTime() - entryTime.getTime() > 15 * 60 * 1000) {
+        earlyArrivalFee = countBlockFee(entryTime, scheduledStart, 'Early Arrival');
+      }
 
       if (now > scheduledEnd) {
         const otHours = (now.getTime() - scheduledEnd.getTime()) / (1000 * 60 * 60);
         if (otHours > 15 / 60) {
           // Overtime: same block logic, no multiplier
-          overtimeFee = countBlockFee(scheduledEnd, now);
+          overtimeFee = countBlockFee(scheduledEnd, now, 'Overtime');
         }
       }
     } else {
-      baseFee = countBlockFee(entryTime, now);
+      baseFee = countBlockFee(entryTime, now, 'Standard Parking');
     }
 
-    const totalFee = baseFee + overtimeFee;
+    const totalFee = baseFee + earlyArrivalFee + overtimeFee;
     const advancePayment = activeSession.advancePayment || 0;
     const balanceDue = Math.max(0, totalFee - advancePayment);
 
-    return { baseFee, overtimeFee, totalFee: balanceDue };
+    if (advancePayment > 0) {
+      logs.push({
+        time: now,
+        message: 'Advance Payment Deducted',
+        amount: -advancePayment
+      });
+    }
+
+    return { baseFee, earlyArrivalFee, overtimeFee, totalFee: balanceDue, logs };
   }, [activeSession]);
 
   useEffect(() => {
@@ -586,6 +634,10 @@ const StaffExitPage = () => {
                   <AlertTriangle className="w-5 h-5 mr-3 text-gray-400" />
                   Exceptions
                 </Link>
+                <Link to="/staff/schedule" className="flex items-center px-6 py-3 text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition-colors w-full text-left">
+                  <Calendar className="w-5 h-5 mr-3 text-gray-400" />
+                  My Schedule
+                </Link>
               </>
             )}
             {profile?.role !== 'parking_manager' && (
@@ -789,21 +841,22 @@ const StaffExitPage = () => {
 
                 {/* History Log */}
                 <section>
-                  <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">History Log</h3>
-                  <div className="bg-white border border-gray-200 shadow-sm flex flex-col min-h-[120px]">
-                    {sessionFound ? (
-                      <>
-                        <div className="flex items-center border-b border-gray-100 p-4">
-                          <span className="w-24 text-xs text-gray-400">08:14 AM</span>
-                          <span className="flex-1 text-sm text-gray-700">ANPR Entry Detected</span>
-                          <span className="px-2 py-1 bg-blue-50 text-blue-600 text-[10px] font-bold rounded uppercase tracking-wider">System</span>
+                  <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">History Log (Fee Details)</h3>
+                  <div className="bg-white border border-gray-200 shadow-sm flex flex-col min-h-[120px] max-h-[300px] overflow-y-auto">
+                    {sessionFound && estimatedFees.logs && estimatedFees.logs.length > 0 ? (
+                      estimatedFees.logs.map((log: any, idx: number) => (
+                        <div key={idx} className={`flex items-center p-4 ${idx !== estimatedFees.logs.length - 1 ? 'border-b border-gray-100' : ''}`}>
+                          <span className="w-24 text-xs text-gray-400 shrink-0">{new Date(log.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                          <span className="flex-1 text-sm text-gray-700">{log.message}</span>
+                          {log.amount !== 0 && (
+                            <span className={`px-2 py-1 text-[10px] font-bold rounded uppercase tracking-wider ml-2 shrink-0 ${
+                              log.amount > 0 ? 'bg-orange-50 text-orange-600' : 'bg-green-50 text-green-600'
+                            }`}>
+                              {log.amount > 0 ? '+' : ''}{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(log.amount)}
+                            </span>
+                          )}
                         </div>
-                        <div className="flex items-center p-4">
-                          <span className="w-24 text-xs text-gray-400">02:50 PM</span>
-                          <span className="flex-1 text-sm text-gray-700">Payment Received via Kiosk 4</span>
-                          <span className="px-2 py-1 bg-gray-100 text-gray-600 text-[10px] font-bold rounded uppercase tracking-wider">User</span>
-                        </div>
-                      </>
+                      ))
                     ) : (
                       <div className="flex-1 flex items-center justify-center text-sm text-gray-400">
                         No history logs available
@@ -816,30 +869,31 @@ const StaffExitPage = () => {
               {/* Right Column (Amount Due & Camera) */}
               <div className="w-[380px] flex flex-col space-y-6">
 
-                {/* Camera View */}
+                {/* Camera View for Comparison */}
                 <section>
                   <div className="flex justify-between items-center mb-3">
+                    <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Live Exit Cam</span>
                     <div className="flex gap-2">
                       <button
                         onClick={() => setCamMode('lpr')}
-                        className={`text-[10px] px-3 py-1.5 rounded font-bold uppercase tracking-wider transition-colors ${camMode === 'lpr' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
+                        className={`text-[10px] px-2 py-1 rounded font-bold uppercase tracking-wider transition-colors ${camMode === 'lpr' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
                       >
-                        LPR Camera
+                        LPR
                       </button>
                       <button
                         onClick={() => setCamMode('qr')}
-                        className={`text-[10px] px-3 py-1.5 rounded font-bold uppercase tracking-wider transition-colors ${camMode === 'qr' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
+                        className={`text-[10px] px-2 py-1 rounded font-bold uppercase tracking-wider transition-colors ${camMode === 'qr' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
                       >
-                        QR Scanner
+                        QR
+                      </button>
+                      <button
+                        onClick={() => setIsExitCamActive(!isExitCamActive)}
+                        className={`text-[10px] px-2 py-1 rounded font-bold uppercase tracking-wider transition-colors ${isExitCamActive ? 'bg-red-100 text-red-700 hover:bg-red-200' : 'bg-green-100 text-green-700 hover:bg-green-200'
+                          }`}
+                      >
+                        {isExitCamActive ? 'Off' : 'On'}
                       </button>
                     </div>
-                    <button
-                      onClick={() => setIsExitCamActive(!isExitCamActive)}
-                      className={`text-[10px] px-2 py-1 rounded font-bold uppercase tracking-wider transition-colors ${isExitCamActive ? 'bg-red-100 text-red-700 hover:bg-red-200' : 'bg-green-100 text-green-700 hover:bg-green-200'
-                        }`}
-                    >
-                      {isExitCamActive ? 'Turn Off Cam' : 'Turn On Cam'}
-                    </button>
                   </div>
                   <div className="relative bg-black aspect-video rounded-xl overflow-hidden border border-gray-200 shadow-sm flex items-center justify-center">
                     {isExitCamActive ? (
@@ -869,13 +923,49 @@ const StaffExitPage = () => {
                         <span className="text-xs font-bold tracking-widest uppercase">Camera Disabled</span>
                       </div>
                     )}
-                    <div className="absolute top-3 left-3 bg-black/80 text-white text-[10px] font-bold px-2 py-1 rounded flex items-center tracking-wider">
+                    <div className="absolute top-3 left-3 bg-black/80 text-white text-[10px] font-bold px-2 py-1 rounded flex items-center tracking-wider z-10">
                       <span className={`w-1.5 h-1.5 rounded-full mr-2 ${isExitCamActive ? 'bg-red-500 animate-pulse' : 'bg-gray-500'}`}></span>
-                      LPR-CAM-02
+                      LPR-CAM-EXIT
                     </div>
                   </div>
+                  
                   {/* Hidden canvas for capturing camera frame */}
                   <canvas ref={canvasRef} className="hidden" />
+
+                  {/* Entry Image for Comparison */}
+                  <div className="mt-4">
+                    <div className="flex justify-between items-center mb-3">
+                      <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Entry Image (Captured)</span>
+                    </div>
+                    <div className="relative bg-black aspect-video rounded-xl overflow-hidden border border-gray-200 shadow-sm flex items-center justify-center">
+                      {(() => {
+                         const entryImg = sessionFound ? activeSession?.evidenceImages?.find((img: any) => img.type === 'entry') : null;
+                         if (entryImg?.url) {
+                           // Resolve backend local storage URL
+                           let imgUrl = entryImg.url;
+                           if (!imgUrl.startsWith('http')) {
+                             const baseUrl = import.meta.env.VITE_API_BASE_URL?.replace(/\/api\/v1\/?$/, '') || '';
+                             imgUrl = `${baseUrl}${imgUrl.startsWith('/') ? '' : '/'}${imgUrl}`;
+                           }
+                           return <img src={imgUrl} alt="Entry Snapshot" className="w-full h-full object-cover opacity-90" />;
+                         }
+                         return (
+                           <div className="flex flex-col items-center text-gray-500">
+                             <Camera className="w-10 h-10 mb-2 opacity-50" />
+                             <span className="text-xs font-bold tracking-widest uppercase">No Entry Image</span>
+                           </div>
+                         );
+                      })()}
+                      <div className="absolute top-3 left-3 bg-black/80 text-white text-[10px] font-bold px-2 py-1 rounded flex items-center tracking-wider z-10">
+                        ENTRY-CAM-SNAPSHOT
+                      </div>
+                      {sessionFound && activeSession?.entryTime && (
+                        <div className="absolute bottom-3 right-3 bg-black/80 text-white text-[10px] font-bold px-2 py-1 rounded tracking-wider z-10">
+                           {new Date(activeSession.entryTime).toLocaleString()}
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </section>
 
                 <div className="bg-white border border-gray-200 shadow-sm p-8 flex flex-col space-y-6">
@@ -891,6 +981,12 @@ const StaffExitPage = () => {
                       <span className="text-gray-500">Base Fee</span>
                       <span className={`font-medium ${sessionFound ? 'text-gray-900' : 'text-gray-400'}`}>
                         {sessionFound && activeSession ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(estimatedFees.baseFee || 0) : '0 ₫'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">Early Arrival Fee</span>
+                      <span className={`font-medium ${sessionFound ? 'text-gray-900' : 'text-gray-400'}`}>
+                        {sessionFound && activeSession ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(estimatedFees.earlyArrivalFee || 0) : '0 ₫'}
                       </span>
                     </div>
                     <div className="flex justify-between text-sm">

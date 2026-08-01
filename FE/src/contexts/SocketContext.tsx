@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 
-const BACKEND_URL = import.meta.env.VITE_API_URL?.replace('/api/v1', '') || 'https://parking-backend-ynok.onrender.com';
+const BACKEND_URL = import.meta.env.VITE_API_BASE_URL?.replace('/api/v1', '') || 'http://localhost:5000';
 
 // ──────────────────────────────────────────────
 // Types
@@ -32,9 +32,9 @@ interface SocketContextValue {
 const SocketContext = createContext<SocketContextValue>({
   socket: null,
   isConnected: false,
-  joinParkingLot: () => {},
-  leaveParkingLot: () => {},
-  onSlotUpdate: () => () => {},
+  joinParkingLot: () => { },
+  leaveParkingLot: () => { },
+  onSlotUpdate: () => () => { },
 });
 
 // ──────────────────────────────────────────────
@@ -99,7 +99,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const onSlotUpdate = useCallback((handler: (payload: SlotUpdatePayload) => void) => {
     const socket = socketRef.current;
-    if (!socket) return () => {};
+    if (!socket) return () => { };
     socket.on('slotStatusUpdated', handler);
     return () => socket.off('slotStatusUpdated', handler);
   }, []);

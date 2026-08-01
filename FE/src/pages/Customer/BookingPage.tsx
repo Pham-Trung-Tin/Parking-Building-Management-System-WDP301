@@ -509,7 +509,7 @@ const TEMP_PRICES: Record<string, { dayBlockRate: number, dailyRate: number }> =
 const BookingPage = () => {
     const navigate = useNavigate();
     const location = useLocation();
-    const { joinParkingLot, leaveParkingLot, onSlotUpdate } = useSocket();
+    const { isConnected, joinParkingLot, leaveParkingLot, onSlotUpdate } = useSocket();
     const [parkingSpot, setParkingSpot] = useState<any>(location.state?.spot || { title: 'Bitexco Financial Tower Parking', price: 50000 });
 
     useEffect(() => {
@@ -527,13 +527,14 @@ const BookingPage = () => {
 
     // ── Real-time: join / leave parking lot socket room ──
     useEffect(() => {
-        if (!parkingSpot._id) return;
+        if (!parkingSpot._id || !isConnected) return;
         joinParkingLot(parkingSpot._id);
         return () => leaveParkingLot(parkingSpot._id);
-    }, [parkingSpot._id, joinParkingLot, leaveParkingLot]);
+    }, [parkingSpot._id, joinParkingLot, leaveParkingLot, isConnected]);
 
     // ── Real-time: patch slot status AND lock fields when backend broadcasts ──
     useEffect(() => {
+        if (!isConnected) return;
         const unsubscribe = onSlotUpdate((payload: any) => {
             setFloorSlots(prev =>
                 prev.map(s =>
@@ -549,7 +550,7 @@ const BookingPage = () => {
             );
         });
         return unsubscribe;
-    }, [onSlotUpdate]);
+    }, [onSlotUpdate, isConnected]);
 
 
 
@@ -571,7 +572,7 @@ const BookingPage = () => {
 
     const [entryDate, setEntryDate] = useState(() => {
         const d = new Date();
-        d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+        d.setMinutes(d.getMinutes() + 5 - d.getTimezoneOffset());
         return d.toISOString().slice(0, 16);
     });
     const [exitDate, setExitDate] = useState(() => {
@@ -588,13 +589,19 @@ const BookingPage = () => {
     const exitSelMin = parseInt(exitDate.slice(14, 16)) || 0;
     const handleSetEntryDate = (dateStr: string, h: number, m: number) => {
         const now = new Date();
+        now.setMinutes(now.getMinutes() + 5);
         const localNow = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
         const todayStr = localNow.toISOString().slice(0, 10);
 
         let finalH = h;
         let finalM = m;
+        let finalDateStr = dateStr;
 
-        if (dateStr === todayStr) {
+        if (dateStr < todayStr) {
+            finalDateStr = todayStr;
+            finalH = now.getHours();
+            finalM = now.getMinutes();
+        } else if (dateStr === todayStr) {
             const currentHour = now.getHours();
             const currentMin = now.getMinutes();
             if (finalH < currentHour) {
@@ -604,7 +611,7 @@ const BookingPage = () => {
                 finalM = currentMin;
             }
         }
-        setEntryDate(`${dateStr}T${String(finalH).padStart(2, '0')}:${String(finalM).padStart(2, '0')}`);
+        setEntryDate(`${finalDateStr}T${String(finalH).padStart(2, '0')}:${String(finalM).padStart(2, '0')}`);
     };
 
     const handleSetExitDate = (h: number, m: number) => {
@@ -899,7 +906,7 @@ const BookingPage = () => {
             setCheckoutProcessing(false);
             setShowConfirmModal(false);
 
-            // Navigate to /checkout page — same UX as Monthly Pass flow
+            // Navigate to /checkout page — CheckoutPage handles payment method selection
             navigate('/checkout', {
                 state: {
                     isBooking: true,
@@ -913,7 +920,6 @@ const BookingPage = () => {
                     entryDate,
                     exitDate,
                     totalAmount: estimatedPrice,
-                    payMethod,
                 }
             });
         } catch (error: any) {
@@ -1030,6 +1036,8 @@ const BookingPage = () => {
     const nightRate = vehicleType?.pricing?.nightBlockRate || baseRate * 1.5;
 
     let calculatedEstCost = 0;
+    let hasDayBlock = false;
+    let hasNightBlock = false;
     let tempStart = new Date(entryDate);
     const tempExit = new Date(exitTime);
 
@@ -1041,6 +1049,8 @@ const BookingPage = () => {
         const isStartNight = startHour >= 18 || startHour < 6;
         const isEndNight = endHour >= 18 || endHour < 6;
         const isNightBlock = isStartNight || isEndNight;
+        if (isNightBlock) hasNightBlock = true;
+        else hasDayBlock = true;
         calculatedEstCost += isNightBlock ? nightRate : baseRate;
         tempStart = new Date(tempStart.getTime() + 4 * 60 * 60 * 1000);
     }
@@ -2146,7 +2156,16 @@ const BookingPage = () => {
                                                     <VehicleSvgIcon code={vt.code} size={38} />
                                                 </div>
                                                 <div className="vt-name">{vt.name}</div>
-                                                <div className="vt-price">{fmtVND(vt.pricing?.dayBlockRate || TEMP_PRICES[vt.code?.toUpperCase()]?.dayBlockRate || (vt.pricing?.hourlyRate ? vt.pricing.hourlyRate * 4 : 0))}/4h</div>
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', alignItems: 'center' }}>
+                                                    <div className="vt-price" style={{ fontSize: '12px' }}>
+                                                        <span style={{ color: '#64748b', marginRight: '4px' }}>Day:</span>
+                                                        <span style={{ fontWeight: 600 }}>{fmtVND(vt.pricing?.dayBlockRate || TEMP_PRICES[vt.code?.toUpperCase()]?.dayBlockRate || (vt.pricing?.hourlyRate ? vt.pricing.hourlyRate * 4 : 20000))}</span>/4h
+                                                    </div>
+                                                    <div className="vt-price" style={{ fontSize: '12px' }}>
+                                                        <span style={{ color: '#64748b', marginRight: '4px' }}>Night:</span>
+                                                        <span style={{ fontWeight: 600 }}>{fmtVND(vt.pricing?.nightBlockRate || (vt.pricing?.dayBlockRate || TEMP_PRICES[vt.code?.toUpperCase()]?.dayBlockRate || (vt.pricing?.hourlyRate ? vt.pricing.hourlyRate * 4 : 20000)) * 1.5)}</span>/4h
+                                                    </div>
+                                                </div>
                                                 {vehicleType?._id === vt._id && (
                                                     <div className="vt-check">✓</div>
                                                 )}
@@ -3051,10 +3070,18 @@ const BookingPage = () => {
                                             <span className="modal-row-label">Duration</span>
                                             <span className="modal-row-value">{duration} hour{duration !== 1 ? 's' : ''}</span>
                                         </div>
-                                        <div className="modal-row">
-                                            <span className="modal-row-label">Rate</span>
-                                            <span className="modal-row-value">{fmtVND(baseRate)}/4h</span>
-                                        </div>
+                                        {hasDayBlock && (
+                                            <div className="modal-row">
+                                                <span className="modal-row-label">Day Rate</span>
+                                                <span className="modal-row-value">{fmtVND(baseRate)}/4h</span>
+                                            </div>
+                                        )}
+                                        {hasNightBlock && (
+                                            <div className="modal-row">
+                                                <span className="modal-row-label">Night Rate (18:00 - 06:00)</span>
+                                                <span className="modal-row-value">{fmtVND(nightRate)}/4h</span>
+                                            </div>
+                                        )}
                                     </div>
 
                                     <div className="modal-total">
@@ -3066,8 +3093,20 @@ const BookingPage = () => {
                                         <button className="modal-cancel" onClick={() => setShowConfirmModal(false)}>
                                             ← Edit
                                         </button>
-                                        <button id="confirm-booking-btn" className="modal-confirm" onClick={() => setCheckoutPhase('payment')}>
-                                            Proceed to Payment →
+                                        <button
+                                            id="confirm-booking-btn"
+                                            className={`modal-pay-btn ${checkoutProcessing ? 'processing' : 'active'}`}
+                                            onClick={handleConfirmPayment}
+                                            disabled={checkoutProcessing}
+                                        >
+                                            {checkoutProcessing ? (
+                                                <>
+                                                    <div className="bk-spin" style={{ width: 16, height: 16, borderWidth: 2 }} />
+                                                    Processing...
+                                                </>
+                                            ) : (
+                                                'Proceed to Payment →'
+                                            )}
                                         </button>
                                     </div>
                                 </>
@@ -3469,9 +3508,11 @@ const BookingPage = () => {
                         }}>
                             {(() => {
                                 const now = new Date();
+                                now.setMinutes(now.getMinutes() + 5);
                                 const currentHour = now.getHours();
                                 const currentMin = now.getMinutes();
-                                const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+                                const localNow = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
+                                const todayStr = localNow.toISOString().slice(0, 10);
                                 const isTodaySelection = entryDate.slice(0, 10) === todayStr;
 
                                 return (

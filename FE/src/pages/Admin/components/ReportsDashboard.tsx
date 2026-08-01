@@ -24,9 +24,6 @@ export function ReportsDashboard() {
         const list = res.data?.parkingLots || res.data || res || [];
         if (Array.isArray(list)) {
           setParkingLots(list);
-          if (list.length > 0) {
-            setSelectedLotId(list[0]._id);
-          }
         }
       } catch (err) {
         console.error("Failed to load parking lots", err);

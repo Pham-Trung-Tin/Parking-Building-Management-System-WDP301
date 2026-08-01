@@ -109,7 +109,7 @@ const CheckoutSuccessPage = () => {
     const isMoto = typeof vehicleType === 'object' ? vehicleType.code === 'motorcycle' : vehicleType === 'motorcycle';
     const vehicleTypeName = data.vehicleTypeName || (typeof vehicleType === 'object' ? vehicleType.name : (isMoto ? 'Motorcycle' : 'Car'));
 
-    const floorName = typeof floorObj === 'object' && floorObj !== null ? (floorObj.name || `Floor ${floorObj.floorNumber}`) : `Floor ${floorObj || 3}`;
+    const floorName = data.floorName || (typeof floorObj === 'object' && floorObj !== null ? (floorObj.name || `Floor ${floorObj.floorNumber}`) : `Floor ${floorObj || 3}`);
     const slotCode = data.slotCode || (typeof slotObj === 'object' && slotObj !== null ? slotObj.slotCode : `${String.fromCharCode(64 + Number(floorObj || 3))}-${floorObj || 3}05`);
 
     const licensePlate = data.licensePlate || (isMoto ? '59T1-23456' : '51A-12345');
@@ -465,7 +465,18 @@ const CheckoutSuccessPage = () => {
                             <span className="r-value" style={{ fontFamily: 'monospace', letterSpacing: '0.06em' }}>{licensePlate}</span>
                         </div>
                         
-                        {!isMonthlyPass ? (
+                        {!isMonthlyPass && data.isBooking ? (
+                            <>
+                                <div className="r-row">
+                                    <span className="r-label">Booking Code</span>
+                                    <span className="r-value" style={{ fontFamily: 'monospace' }}>{data.bookingCode || '—'}</span>
+                                </div>
+                                <div className="r-row">
+                                    <span className="r-label">Floor / Slot</span>
+                                    <span className="r-value">{data.floorName || '—'} — {data.slotCode || '—'}</span>
+                                </div>
+                            </>
+                        ) : !isMonthlyPass ? (
                             <div className="r-row">
                                 <span className="r-label">Floor / Slot</span>
                                 <span className="r-value">{floorName} — {slotCode}</span>
@@ -475,7 +486,19 @@ const CheckoutSuccessPage = () => {
                         <div className="r-divider"></div>
 
                         {/* Time info */}
-                        {!isMonthlyPass ? (
+                        {!isMonthlyPass && data.isBooking ? (
+                            <>
+                                <div className="r-section-title"> Booking Time</div>
+                                <div className="r-row">
+                                    <span className="r-label">Entry</span>
+                                    <span className="r-value" style={{ fontSize: 12 }}>{data.entryDate ? formatTime(new Date(data.entryDate)) : '—'}</span>
+                                </div>
+                                <div className="r-row">
+                                    <span className="r-label">Est. Exit</span>
+                                    <span className="r-value" style={{ fontSize: 12 }}>{data.exitDate ? formatTime(new Date(data.exitDate)) : '—'}</span>
+                                </div>
+                            </>
+                        ) : !isMonthlyPass ? (
                             <>
                                 <div className="r-section-title"> Time Details</div>
                                 <div className="r-row">
@@ -516,7 +539,9 @@ const CheckoutSuccessPage = () => {
                         {!isMonthlyPass ? (
                             <>
                                 <div className="r-row">
-                                    <span className="r-label">Parking Fee</span>
+                                    <span className="r-label">
+                                        {data.isBooking && payMethod === 'cash' ? 'Estimated Fee' : 'Parking Fee'}
+                                    </span>
                                     <span className="r-value">{Math.round(totalAmount).toLocaleString('vi-VN')} ₫</span>
                                 </div>
 
@@ -525,10 +550,26 @@ const CheckoutSuccessPage = () => {
                                     <span className="r-value">{payMethodLabel}</span>
                                 </div>
 
-                                <div className="r-total">
-                                    <span className="r-total-label">Total Paid</span>
-                                    <span className="r-total-amount">{grandTotal.toLocaleString('vi-VN')} ₫</span>
-                                </div>
+                                {data.isBooking && payMethod === 'cash' ? (
+                                    <div style={{
+                                        marginTop: 10,
+                                        padding: '10px 14px',
+                                        background: '#fffbeb',
+                                        border: '1px solid #fde68a',
+                                        borderRadius: 10,
+                                        fontSize: 12,
+                                        color: '#92400e',
+                                        fontWeight: 600,
+                                        lineHeight: 1.6,
+                                    }}>
+                                        ⚠️ The fee above is an estimate. The <strong>actual</strong> fee will be calculated based on the actual parking duration upon exit and collected at the counter.
+                                    </div>
+                                ) : (
+                                    <div className="r-total">
+                                        <span className="r-total-label">Total Paid</span>
+                                        <span className="r-total-amount">{grandTotal.toLocaleString('vi-VN')} ₫</span>
+                                    </div>
+                                )}
                             </>
                         ) : (
                             <>
