@@ -115,7 +115,7 @@ const StaffExitPage = () => {
         setIsManual(false);
 
         try {
-          const lotId = (profile?.assignedParkingLot as any)?._id || (profile?.assignedParkingLot as any);
+          const lotId = Array.isArray(profile?.assignedParkingLot) ? profile?.assignedParkingLot[0]?._id : (profile?.assignedParkingLot as any)?._id || profile?.assignedParkingLot;
           const sessionRes = await parkingSessionService.findActive({
             licensePlate: data.licensePlate,
             parkingLotId: lotId
@@ -300,7 +300,7 @@ const StaffExitPage = () => {
 
     try {
       const query = searchQuery.trim();
-      const lotId = (profile?.assignedParkingLot as any)?._id || (profile?.assignedParkingLot as any);
+      const lotId = Array.isArray(profile?.assignedParkingLot) ? profile?.assignedParkingLot[0]?._id : (profile?.assignedParkingLot as any)?._id || (profile?.assignedParkingLot as any);
 
       // ── Ưu tiên 1: QR mới — plain prefix "co_<sessionId>" ─────────────────
       if (query.startsWith('co_')) {
@@ -490,7 +490,7 @@ const StaffExitPage = () => {
       }
 
       if (payload.type === 'monthly_pass' || payload.passCode) {
-        const lotId = (profile?.assignedParkingLot as any)?._id || (profile?.assignedParkingLot as any);
+        const lotId = Array.isArray(profile?.assignedParkingLot) ? profile?.assignedParkingLot[0]?._id : (profile?.assignedParkingLot as any)?._id || (profile?.assignedParkingLot as any);
         const sessionRes = await parkingSessionService.findActive({ licensePlate: payload.licensePlate, parkingLotId: lotId });
         if (sessionRes.data) {
           setActiveSession(sessionRes.data);
@@ -506,7 +506,7 @@ const StaffExitPage = () => {
 
       // Trường hợp QR chứa sessionCode thay vì sessionId
       if (payload.sessionCode && !payload.sessionId) {
-        const lotId = (profile?.assignedParkingLot as any)?._id || (profile?.assignedParkingLot as any);
+        const lotId = Array.isArray(profile?.assignedParkingLot) ? profile?.assignedParkingLot[0]?._id : (profile?.assignedParkingLot as any)?._id || (profile?.assignedParkingLot as any);
         const sessionRes = await parkingSessionService.findActive({ sessionCode: payload.sessionCode, parkingLotId: lotId });
         if (sessionRes.data) {
           setActiveSession(sessionRes.data);

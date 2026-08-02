@@ -161,8 +161,13 @@ const StaffManageSlotPage = () => {
     const { profile } = useProfile();
     const navigate = useNavigate();
 
-    const buildingName = (profile?.assignedParkingLot as any)?.name || 'Main Street Garage';
-    const parkingLotId = (profile?.assignedParkingLot as any)?._id || profile?.assignedParkingLot;
+    const buildingName = Array.isArray(profile?.assignedParkingLot) 
+        ? profile?.assignedParkingLot[0]?.name 
+        : (profile?.assignedParkingLot as any)?.name || 'Main Street Garage';
+        
+    const parkingLotId = Array.isArray(profile?.assignedParkingLot)
+        ? profile?.assignedParkingLot[0]?._id
+        : (profile?.assignedParkingLot as any)?._id || profile?.assignedParkingLot;
 
     const [floors, setFloors] = useState<Floor[]>([]);
     const [selectedFloor, setSelectedFloor] = useState<Floor | null>(null);

@@ -127,7 +127,7 @@ const StaffPage = () => {
   const [floorStats, setFloorStats] = useState<Record<string, { total: number, occupied: number }>>({});
 
   useEffect(() => {
-    const lotId = (profile as any)?.assignedParkingLot?._id || (profile as any)?.assignedParkingLot || defaultLotId;
+    const lotId = Array.isArray(profile?.assignedParkingLot) ? profile?.assignedParkingLot[0]?._id : (profile as any)?.assignedParkingLot?._id || (profile as any)?.assignedParkingLot || defaultLotId;
     if (lotId) {
       floorService.getFloors({ status: 'active', parkingLot: lotId }).then(async (res: any) => {
         const fetchedFloors = res.data || res || [];
@@ -266,7 +266,7 @@ const StaffPage = () => {
       showNotification('Please wait for scan or enter a valid license plate', 'error');
       return;
     }
-    const lotId = (profile as any)?.assignedParkingLot?._id || (profile as any)?.assignedParkingLot || defaultLotId;
+    const lotId = Array.isArray(profile?.assignedParkingLot) ? profile?.assignedParkingLot[0]?._id : (profile as any)?.assignedParkingLot?._id || (profile as any)?.assignedParkingLot || defaultLotId;
     if (!lotId) {
       showNotification('System is still loading parking lot info or no lot available.', 'error');
       return;
@@ -559,7 +559,7 @@ const StaffPage = () => {
       return;
     }
 
-    const lotId = (profile as any)?.assignedParkingLot?._id || (profile as any)?.assignedParkingLot || defaultLotId;
+    const lotId = Array.isArray(profile?.assignedParkingLot) ? profile?.assignedParkingLot[0]?._id : (profile as any)?.assignedParkingLot?._id || (profile as any)?.assignedParkingLot || defaultLotId;
 
     try {
       if (modalData.monthlyPassCode) {

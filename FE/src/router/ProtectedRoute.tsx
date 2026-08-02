@@ -37,10 +37,17 @@ export const GuestRoute: React.FC = () => {
  */
 export const CustomerRoute: React.FC = () => {
   const userJson = localStorage.getItem('user');
+  const location = useLocation();
 
   if (userJson) {
     try {
       const user = JSON.parse(userJson);
+      
+      // Allow viewing public map without redirection
+      if (location.pathname.startsWith('/public-map') || location.pathname.startsWith('/find-parking')) {
+          return <Outlet />;
+      }
+
       if (user.role === 'system_admin') {
         return <Navigate to="/admin" replace />;
       }
