@@ -946,8 +946,9 @@ const BookingPage = () => {
 
     // ─── Data fetching ──────────────────────────────────────────────────────
     useEffect(() => {
+        if (!parkingSpot._id) return;
         setVehicleTypesLoading(true);
-        vehicleTypeService.getAll()
+        vehicleTypeService.getAll({ parkingLot: parkingSpot._id })
             .then((data: any) => {
                 const list: VehicleType[] = Array.isArray(data) ? data : data?.data ?? [];
                 setVehicleTypes(list.filter((v: VehicleType) => v.isActive && !v.isDeleted));
@@ -957,7 +958,9 @@ const BookingPage = () => {
                 { _id: 'motorcycle', name: 'Motorcycle', code: 'MOTORBIKE', size: 'small', isActive: true, pricing: { hourlyRate: 5000, dailyRate: 40000, dayBlockRate: 8000, nightBlockRate: 12000 } },
             ]))
             .finally(() => setVehicleTypesLoading(false));
+    }, [parkingSpot._id]);
 
+    useEffect(() => {
         // Fetch saved vehicles
         vehicleService.getMyVehicles(1, 50)
             .then((res: any) => {
@@ -2219,8 +2222,8 @@ const BookingPage = () => {
                                     {/* ── Saved Vehicles Quick Select ── */}
                                     {(() => {
                                         const matching = savedVehicles.filter(v => {
-                                            const vtId = typeof v.vehicleType === 'object' ? v.vehicleType._id : v.vehicleType;
-                                            return vtId === vehicleType?._id;
+                                            const vtCode = typeof v.vehicleType === 'object' ? v.vehicleType.code : null;
+                                            return vtCode === vehicleType?.code;
                                         });
                                         if (matching.length === 0) return null;
                                         return (

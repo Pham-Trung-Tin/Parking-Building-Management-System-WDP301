@@ -134,14 +134,11 @@ const MyVehiclesPage: React.FC = () => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [vRes, tRes, pRes, mRes, sRes] = await Promise.all([
-          vehicleService.getMyVehicles(1, 50).catch(() => null),
-          vehicleTypeService.getAll().catch(() => null),
-          parkingLotService.getParkingLots().catch(() => null),
-          monthlyPassService.getMyMonthlyPasses().catch(() => null),
-          parkingSessionService.getSessions({ status: 'active' }).catch(() => null)
-      ]);
-      
+      const vRes = await vehicleService.getMyVehicles(1, 50).catch(() => null);
+      const pRes = await parkingLotService.getParkingLots().catch(() => null);
+      const mRes = await monthlyPassService.getMyMonthlyPasses().catch(() => null);
+      const sRes = await parkingSessionService.getSessions({ status: 'active' }).catch(() => null);
+
       const extractArray = (res: any) => {
           if (!res) return [];
           if (Array.isArray(res)) return res;
@@ -151,9 +148,15 @@ const MyVehiclesPage: React.FC = () => {
           return [];
       };
 
+      const lots = extractArray(pRes);
+      let tRes = null;
+      if (lots.length > 0) {
+          tRes = await vehicleTypeService.getAll({ parkingLot: lots[0]._id }).catch(() => null);
+      }
+
       setVehicles(extractArray(vRes));
       setVehicleTypes(extractArray(tRes));
-      setParkingLots(extractArray(pRes));
+      setParkingLots(lots);
       setMonthlyPasses(extractArray(mRes));
       setActiveSessions(extractArray(sRes));
     } catch { setError('Failed to load data.'); }

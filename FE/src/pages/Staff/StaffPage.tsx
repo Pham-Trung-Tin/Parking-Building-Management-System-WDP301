@@ -99,15 +99,17 @@ const StaffPage = () => {
   const [defaultLotId, setDefaultLotId] = useState('');
 
   useEffect(() => {
-    vehicleTypeService.getAll().then((res: any) => {
-      const types = res.data || res;
-      setVehicleTypesList(types);
-      if (types.length > 0) setSelectedVehicle(types[0]._id);
-    }).catch(console.error);
-
     parkingLotService.getParkingLots({ limit: 1 }).then((res: any) => {
       const lots = res.data?.docs || res.data || [];
-      if (lots.length > 0) setDefaultLotId(lots[0]._id);
+      if (lots.length > 0) {
+        const lotId = lots[0]._id;
+        setDefaultLotId(lotId);
+        vehicleTypeService.getAll({ parkingLot: lotId }).then((vRes: any) => {
+          const types = vRes.data || vRes;
+          setVehicleTypesList(types);
+          if (types.length > 0) setSelectedVehicle(types[0]._id);
+        }).catch(console.error);
+      }
     }).catch(console.error);
   }, []);
 
