@@ -118,9 +118,12 @@ const parkingSlotService = {
         return axiosClient.delete(`/parking-slots/${id}`);
     },
 
-    /** POST /parking-slots/:id/lock */
-    lockSlot: (slotId: string): Promise<any> => {
-        return axiosClient.post(`/parking-slots/${slotId}/lock`);
+    /** POST /parking-slots/:id/lock
+     * @param wantedStart ISO string — if slot is occupied, backend checks if
+     *                    the current occupant's booking ends before this time.
+     */
+    lockSlot: (slotId: string, wantedStart?: string): Promise<any> => {
+        return axiosClient.post(`/parking-slots/${slotId}/lock`, { wantedStart: wantedStart ?? null });
     },
 
     /** DELETE /parking-slots/:id/lock */

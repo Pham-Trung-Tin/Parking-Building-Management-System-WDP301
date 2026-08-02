@@ -747,9 +747,14 @@ const BookingPage = () => {
         }
         setSelectedSlot(slot);
 
-        // Lock the newly selected slot
+        // Lock the newly selected slot.
+        // Pass wantedStart so backend can allow locking an occupied slot whose
+        // current booking ends before the customer's desired start time.
         try {
-            const res = await parkingSlotService.lockSlot(slot._id);
+            const res = await parkingSlotService.lockSlot(
+                slot._id,
+                entryDate ? new Date(entryDate).toISOString() : undefined,
+            );
             const data = (res as any)?.data || res;
             const until = new Date(data.lockedUntil);
             setSlotLockUntil(until);
@@ -764,7 +769,7 @@ const BookingPage = () => {
             const msg = err?.response?.data?.message || 'This slot is being selected by another user.';
             alert(`⚠️ ${msg}`);
         }
-    }, [selectedSlot]);
+    }, [selectedSlot, entryDate]);
 
     // Cleanup lock on unmount
     useEffect(() => {
