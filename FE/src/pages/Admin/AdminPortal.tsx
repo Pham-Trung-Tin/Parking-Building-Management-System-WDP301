@@ -207,8 +207,8 @@ export default function AdminPortal() {
                   key={item.id}
                   onClick={() => setActiveNav(item.id)}
                   className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${activeNav === item.id
-                      ? "bg-gray-900 text-white shadow-sm"
-                      : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"
+                    ? "bg-gray-900 text-white shadow-sm"
+                    : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"
                     }`}
                 >
                   <Icon className="w-4 h-4 shrink-0" />
@@ -259,13 +259,13 @@ export default function AdminPortal() {
                       {pagination?.totalDocs || users.length} accounts registered
                     </p>
                   </div>
-                  <button
+                  {/* <button
                     onClick={() => setShowAddModal(true)}
                     className="flex items-center gap-2 px-5 py-2.5 bg-gray-900 text-white text-sm font-medium rounded-xl hover:bg-gray-700 transition-colors shadow-sm"
                   >
                     <UserPlus className="w-4 h-4" />
                     Add User
-                  </button>
+                  </button> */}
                 </div>
 
                 {/* Stats */}
@@ -377,8 +377,8 @@ export default function AdminPortal() {
                       <div
                         key={user.id || user._id}
                         className={`grid grid-cols-[1fr_140px_110px_130px] px-6 py-4 items-center hover:bg-gray-50/60 transition-colors ${i !== users.length - 1
-                            ? "border-b border-gray-100"
-                            : ""
+                          ? "border-b border-gray-100"
+                          : ""
                           }`}
                       >
                         {/* Account */}
@@ -421,14 +421,14 @@ export default function AdminPortal() {
                               handleToggleUserStatus(user.id || user._id, user.status)
                             }
                             className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-lg transition-colors ${user.status === "active"
-                                ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
-                                : "bg-rose-50 text-rose-600 hover:bg-rose-100"
+                              ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                              : "bg-rose-50 text-rose-600 hover:bg-rose-100"
                               }`}
                           >
                             <span
                               className={`w-1.5 h-1.5 rounded-full ${user.status === "active"
-                                  ? "bg-emerald-500"
-                                  : "bg-rose-400"
+                                ? "bg-emerald-500"
+                                : "bg-rose-400"
                                 }`}
                             />
                             {mapStatusToUI(user.status)}
@@ -478,8 +478,8 @@ export default function AdminPortal() {
                           key={pageNo}
                           onClick={() => updateFilters({ page: pageNo })}
                           className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors cursor-pointer ${pageNo === pagination.page
-                              ? "bg-gray-900 text-white border-gray-900"
-                              : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
+                            ? "bg-gray-900 text-white border-gray-900"
+                            : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
                             }`}
                         >
                           {pageNo}
@@ -520,8 +520,8 @@ export default function AdminPortal() {
                         showToast("Permission matrix saved");
                       }}
                       className={`flex items-center gap-2 px-5 py-2.5 text-sm font-medium rounded-xl transition-all shadow-sm ${permSaved
-                          ? "bg-emerald-600 text-white hover:bg-emerald-700"
-                          : "bg-gray-900 text-white hover:bg-gray-700"
+                        ? "bg-emerald-600 text-white hover:bg-emerald-700"
+                        : "bg-gray-900 text-white hover:bg-gray-700"
                         }`}
                     >
                       <Check className="w-4 h-4" />
