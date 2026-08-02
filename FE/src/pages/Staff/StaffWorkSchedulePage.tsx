@@ -21,7 +21,8 @@ export default function StaffWorkSchedulePage() {
   const [allMySchedules, setAllMySchedules] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  
+  const [fullShifts, setFullShifts] = useState<string[]>([]);
+
   const [activeTab, setActiveTab] = useState<'view' | 'register'>('view');
   const [viewMode, setViewMode] = useState<'week' | 'month'>('week');
   const [dateOffset, setDateOffset] = useState(0);
@@ -52,17 +53,27 @@ export default function StaffWorkSchedulePage() {
   };
 
   // Date calculation based on mode
-  const baseDate = viewMode === 'month' 
+  const baseDate = viewMode === 'month'
     ? dayjs().startOf('month').add(dateOffset, 'month')
     : dayjs().isoWeekday(1).add(dateOffset, 'week');
-  
+
   const monthYear = baseDate.format('YYYY-MM');
 
   const scheduleData = useMemo(() => {
     return allMySchedules.find(s => s.monthYear === monthYear);
   }, [allMySchedules, monthYear]);
 
-  const isReadonly = scheduleData && scheduleData.status !== 'pending';
+  const getShiftData = (dateStr: string, shiftId: string) => {
+    if (!scheduleData) return null;
+    return scheduleData.shifts.find((s: any) => s.date === dateStr && s.shiftType === shiftId);
+  };
+
+  const isShiftReadonly = (dateStr: string, shiftId: string) => {
+    const shift = getShiftData(dateStr, shiftId);
+    const isLockedStatus = shift && shift.status !== 'pending';
+    const isTooClose = dayjs(`${dateStr} 00:00:00`).diff(dayjs(), 'hours') < 48;
+    return isLockedStatus || isTooClose;
+  };
 
   // Initialize selectedShifts when scheduleData changes or month changes
   useEffect(() => {
@@ -78,11 +89,39 @@ export default function StaffWorkSchedulePage() {
     }
   }, [scheduleData, baseDate.format('YYYY-MM')]);
 
+  useEffect(() => {
+    const fetchAvailability = async () => {
+      const raw = profile?.assignedParkingLot;
+      const lotId = Array.isArray(raw)
+        ? (raw as any[]).filter(Boolean).map((v: any) => v?._id || v)[0]
+        : (typeof raw === 'string' ? raw : (raw as any)?._id);
+        
+      if (lotId && monthYear) {
+        try {
+          const res: any = await workScheduleService.getAvailability(lotId, monthYear);
+          setFullShifts(res.data?.fullShifts || []);
+        } catch (e) {
+          console.error(e);
+        }
+      }
+    };
+    if (activeTab === 'register') {
+      fetchAvailability();
+    }
+  }, [profile, monthYear, activeTab]);
+
+  const isShiftDisabled = (dateStr: string, shiftId: string) => {
+    if (isShiftReadonly(dateStr, shiftId)) return true;
+    const isSelected = (selectedShifts[dateStr] || []).includes(shiftId);
+    if (fullShifts.includes(`${dateStr}_${shiftId}`) && !isSelected) return true;
+    return false;
+  };
+
   const handleShiftToggle = (dateStr: string, shiftId: string) => {
-    if (isReadonly) return;
+    if (isShiftDisabled(dateStr, shiftId)) return;
     setSelectedShifts(prev => {
       const current = prev[dateStr] || [];
-      const updated = current.includes(shiftId) 
+      const updated = current.includes(shiftId)
         ? current.filter(id => id !== shiftId)
         : [...current, shiftId];
       return { ...prev, [dateStr]: updated };
@@ -125,7 +164,7 @@ export default function StaffWorkSchedulePage() {
   // Calendar Grid Generation
   const generateCalendarGrid = () => {
     let startOfGrid, endOfGrid;
-    
+
     if (viewMode === 'month') {
       startOfGrid = baseDate.isoWeekday(1); // Monday of the first week
       const endOfMonth = baseDate.endOf('month');
@@ -134,7 +173,7 @@ export default function StaffWorkSchedulePage() {
       startOfGrid = baseDate.isoWeekday(1);
       endOfGrid = baseDate.isoWeekday(7);
     }
-    
+
     const days = [];
     let current = startOfGrid;
     while (current.isBefore(endOfGrid) || current.isSame(endOfGrid, 'day')) {
@@ -153,8 +192,8 @@ export default function StaffWorkSchedulePage() {
   const calendarDays = generateCalendarGrid();
   const weekDayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-  const shiftCountInView = scheduleData 
-    ? scheduleData.shifts.filter((s: any) => calendarDays.some(d => s.date.startsWith(d.dateStr))).length 
+  const shiftCountInView = scheduleData
+    ? scheduleData.shifts.filter((s: any) => calendarDays.some(d => s.date.startsWith(d.dateStr))).length
     : 0;
 
   return (
@@ -243,16 +282,16 @@ export default function StaffWorkSchedulePage() {
               <h2 className="text-xl font-bold text-gray-900">My Schedule</h2>
               <p className="text-sm text-gray-500">View and manage your monthly work schedules</p>
             </div>
-            
+
             <div className="flex items-center gap-4">
               <div className="flex items-center bg-gray-100 rounded-lg p-1 border border-gray-200 shadow-inner">
-                <button 
+                <button
                   onClick={() => { setViewMode('week'); setDateOffset(0); }}
                   className={`px-3 py-1.5 text-xs font-bold rounded transition-all ${viewMode === 'week' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
                 >
                   Week
                 </button>
-                <button 
+                <button
                   onClick={() => { setViewMode('month'); setDateOffset(0); }}
                   className={`px-3 py-1.5 text-xs font-bold rounded transition-all ${viewMode === 'month' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
                 >
@@ -261,18 +300,18 @@ export default function StaffWorkSchedulePage() {
               </div>
 
               <div className="flex items-center bg-gray-100 rounded-lg p-1 border border-gray-200 shadow-inner">
-                <button 
+                <button
                   onClick={() => setDateOffset(prev => prev - 1)}
                   className="px-4 py-1.5 text-sm font-medium rounded hover:bg-white hover:shadow-sm transition-all text-gray-700"
                 >
                   Previous
                 </button>
                 <div className="px-4 py-1.5 text-sm font-bold bg-white shadow-sm rounded text-gray-900 mx-1 border border-gray-200 min-w-[140px] text-center">
-                  {viewMode === 'month' 
-                    ? baseDate.format('MMMM YYYY') 
+                  {viewMode === 'month'
+                    ? baseDate.format('MMMM YYYY')
                     : `${baseDate.format('MMM DD')} - ${baseDate.add(6, 'day').format('MMM DD')}`}
                 </div>
-                <button 
+                <button
                   onClick={() => setDateOffset(prev => prev + 1)}
                   className="px-4 py-1.5 text-sm font-medium rounded hover:bg-white hover:shadow-sm transition-all text-gray-700"
                 >
@@ -281,15 +320,15 @@ export default function StaffWorkSchedulePage() {
               </div>
             </div>
           </div>
-          
+
           <div className="flex items-center gap-6 border-b border-gray-200 w-full mt-2">
-            <button 
+            <button
               onClick={() => setActiveTab('view')}
               className={`pb-3 text-sm font-bold border-b-2 transition-colors ${activeTab === 'view' ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
             >
               My Overview
             </button>
-            <button 
+            <button
               onClick={() => setActiveTab('register')}
               className={`pb-3 text-sm font-bold border-b-2 transition-colors ${activeTab === 'register' ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
             >
@@ -298,9 +337,10 @@ export default function StaffWorkSchedulePage() {
           </div>
         </header>
 
+
         <main className="flex-1 overflow-y-auto p-8 bg-gray-50">
           <div className="max-w-6xl mx-auto space-y-6">
-            
+
             {error && <div className="p-4 bg-red-50 text-red-600 rounded-xl border border-red-200 text-sm">{error}</div>}
 
             <div className="flex flex-col sm:flex-row sm:items-center justify-between bg-white p-5 rounded-xl shadow-sm border border-gray-200 gap-4">
@@ -313,17 +353,17 @@ export default function StaffWorkSchedulePage() {
                     {viewMode === 'month' ? `Month of ${baseDate.format('MMMM YYYY')}` : `Week of ${baseDate.format('MMM DD, YYYY')}`}
                   </h3>
                   <p className="text-sm text-gray-500 flex items-center gap-2 mt-0.5">
-                    Registration Status: 
-                    <span className={`px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider ${
-                      !scheduleData ? 'bg-gray-100 text-gray-600 border border-gray-200' :
+                    Registration Status:
+                    <span className={`px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider ${!scheduleData ? 'bg-gray-100 text-gray-600 border border-gray-200' :
                       scheduleData.status === 'approved' ? 'bg-green-100 text-green-700 border border-green-200' :
-                      scheduleData.status === 'rejected' ? 'bg-red-100 text-red-700 border border-red-200' :
-                      'bg-blue-100 text-blue-700 border border-blue-200'
-                    }`}>
+                        scheduleData.status === 'rejected' ? 'bg-red-100 text-red-700 border border-red-200' :
+                          'bg-blue-100 text-blue-700 border border-blue-200'
+                      }`}>
                       {!scheduleData ? 'Not Registered' : scheduleData.status}
                     </span>
+
                   </p>
-                  
+
                   {activeTab === 'view' && (
                     <div className="mt-2.5">
                       {shiftCountInView > 0 ? (
@@ -349,10 +389,20 @@ export default function StaffWorkSchedulePage() {
               )}
             </div>
 
-            {isReadonly && activeTab === 'register' && (
+            {scheduleData && scheduleData.status === 'published' && activeTab === 'register' && (
               <div className="p-4 bg-indigo-50 border border-indigo-200 text-indigo-700 rounded-xl text-sm font-medium flex items-center gap-2">
                 <AlertCircle className="w-5 h-5 shrink-0" />
-                This schedule has already been {scheduleData.status} and cannot be modified.
+                This month's schedule has been published.
+              </div>
+            )}
+
+            {activeTab === 'register' && (
+              <div className="px-4 py-3 bg-blue-50 border border-blue-200 text-blue-800 rounded-xl flex items-start gap-3 shadow-sm">
+                <Clock className="w-5 h-5 shrink-0 mt-0.5 text-blue-600" />
+                <div>
+                  <p className="text-sm font-bold mb-0.5">Registration Deadline</p>
+                  <p className="text-blue-700 text-xs font-medium">You can only register or modify shifts at least 48 hours in advance. Shifts within the next 48 hours are locked and cannot be changed.</p>
+                </div>
               </div>
             )}
 
@@ -366,25 +416,23 @@ export default function StaffWorkSchedulePage() {
                   </div>
                 ))}
               </div>
-              
+
               {/* Calendar Cells */}
               <div className="grid grid-cols-7 bg-gray-200 gap-px">
                 {calendarDays.map((d, i) => {
-                  const dayShifts = scheduleData ? scheduleData.shifts.filter((s:any) => s.date.startsWith(d.dateStr)).map((s:any) => s.shiftType) : [];
-                  
+                  const dayShifts = scheduleData ? scheduleData.shifts.filter((s: any) => s.date.startsWith(d.dateStr)).map((s: any) => s.shiftType) : [];
+
                   return (
-                    <div key={i} className={`bg-white ${viewMode === 'week' ? 'min-h-[200px]' : 'min-h-[120px]'} flex flex-col p-2 transition-colors ${
-                      !d.isCurrentMonth ? 'opacity-40 bg-gray-50' : 
+                    <div key={i} className={`bg-white ${viewMode === 'week' ? 'min-h-[200px]' : 'min-h-[120px]'} flex flex-col p-2 transition-colors ${!d.isCurrentMonth ? 'opacity-40 bg-gray-50' :
                       d.isToday ? 'bg-blue-50/20 ring-1 ring-inset ring-blue-500' : 'hover:bg-gray-50/50'
-                    }`}>
+                      }`}>
                       <div className="flex justify-between items-center mb-2">
-                        <span className={`text-sm font-bold ${
-                          d.isToday ? 'text-white bg-blue-600 w-6 h-6 rounded-full flex items-center justify-center' : 'text-gray-700'
-                        }`}>
+                        <span className={`text-sm font-bold ${d.isToday ? 'text-white bg-blue-600 w-6 h-6 rounded-full flex items-center justify-center' : 'text-gray-700'
+                          }`}>
                           {d.date.format('D')}
                         </span>
                       </div>
-                      
+
                       <div className="flex-1 flex flex-col gap-1.5">
                         {activeTab === 'view' ? (
                           /* View Mode */
@@ -393,18 +441,21 @@ export default function StaffWorkSchedulePage() {
                           ) : (
                             dayShifts.map((shiftType: string) => {
                               const shiftInfo = SHIFTS.find(s => s.id === shiftType);
+                              const shiftData = getShiftData(d.dateStr, shiftType);
                               return (
-                                <div key={shiftType} className={`px-2 py-1 rounded border shadow-sm flex flex-col ${
-                                  shiftType === 'morning' ? 'bg-sky-50 border-sky-100 text-sky-800' :
-                                  shiftType === 'afternoon' ? 'bg-amber-50 border-amber-100 text-amber-800' :
-                                  'bg-indigo-50 border-indigo-100 text-indigo-800'
-                                }`}>
+                                <div key={shiftType} className={`px-2 py-1 rounded border shadow-sm flex flex-col ${shiftData?.status === 'approved' ? 'bg-green-50 border-green-100 text-green-800' :
+                                  shiftData?.status === 'published' ? 'bg-indigo-100 border-indigo-200 text-indigo-900' :
+                                    shiftData?.status === 'rejected' ? 'bg-red-50 border-red-100 text-red-800' :
+                                      shiftType === 'morning' ? 'bg-sky-50 border-sky-100 text-sky-800' :
+                                        shiftType === 'afternoon' ? 'bg-amber-50 border-amber-100 text-amber-800' :
+                                          'bg-indigo-50 border-indigo-100 text-indigo-800'
+                                  }`}>
                                   <span className={`font-black uppercase truncate ${viewMode === 'week' ? 'text-xs' : 'text-[10px]'}`}>
                                     {shiftInfo?.label.split(' ')[0]}
                                   </span>
-                                  {viewMode === 'week' && (
-                                    <span className="text-[10px] font-semibold opacity-70 truncate">{shiftInfo?.label.match(/\(([^)]+)\)/)?.[1]}</span>
-                                  )}
+                                  <span className="text-[9px] font-semibold opacity-70 truncate mt-0.5">
+                                    {shiftInfo?.label.match(/\(([^)]+)\)/)?.[1]}
+                                  </span>
                                 </div>
                               );
                             })
@@ -414,30 +465,38 @@ export default function StaffWorkSchedulePage() {
                           d.isCurrentMonth && !d.isPast ? (
                             SHIFTS.map(shiftInfo => {
                               const isSelected = (selectedShifts[d.dateStr] || []).includes(shiftInfo.id);
+                              const readonly = isShiftReadonly(d.dateStr, shiftInfo.id);
+                              const disabled = isShiftDisabled(d.dateStr, shiftInfo.id);
+                              const isFull = fullShifts.includes(`${d.dateStr}_${shiftInfo.id}`);
+                              const shiftData = getShiftData(d.dateStr, shiftInfo.id);
                               return (
-                                <div 
+                                <div
                                   key={shiftInfo.id}
                                   onClick={() => handleShiftToggle(d.dateStr, shiftInfo.id)}
-                                  className={`px-2 py-1.5 rounded border text-[10px] font-bold cursor-pointer transition-all flex items-center justify-between ${
-                                    isReadonly 
-                                      ? (isSelected ? 'bg-indigo-50 border-indigo-200 text-indigo-700 cursor-default' : 'bg-gray-50 border-gray-100 text-gray-400 cursor-default opacity-50')
-                                      : isSelected 
-                                        ? 'bg-blue-600 border-blue-600 text-white shadow-sm' 
-                                        : 'bg-white border-gray-200 text-gray-600 hover:border-blue-300 hover:bg-blue-50'
-                                  }`}
-                                  title={shiftInfo.label}
+                                  className={`px-2 py-1.5 rounded border text-[10px] font-bold transition-all flex items-center justify-between ${disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'} ${readonly
+                                    ? (isSelected
+                                      ? (shiftData?.status === 'approved' ? 'bg-green-100 border-green-300 text-green-800'
+                                        : shiftData?.status === 'published' ? 'bg-indigo-100 border-indigo-300 text-indigo-900'
+                                          : shiftData?.status === 'rejected' ? 'bg-red-100 border-red-300 text-red-800'
+                                            : 'bg-indigo-50 border-indigo-200 text-indigo-700')
+                                      : 'bg-gray-50 border-gray-100 text-gray-400')
+                                    : isSelected
+                                      ? 'bg-blue-600 border-blue-600 text-white shadow-sm'
+                                      : disabled ? 'bg-gray-100 border-gray-200 text-gray-500' : 'bg-white border-gray-200 text-gray-600 hover:border-blue-300 hover:bg-blue-50'
+                                    }`}
+                                  title={isFull && !isSelected ? 'This shift is full' : shiftInfo.label}
                                 >
                                   <div className="flex items-center gap-1 truncate">
                                     <span className="uppercase truncate">{shiftInfo.label.split(' ')[0]}</span>
-                                    <span className={`text-[9px] font-semibold whitespace-nowrap ${
-                                      isSelected 
-                                        ? (isReadonly ? 'text-indigo-500' : 'text-blue-200') 
-                                        : 'text-gray-400'
-                                    }`}>
+                                    <span className={`text-[9px] font-semibold whitespace-nowrap ${isSelected
+                                      ? (readonly ? 'text-gray-500' : 'text-blue-200')
+                                      : disabled ? 'text-gray-400' : 'text-gray-400'
+                                      }`}>
                                       {shiftInfo?.label.match(/\(([^)]+)\)/)?.[1]}
                                     </span>
                                   </div>
-                                  {isSelected && <Check className={`w-3 h-3 shrink-0 ${isReadonly ? 'text-indigo-600' : 'text-white'}`} />}
+                                  {isSelected && <Check className={`w-3 h-3 shrink-0 ${readonly ? 'text-gray-600' : 'text-white'}`} />}
+                                  {isFull && !isSelected && <span className="text-[8px] font-bold uppercase text-red-500 ml-1">Full</span>}
                                 </div>
                               );
                             })
@@ -454,7 +513,7 @@ export default function StaffWorkSchedulePage() {
               </div>
             </div>
 
-            {activeTab === 'register' && !isReadonly && (
+            {activeTab === 'register' && (
               <div className="flex justify-end pt-4 pb-12">
                 <button
                   onClick={handleSave}
@@ -466,7 +525,7 @@ export default function StaffWorkSchedulePage() {
                 </button>
               </div>
             )}
-            
+
           </div>
         </main>
       </div>

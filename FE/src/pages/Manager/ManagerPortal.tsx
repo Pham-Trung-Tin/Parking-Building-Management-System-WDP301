@@ -123,7 +123,7 @@ export default function ManagerPortal() {
           {tab === 'floors' && <FloorsTab globalLotId={globalLotId} setGlobalLotId={setGlobalLotId} />}
           {tab === 'slots' && <SlotsTab globalLotId={globalLotId} setGlobalLotId={setGlobalLotId} />}
           {tab === 'staff' && <StaffAssignmentTab globalLotId={globalLotId} setGlobalLotId={setGlobalLotId} />}
-          {tab === 'schedules' && <ManagerWorkScheduleTab globalLotId={globalLotId} />}
+          {tab === 'schedules' && <ManagerWorkScheduleTab globalLotId={globalLotId} setGlobalLotId={setGlobalLotId} />}
           {tab === 'revenue' && <RevenueTab globalLotId={globalLotId} />}
         </div>
       </div>

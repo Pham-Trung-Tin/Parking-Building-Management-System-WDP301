@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { workScheduleService } from '../../services/api';
-import { Loader2, Check, X, Calendar, AlertTriangle, MessageSquare, Eye } from 'lucide-react';
+import parkingLotService from '../../services/api/parkingLotService';
+import { Loader2, Check, X, Calendar, AlertTriangle, MessageSquare, Eye, Settings } from 'lucide-react';
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
 
@@ -13,17 +14,47 @@ const SHIFTS = [
   { id: 'night', label: 'Night (22:00 - 06:00)' },
 ];
 
-export default function ManagerWorkScheduleTab({ globalLotId }: { globalLotId: string }) {
+export default function ManagerWorkScheduleTab({ globalLotId, setGlobalLotId }: { globalLotId: string, setGlobalLotId?: any }) {
   const [schedules, setSchedules] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  
+  const [lots, setLots] = useState<any[]>([]);
+  const user = useMemo(() => { try { return JSON.parse(localStorage.getItem('user') || '{}'); } catch { return {}; } }, []);
+  
+  const [quotaModalOpen, setQuotaModalOpen] = useState(false);
+  const [quotas, setQuotas] = useState({ morning: 2, afternoon: 2, night: 2 });
+  const [savingQuotas, setSavingQuotas] = useState(false);
+
+  const activeLot = useMemo(() => lots.find((l: any) => l._id === globalLotId), [lots, globalLotId]);
+  useEffect(() => {
+    if (activeLot && activeLot.settings?.shiftQuotas) {
+      setQuotas(activeLot.settings.shiftQuotas);
+    } else {
+      setQuotas({ morning: 2, afternoon: 2, night: 2 });
+    }
+  }, [activeLot]);
+
+  const handleSaveQuotas = async () => {
+    if (!globalLotId) return;
+    setSavingQuotas(true);
+    try {
+      await parkingLotService.updateParkingLot(globalLotId, { settings: { ...activeLot?.settings, shiftQuotas: quotas } });
+      setLots(prev => prev.map(l => l._id === globalLotId ? { ...l, settings: { ...l.settings, shiftQuotas: quotas } } : l));
+      setQuotaModalOpen(false);
+    } catch (e: any) {
+      setError(e.message || 'Failed to save settings');
+    } finally {
+      setSavingQuotas(false);
+    }
+  };
   
   const [activeTab, setActiveTab] = useState<'overview' | 'requests'>('overview');
   const [viewMode, setViewMode] = useState<'week' | 'month'>('week');
   const [dateOffset, setDateOffset] = useState(0);
 
   const [dayDetailsModal, setDayDetailsModal] = useState<{ dateStr: string; displayDate: string } | null>(null);
-  const [actionModal, setActionModal] = useState<{ id: string, action: 'approved' | 'rejected', title: string } | null>(null);
+  const [actionModal, setActionModal] = useState<{ id: string, shiftId?: string, bulk?: boolean, action: 'approved' | 'rejected' | 'published', title: string } | null>(null);
   const [detailsModal, setDetailsModal] = useState<any | null>(null);
   const [managerNote, setManagerNote] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
@@ -31,6 +62,22 @@ export default function ManagerWorkScheduleTab({ globalLotId }: { globalLotId: s
   useEffect(() => {
     if (globalLotId) loadSchedules();
   }, [globalLotId]);
+
+  useEffect(() => {
+    const fetchLots = async () => {
+      try {
+        const res = await parkingLotService.getParkingLots({ limit: 100 });
+        let data: any[] = res.data || res.docs || (Array.isArray(res) ? res : []);
+        if (user?.role === 'parking_manager') {
+          const raw = user?.assignedParkingLot;
+          const ids: string[] = Array.isArray(raw) ? raw.filter(Boolean) : (raw ? [raw] : []);
+          if (ids.length > 0) data = data.filter((l: any) => ids.includes(l._id));
+        }
+        setLots(data);
+      } catch (e) {}
+    };
+    fetchLots();
+  }, []);
 
   const loadSchedules = async () => {
     setLoading(true);
@@ -49,10 +96,15 @@ export default function ManagerWorkScheduleTab({ globalLotId }: { globalLotId: s
     if (!actionModal) return;
     setActionLoading(true);
     try {
-      await workScheduleService.updateStatus(actionModal.id, actionModal.action, managerNote);
+      await workScheduleService.updateStatus(actionModal.id, actionModal.action, managerNote, actionModal.shiftId, actionModal.bulk);
       setActionModal(null);
       setManagerNote('');
       loadSchedules();
+      
+      // also close/update detailsModal if open
+      if (detailsModal) {
+        setDetailsModal(null);
+      }
     } catch (err: any) {
       setError(err.message || 'Action failed');
     } finally {
@@ -68,14 +120,14 @@ export default function ManagerWorkScheduleTab({ globalLotId }: { globalLotId: s
   const monthYear = baseDate.format('YYYY-MM');
   
   const currentMonthSchedules = useMemo(() => {
-    return schedules.filter(s => s.monthYear === monthYear && s.status === 'approved');
+    return schedules.filter(s => s.monthYear === monthYear && (s.status === 'approved' || s.status === 'published' || s.status === 'pending')); // Pending may have approved shifts
   }, [schedules, monthYear]);
   
   const getStaffForShift = (dateStr: string, shiftId: string) => {
     const assignedStaff: any[] = [];
     currentMonthSchedules.forEach(schedule => {
-      const hasShift = schedule.shifts.some((s: any) => s.date.startsWith(dateStr) && s.shiftType === shiftId);
-      if (hasShift) {
+      const hasApprovedShift = schedule.shifts.some((s: any) => s.date.startsWith(dateStr) && s.shiftType === shiftId && (s.status === 'approved' || s.status === 'published'));
+      if (hasApprovedShift) {
         assignedStaff.push(schedule.staff);
       }
     });
@@ -125,10 +177,32 @@ export default function ManagerWorkScheduleTab({ globalLotId }: { globalLotId: s
             <h2 className="text-xl font-bold text-gray-900">Work Schedules</h2>
             <p className="text-sm text-gray-500">Manage monthly staff schedules and approve shift requests</p>
           </div>
-          <button onClick={loadSchedules} className="px-4 py-2 bg-white border border-gray-200 text-gray-700 text-sm font-bold rounded-lg hover:bg-gray-50 shadow-sm transition-colors uppercase tracking-wider flex items-center gap-2">
-            {loading && <Loader2 className="w-4 h-4 animate-spin text-gray-400" />}
-            Refresh Data
-          </button>
+          
+          <div className="flex items-center gap-4">
+            {lots.length > 1 && (
+              <div className="flex items-center gap-3 bg-white px-3 py-1.5 border border-gray-200 rounded-lg shadow-sm">
+                <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Building:</span>
+                <select
+                  value={globalLotId || ''}
+                  onChange={e => {
+                    if (setGlobalLotId) setGlobalLotId(e.target.value);
+                  }}
+                  className="bg-transparent text-sm font-bold text-gray-900 focus:outline-none focus:ring-0 min-w-[180px] cursor-pointer"
+                >
+                  {lots.map((l: any) => <option key={l._id} value={l._id}>{l.name}</option>)}
+                </select>
+              </div>
+            )}
+
+            <button onClick={() => setQuotaModalOpen(true)} className="p-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 shadow-sm transition-colors" title="Shift Quota Settings">
+              <Settings className="w-5 h-5" />
+            </button>
+
+            <button onClick={loadSchedules} className="px-4 py-2 bg-white border border-gray-200 text-gray-700 text-sm font-bold rounded-lg hover:bg-gray-50 shadow-sm transition-colors uppercase tracking-wider flex items-center gap-2">
+              {loading && <Loader2 className="w-4 h-4 animate-spin text-gray-400" />}
+              Refresh Data
+            </button>
+          </div>
         </div>
         
         <div className="flex items-center gap-6 border-b border-gray-200 w-full mt-2">
@@ -143,9 +217,9 @@ export default function ManagerWorkScheduleTab({ globalLotId }: { globalLotId: s
             className={`pb-3 text-sm font-bold border-b-2 transition-colors flex items-center gap-2 ${activeTab === 'requests' ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
           >
             Registration Requests
-            {schedules.filter(s => s.status === 'pending').length > 0 && (
+            {schedules.filter(s => s.shifts.some((shift: any) => shift.status === 'pending')).length > 0 && (
               <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">
-                {schedules.filter(s => s.status === 'pending').length}
+                {schedules.filter(s => s.shifts.some((shift: any) => shift.status === 'pending')).length}
               </span>
             )}
           </button>
@@ -361,19 +435,23 @@ export default function ManagerWorkScheduleTab({ globalLotId }: { globalLotId: s
                     )}
                   </div>
                   
-                  {schedule.status === 'pending' && (
+                  {schedule.shifts.some((s: any) => s.status === 'pending') && (
                     <div className="px-5 py-4 bg-gray-50 border-t border-gray-100 flex justify-end gap-3 mt-auto">
                       <button 
-                        onClick={() => setActionModal({ id: schedule._id, action: 'rejected', title: 'Reject Schedule' })}
-                        className="px-4 py-2 bg-white text-red-600 border border-red-200 hover:bg-red-50 text-sm font-bold rounded-lg transition-colors flex items-center gap-2"
-                      >
-                        <X className="w-4 h-4" /> Reject
-                      </button>
-                      <button 
-                        onClick={() => setActionModal({ id: schedule._id, action: 'approved', title: 'Approve Schedule' })}
+                        onClick={() => setActionModal({ id: schedule._id, bulk: true, action: 'approved', title: 'Approve All Pending' })}
                         className="px-4 py-2 bg-gray-900 text-white hover:bg-gray-800 text-sm font-bold rounded-lg transition-colors flex items-center gap-2 shadow-sm"
                       >
-                        <Check className="w-4 h-4" /> Approve
+                        <Check className="w-4 h-4" /> Bulk Approve
+                      </button>
+                    </div>
+                  )}
+                  {schedule.status === 'approved' && !schedule.shifts.some((s: any) => s.status === 'pending') && (
+                    <div className="px-5 py-4 bg-blue-50 border-t border-blue-100 flex justify-end gap-3 mt-auto">
+                      <button 
+                        onClick={() => setActionModal({ id: schedule._id, bulk: true, action: 'published', title: 'Publish Schedule' })}
+                        className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 text-sm font-bold rounded-lg transition-colors flex items-center gap-2 shadow-sm"
+                      >
+                        <Calendar className="w-4 h-4" /> Publish
                       </button>
                     </div>
                   )}
@@ -449,35 +527,73 @@ export default function ManagerWorkScheduleTab({ globalLotId }: { globalLotId: s
             </div>
             
             <div className="p-6 overflow-y-auto flex-1 bg-white custom-scrollbar">
-              <div className="space-y-4">
-                {Object.entries(
+              {(() => {
+                const weeks: any = {};
+                detailsModal.shifts.forEach((s: any) => {
+                  const week = dayjs(s.date).isoWeek();
+                  if (!weeks[week]) weeks[week] = 0;
+                  weeks[week]++;
+                });
+                const hasOvertimeWarning = Object.values(weeks).some((count: any) => count > 6);
+                
+                return (
+                  <div className="space-y-4">
+                    {hasOvertimeWarning && (
+                      <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-red-700 text-sm font-medium mb-4">
+                        <AlertTriangle className="w-4 h-4 shrink-0" />
+                        Warning: This staff has registered for more than 6 shifts in a single week.
+                      </div>
+                    )}
+                    
+                    {Object.entries(
                   detailsModal.shifts.reduce((acc: any, curr: any) => {
                     if (!acc[curr.date]) acc[curr.date] = [];
-                    acc[curr.date].push(curr.shiftType);
+                    acc[curr.date].push(curr);
                     return acc;
                   }, {})
                 ).sort((a: any, b: any) => a[0].localeCompare(b[0])).map(([date, shifts]: any) => (
                   <div key={date} className="flex flex-col sm:flex-row sm:items-center justify-between bg-white p-4 rounded-xl border border-gray-200 shadow-sm gap-3 hover:border-gray-300 transition-colors">
                     <div className="flex items-center gap-3">
-                      <div className="bg-gray-100 text-gray-700 w-12 h-12 flex flex-col items-center justify-center rounded-lg font-black leading-none">
+                      <div className="bg-gray-100 text-gray-700 w-12 h-12 flex flex-col items-center justify-center rounded-lg font-black leading-none shrink-0">
                         <span className="text-xs uppercase text-gray-500">{dayjs(date).format('ddd')}</span>
                         <span className="text-lg mt-0.5">{dayjs(date).format('DD')}</span>
                       </div>
-                      <span className="text-sm font-bold text-gray-600">{dayjs(date).format('MMMM YYYY')}</span>
+                      <span className="text-sm font-bold text-gray-600">{dayjs(date).format('MM YYYY')}</span>
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                      {shifts.map((st: string) => {
-                        const shiftInfo = SHIFTS.find(s => s.id === st);
+                    <div className="flex flex-wrap gap-2 flex-1 justify-end">
+                      {shifts.map((shift: any) => {
+                        const shiftInfo = SHIFTS.find(s => s.id === shift.shiftType);
                         return (
-                          <div key={st} className={`flex flex-col items-center px-4 py-1.5 rounded-lg border shadow-sm ${
-                            st === 'morning' ? 'bg-sky-50 border-sky-200' :
-                            st === 'afternoon' ? 'bg-amber-50 border-amber-200' :
+                          <div key={shift._id} className={`flex items-center justify-between gap-3 px-3 py-1.5 rounded-lg border shadow-sm ${
+                            shift.shiftType === 'morning' ? 'bg-sky-50 border-sky-200' :
+                            shift.shiftType === 'afternoon' ? 'bg-amber-50 border-amber-200' :
                             'bg-indigo-50 border-indigo-200'
                           }`}>
-                            <span className={`text-[10px] font-black uppercase tracking-wider ${
-                              st === 'morning' ? 'text-sky-700' : st === 'afternoon' ? 'text-amber-700' : 'text-indigo-700'
-                            }`}>{shiftInfo?.id}</span>
-                            <span className="text-[9px] font-semibold text-gray-500 mt-0.5">{shiftInfo?.label.match(/\(([^)]+)\)/)?.[1]}</span>
+                            <div className="flex flex-col">
+                              <span className={`text-[10px] font-black uppercase tracking-wider ${
+                                shift.shiftType === 'morning' ? 'text-sky-700' : shift.shiftType === 'afternoon' ? 'text-amber-700' : 'text-indigo-700'
+                              }`}>{shiftInfo?.id}</span>
+                              <span className="text-[9px] font-semibold text-gray-500 mt-0.5">{shiftInfo?.label.match(/\(([^)]+)\)/)?.[1]}</span>
+                            </div>
+                            
+                            {shift.status === 'pending' ? (
+                              <div className="flex items-center gap-1">
+                                <button onClick={() => setActionModal({ id: detailsModal._id, shiftId: shift._id, action: 'approved', title: 'Approve Shift' })} className="p-1 bg-green-100 text-green-700 hover:bg-green-200 rounded">
+                                  <Check className="w-3 h-3" />
+                                </button>
+                                <button onClick={() => setActionModal({ id: detailsModal._id, shiftId: shift._id, action: 'rejected', title: 'Reject Shift' })} className="p-1 bg-red-100 text-red-700 hover:bg-red-200 rounded">
+                                  <X className="w-3 h-3" />
+                                </button>
+                              </div>
+                            ) : (
+                              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider ${
+                                shift.status === 'approved' ? 'bg-green-100 text-green-700' :
+                                shift.status === 'published' ? 'bg-blue-100 text-blue-700' :
+                                'bg-red-100 text-red-700'
+                              }`}>
+                                {shift.status}
+                              </span>
+                            )}
                           </div>
                         );
                       })}
@@ -485,9 +601,11 @@ export default function ManagerWorkScheduleTab({ globalLotId }: { globalLotId: s
                   </div>
                 ))}
               </div>
-            </div>
-          </div>
-        </div>,
+            );
+          })()}
+        </div>
+      </div>
+    </div>,
         document.body
       )}
 
@@ -550,6 +668,54 @@ export default function ManagerWorkScheduleTab({ globalLotId }: { globalLotId: s
                   </div>
                 );
               })}
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+      {/* Quota Settings Modal */}
+      {quotaModalOpen && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setQuotaModalOpen(false)} />
+          <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-md p-6 animate-fade-in-up m-4">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-xl font-black text-gray-900">Shift Quotas</h2>
+                <p className="text-sm text-gray-500">Max number of staff allowed per shift</p>
+              </div>
+              <button onClick={() => setQuotaModalOpen(false)} className="p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-900 rounded-lg transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 space-y-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-bold text-gray-700 uppercase tracking-wider">Morning Shift</span>
+                  <input type="number" min="1" value={quotas.morning} onChange={(e) => setQuotas(prev => ({ ...prev, morning: parseInt(e.target.value) || 1 }))} className="w-20 px-3 py-1.5 border border-gray-300 rounded-lg text-center text-sm font-bold" />
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-bold text-gray-700 uppercase tracking-wider">Afternoon Shift</span>
+                  <input type="number" min="1" value={quotas.afternoon} onChange={(e) => setQuotas(prev => ({ ...prev, afternoon: parseInt(e.target.value) || 1 }))} className="w-20 px-3 py-1.5 border border-gray-300 rounded-lg text-center text-sm font-bold" />
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-bold text-gray-700 uppercase tracking-wider">Night Shift</span>
+                  <input type="number" min="1" value={quotas.night} onChange={(e) => setQuotas(prev => ({ ...prev, night: parseInt(e.target.value) || 1 }))} className="w-20 px-3 py-1.5 border border-gray-300 rounded-lg text-center text-sm font-bold" />
+                </div>
+              </div>
+              <p className="text-xs text-gray-500 leading-relaxed">
+                If the quota is reached, staff members will not be able to register for that shift. This limits the total number of registrations across all staff.
+              </p>
+              <div className="flex justify-end pt-2">
+                <button 
+                  onClick={handleSaveQuotas}
+                  disabled={savingQuotas}
+                  className="px-6 py-2.5 bg-gray-900 text-white rounded-lg text-sm font-bold transition-colors shadow-sm flex items-center gap-2 uppercase tracking-wider hover:bg-gray-800 disabled:opacity-50"
+                >
+                  {savingQuotas && <Loader2 className="w-4 h-4 animate-spin" />}
+                  Save Quotas
+                </button>
+              </div>
             </div>
           </div>
         </div>,

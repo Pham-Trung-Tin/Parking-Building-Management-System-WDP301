@@ -12,9 +12,13 @@ class WorkScheduleService {
   getManagerSchedules(parkingLotId?: string) {
     return axiosClient.get('/work-schedules/manager', { params: { parkingLotId } });
   }
+
+  getAvailability(parkingLotId: string, monthYear: string) {
+    return axiosClient.get('/work-schedules/availability', { params: { parkingLotId, monthYear } });
+  }
   
-  updateStatus(id: string, status: string, managerNote?: string) {
-    return axiosClient.put(`/work-schedules/${id}/status`, { status, managerNote });
+  updateStatus(id: string, status: string, managerNote?: string, shiftId?: string, bulk?: boolean) {
+    return axiosClient.put(`/work-schedules/${id}/status`, { status, managerNote, shiftId, bulk });
   }
 }
 
