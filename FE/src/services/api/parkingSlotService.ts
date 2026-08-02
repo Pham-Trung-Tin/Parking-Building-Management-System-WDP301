@@ -28,6 +28,14 @@ export interface ParkingSlot {
     zone: { _id: string; name: string; code: string } | string;
     vehicleType: ParkingSlotVehicleType | string;
     status: 'available' | 'occupied' | 'reserved' | 'maintenance' | 'locked';
+    /**
+     * Computed by the backend at query time (getFloorSlotMap).
+     * 'reserved' if a booking overlaps the requested time window (or starts within 30 min
+     * for the Staff Live Map). Falls back to `status` when not present.
+     */
+    computedStatus?: 'available' | 'occupied' | 'reserved' | 'maintenance' | 'locked';
+    /** Populated when computedStatus === 'reserved' — the conflicting booking info. */
+    upcomingBooking?: { bookingCode: string; startTime: string; endTime: string };
     position?: ParkingSlotPosition;
     features?: ParkingSlotFeatures;
     currentSession?: any;
@@ -57,9 +65,13 @@ const parkingSlotService = {
         return axiosClient.get('/parking-slots', { params });
     },
 
-    /** GET /parking-slots/floor-map/:floorId */
-    getFloorMap: (floorId: string): Promise<ParkingSlot[]> => {
-        return axiosClient.get(`/parking-slots/floor-map/${floorId}`);
+    /** GET /parking-slots/floor-map/:floorId
+     *  @param wantedStart ISO string of the start time the customer wants to book (optional)
+     *  @param wantedEnd   ISO string of the end time the customer wants to book (optional)
+     *  When provided, slots with overlapping bookings are returned with computedStatus='reserved'.
+     */
+    getFloorMap: (floorId: string, params?: { wantedStart?: string; wantedEnd?: string }): Promise<any> => {
+        return axiosClient.get(`/parking-slots/floor-map/${floorId}`, { params });
     },
 
     /** GET /parking-slots/available */

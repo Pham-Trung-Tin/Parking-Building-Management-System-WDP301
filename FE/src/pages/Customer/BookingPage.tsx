@@ -377,18 +377,30 @@ const SlotMapGrid = ({ slots, selectedSlot, onSelect, vehicleType, currentUserId
             return { bg: '#eff6ff', border: '#3b82f6', text: '#1d4ed8', label: 'Your Selection', glow: '0 0 0 2px rgba(59,130,246,0.2)' };
         }
 
-        switch (s.status) {
+        // Use computedStatus from backend (takes time-based bookings into account)
+        // Fall back to the raw DB status if computedStatus is not present.
+        const effectiveStatus = s.computedStatus ?? s.status;
+
+        switch (effectiveStatus) {
             case 'available': return { bg: '#ffffff', border: '#22c55e', text: '#16a34a', label: 'Available', glow: 'none' };
             case 'occupied': return { bg: '#ffffff', border: '#ef4444', text: '#ef4444', label: 'Occupied', glow: 'none' };
-            case 'reserved': return { bg: '#ede9fe', border: '#8b5cf6', text: '#7c3aed', label: 'Reserved', glow: 'none' };
+            case 'reserved': return {
+                bg: '#ede9fe', border: '#8b5cf6', text: '#7c3aed',
+                label: s.upcomingBooking
+                    ? `Reserved (${s.upcomingBooking.startTime}–${s.upcomingBooking.endTime})`
+                    : 'Reserved',
+                glow: 'none',
+            };
             case 'maintenance': return { bg: '#f8fafc', border: '#94a3b8', text: '#64748b', label: 'Maintenance', glow: 'none' };
             case 'locked': return { bg: '#f8fafc', border: '#cbd5e1', text: '#94a3b8', label: 'Locked', glow: 'none' };
-            default: return { bg: '#f8fafc', border: '#e2e8f0', text: '#94a3b8', label: s.status, glow: 'none' };
+            default: return { bg: '#f8fafc', border: '#e2e8f0', text: '#94a3b8', label: effectiveStatus, glow: 'none' };
         }
     };
 
     const canSelectSlot = (s: ParkingSlot) => {
-        if (s.status !== 'available') return false;
+        // Use computedStatus to block time-reserved slots from being selected
+        const effectiveStatus = s.computedStatus ?? s.status;
+        if (effectiveStatus !== 'available') return false;
         // If locked by someone else and lock still active → cannot select
         if (
             s.lockedBy && s.lockedUntil &&
@@ -1013,11 +1025,16 @@ const BookingPage = () => {
     useEffect(() => {
         if (!selectedFloor) return;
         setSlotsLoading(true); setSlotsError(null);
-        parkingSlotService.getFloorMap(selectedFloor._id)
+        // Pass the customer's chosen time window so the backend can mark
+        // slots with conflicting bookings as computedStatus='reserved'.
+        const params = (entryDate && exitDate)
+            ? { wantedStart: new Date(entryDate).toISOString(), wantedEnd: new Date(exitDate).toISOString() }
+            : undefined;
+        parkingSlotService.getFloorMap(selectedFloor._id, params)
             .then((data: any) => setFloorSlots((Array.isArray(data) ? data : data?.data ?? []).filter((s: ParkingSlot) => !s.isDeleted)))
             .catch((err: any) => setSlotsError(err?.message || 'Failed to load slots'))
             .finally(() => setSlotsLoading(false));
-    }, [selectedFloor]);
+    }, [selectedFloor, entryDate, exitDate]);
 
     useEffect(() => {
         setSelectedFloor(null); setSelectedZone(null);
