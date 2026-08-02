@@ -63,10 +63,13 @@ axiosClient.interceptors.response.use(
 
             const refreshToken = localStorage.getItem('refreshToken');
 
-            // Không có refreshToken → logout ngay (chỉ chuyển hướng nếu không ở trang login)
+            // Không có refreshToken → logout ngay (chỉ chuyển hướng nếu không ở trang login hoặc các trang public)
             if (!refreshToken) {
                 localStorage.removeItem('accessToken');
-                if (window.location.pathname !== '/login') {
+                const isPublicRoute = window.location.pathname.startsWith('/public-map') || 
+                                      window.location.pathname.startsWith('/find-parking') || 
+                                      window.location.pathname === '/';
+                if (!isPublicRoute && window.location.pathname !== '/login') {
                     window.location.href = '/login';
                 }
                 return Promise.reject({ status, message, raw: error });
