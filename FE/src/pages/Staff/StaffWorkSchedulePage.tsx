@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { workScheduleService } from '../../services/api';
 import useProfile from '../../hooks/useProfile';
-import { Loader2, Check, Calendar, LogOut, CheckCircle2, AlertTriangle, Clock, MapPin, Search } from 'lucide-react';
+import { Loader2, Check, Calendar, LogOut, CheckCircle2, AlertTriangle, Clock, MapPin, Search, X } from 'lucide-react';
+import { createPortal } from 'react-dom';
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
 import { Link, useNavigate } from 'react-router-dom';
@@ -23,6 +24,11 @@ export default function StaffWorkSchedulePage() {
   const [error, setError] = useState('');
   const [fullShifts, setFullShifts] = useState<string[]>([]);
 
+  const [leaveModalOpen, setLeaveModalOpen] = useState(false);
+  const [leaveTarget, setLeaveTarget] = useState<{ date: string, shiftType: string, label: string } | null>(null);
+  const [leaveReason, setLeaveReason] = useState('');
+  const [submittingLeave, setSubmittingLeave] = useState(false);
+
   const [activeTab, setActiveTab] = useState<'view' | 'register'>('view');
   const [viewMode, setViewMode] = useState<'week' | 'month'>('week');
   const [dateOffset, setDateOffset] = useState(0);
@@ -33,17 +39,39 @@ export default function StaffWorkSchedulePage() {
 
   useEffect(() => {
     loadMySchedules();
+    const interval = setInterval(() => {
+      loadMySchedules(true);
+    }, 10000); // 10 seconds
+    return () => clearInterval(interval);
   }, []);
 
-  const loadMySchedules = async () => {
-    setLoading(true);
+  const loadMySchedules = async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const res: any = await workScheduleService.getMySchedules();
       setAllMySchedules(res.data || res);
     } catch (err: any) {
-      setError(err.message || 'Failed to load schedules');
+      if (!silent) setError(err.message || 'Failed to load schedules');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
+    }
+  };
+
+  const handleRequestLeave = async () => {
+    if (!scheduleData || !leaveTarget || !leaveReason.trim()) return;
+    setSubmittingLeave(true);
+    try {
+      await workScheduleService.requestLeave(scheduleData._id, {
+        date: leaveTarget.date,
+        shiftType: leaveTarget.shiftType,
+        leaveReason: leaveReason
+      });
+      setLeaveModalOpen(false);
+      loadMySchedules(); // reload data
+    } catch (e: any) {
+      setError(e.message || 'Failed to submit leave request');
+    } finally {
+      setSubmittingLeave(false);
     }
   };
 
@@ -95,7 +123,7 @@ export default function StaffWorkSchedulePage() {
       const lotId = Array.isArray(raw)
         ? (raw as any[]).filter(Boolean).map((v: any) => v?._id || v)[0]
         : (typeof raw === 'string' ? raw : (raw as any)?._id);
-        
+
       if (lotId && monthYear) {
         try {
           const res: any = await workScheduleService.getAvailability(lotId, monthYear);
@@ -284,6 +312,13 @@ export default function StaffWorkSchedulePage() {
             </div>
 
             <div className="flex items-center gap-4">
+              <button
+                onClick={() => loadMySchedules()}
+                className="px-4 py-2 bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 text-xs font-bold rounded-lg transition-colors flex items-center gap-2 shadow-sm"
+              >
+                <Loader2 className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-blue-600' : 'text-gray-400'}`} />
+                Refresh
+              </button>
               <div className="flex items-center bg-gray-100 rounded-lg p-1 border border-gray-200 shadow-inner">
                 <button
                   onClick={() => { setViewMode('week'); setDateOffset(0); }}
@@ -442,20 +477,36 @@ export default function StaffWorkSchedulePage() {
                             dayShifts.map((shiftType: string) => {
                               const shiftInfo = SHIFTS.find(s => s.id === shiftType);
                               const shiftData = getShiftData(d.dateStr, shiftType);
+                              const canRequestLeave = shiftData?.status === 'approved' || shiftData?.status === 'published';
+
                               return (
-                                <div key={shiftType} className={`px-2 py-1 rounded border shadow-sm flex flex-col ${shiftData?.status === 'approved' ? 'bg-green-50 border-green-100 text-green-800' :
-                                  shiftData?.status === 'published' ? 'bg-indigo-100 border-indigo-200 text-indigo-900' :
-                                    shiftData?.status === 'rejected' ? 'bg-red-50 border-red-100 text-red-800' :
-                                      shiftType === 'morning' ? 'bg-sky-50 border-sky-100 text-sky-800' :
-                                        shiftType === 'afternoon' ? 'bg-amber-50 border-amber-100 text-amber-800' :
-                                          'bg-indigo-50 border-indigo-100 text-indigo-800'
-                                  }`}>
+                                <div key={shiftType}
+                                  onClick={() => {
+                                    if (canRequestLeave) {
+                                      setLeaveTarget({ date: d.dateStr, shiftType, label: shiftInfo?.label || '' });
+                                      setLeaveReason('');
+                                      setLeaveModalOpen(true);
+                                    }
+                                  }}
+                                  className={`px-2 py-1 rounded border shadow-sm flex flex-col relative ${canRequestLeave ? 'cursor-pointer hover:opacity-80' : ''} ${shiftData?.status === 'approved' ? 'bg-green-50 border-green-100 text-green-800' :
+                                      shiftData?.status === 'published' ? 'bg-indigo-100 border-indigo-200 text-indigo-900' :
+                                        shiftData?.status === 'rejected' ? 'bg-red-50 border-red-100 text-red-800' :
+                                          shiftData?.status === 'leave_pending' ? 'bg-orange-50 border-orange-200 text-orange-800' :
+                                            shiftData?.status === 'leave_approved' ? 'bg-gray-100 border-gray-300 text-gray-500 opacity-60' :
+                                              'bg-sky-50 border-sky-100 text-sky-800'
+                                    }`}>
                                   <span className={`font-black uppercase truncate ${viewMode === 'week' ? 'text-xs' : 'text-[10px]'}`}>
                                     {shiftInfo?.label.split(' ')[0]}
                                   </span>
                                   <span className="text-[9px] font-semibold opacity-70 truncate mt-0.5">
                                     {shiftInfo?.label.match(/\(([^)]+)\)/)?.[1]}
                                   </span>
+                                  {shiftData?.status === 'leave_pending' && (
+                                    <span className="text-[8px] font-bold bg-orange-200 text-orange-900 px-1 py-0.5 mt-1 rounded text-center">LEAVE PENDING</span>
+                                  )}
+                                  {shiftData?.status === 'leave_approved' && (
+                                    <span className="text-[8px] font-bold bg-gray-300 text-gray-700 px-1 py-0.5 mt-1 rounded text-center">LEAVE APPROVED</span>
+                                  )}
                                 </div>
                               );
                             })
@@ -529,6 +580,60 @@ export default function StaffWorkSchedulePage() {
           </div>
         </main>
       </div>
+
+      {/* Leave Request Modal */}
+      {leaveModalOpen && leaveTarget && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setLeaveModalOpen(false)} />
+          <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-md p-6 animate-fade-in-up m-4">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-xl font-black text-gray-900">Request Leave</h2>
+                <p className="text-sm text-gray-500">Submit a leave request for an approved shift</p>
+              </div>
+              <button onClick={() => setLeaveModalOpen(false)} className="p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-900 rounded-lg transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
+                <p className="text-sm font-bold text-blue-900 mb-1">Shift Details</p>
+                <p className="text-sm text-blue-700 font-medium">{leaveTarget.date} - {leaveTarget.label}</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">Reason for Leave *</label>
+                <textarea
+                  value={leaveReason}
+                  onChange={(e) => setLeaveReason(e.target.value)}
+                  placeholder="Please provide a valid reason..."
+                  rows={3}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm font-medium"
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4">
+                <button
+                  onClick={() => setLeaveModalOpen(false)}
+                  className="px-5 py-2.5 text-gray-700 font-bold hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleRequestLeave}
+                  disabled={!leaveReason.trim() || submittingLeave}
+                  className="px-6 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-bold transition-colors shadow-sm flex items-center gap-2 hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {submittingLeave && <Loader2 className="w-4 h-4 animate-spin" />}
+                  Submit Request
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }

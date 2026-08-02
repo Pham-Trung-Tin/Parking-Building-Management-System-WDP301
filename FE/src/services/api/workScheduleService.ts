@@ -20,6 +20,14 @@ class WorkScheduleService {
   updateStatus(id: string, status: string, managerNote?: string, shiftId?: string, bulk?: boolean) {
     return axiosClient.put(`/work-schedules/${id}/status`, { status, managerNote, shiftId, bulk });
   }
+
+  requestLeave(id: string, data: { date: string, shiftType: string, leaveReason: string }) {
+    return axiosClient.put(`/work-schedules/${id}/leave-request`, data);
+  }
+
+  assignStaffToShift(data: { parkingLotId: string, staffId: string, date: string, shiftType: string }) {
+    return axiosClient.post('/work-schedules/assign', data);
+  }
 }
 
 const workScheduleService = new WorkScheduleService();

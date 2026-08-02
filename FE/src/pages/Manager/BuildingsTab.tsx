@@ -242,7 +242,7 @@ export default function BuildingsTab({ globalLotId, setGlobalLotId }: any) {
           <h2 className="text-sm font-bold text-gray-800 uppercase tracking-widest">System Overview</h2>
         </div>
         <button onClick={() => { fetchDash(); fetchLots(); }} className="flex items-center gap-2 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors bg-gray-50 hover:bg-gray-100 px-4 py-2 rounded-xl border border-gray-200 shadow-sm">
-          <RefreshCw className={`w-4 h-4 ${dashLoading ? 'animate-spin text-indigo-500' : ''}`} /> Refresh Data
+          <RefreshCw className={`w-4 h-4 ${dashLoading ? 'animate-spin text-indigo-500' : ''}`} /> Refresh
         </button>
       </div>
 
