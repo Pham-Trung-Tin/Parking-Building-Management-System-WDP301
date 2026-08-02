@@ -6,6 +6,7 @@ import floorService from '../../services/api/floorService';
 import zoneService from '../../services/api/zoneService';
 import reportService, { DashboardStats } from '../../services/api/reportService';
 import { Toast, useToast, STATUS_BADGE } from './shared';
+import { useConfirm } from '../../components/ConfirmDialog';
 
 const EMPTY = { name: '', code: '', description: '', contactPhone: '', contactEmail: '', status: 'active', address: { street: '', district: '', city: '' } };
 
@@ -92,9 +93,18 @@ export default function BuildingsTab({ globalLotId, setGlobalLotId }: any) {
   const [search, setSearch] = useState('');
   const [modal, setModal] = useState<any>(null);
   const { toast, showToast } = useToast();
+  const { askConfirm, ConfirmNode } = useConfirm();
 
   const user = useMemo(() => { try { return JSON.parse(localStorage.getItem('user') || '{}'); } catch { return {}; } }, []);
   const isManager = user?.role === 'parking_manager';
+
+  // Support both string (legacy) and string[] (new) for assignedParkingLot
+  const assignedIds: string[] = useMemo(() => {
+    const raw = user?.assignedParkingLot;
+    if (!raw) return [];
+    if (Array.isArray(raw)) return raw.filter(Boolean);
+    return [raw];
+  }, [user]);
 
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [floorCount, setFloorCount] = useState<number | null>(null);
@@ -108,8 +118,8 @@ export default function BuildingsTab({ globalLotId, setGlobalLotId }: any) {
     try {
       const res = await parkingLotService.getParkingLots({ limit: 100, search: search || undefined });
       let fetchedLots = res.data || res.docs || (Array.isArray(res) ? res : []);
-      if (isManager && user?.assignedParkingLot) {
-        fetchedLots = fetchedLots.filter((l: any) => l._id === user.assignedParkingLot);
+      if (isManager && assignedIds.length > 0) {
+        fetchedLots = fetchedLots.filter((l: any) => assignedIds.includes(l._id));
       }
       setLots(fetchedLots);
     } catch (e: any) { showToast(e.message || 'Error loading', false); }
@@ -117,12 +127,20 @@ export default function BuildingsTab({ globalLotId, setGlobalLotId }: any) {
   }, [search]);
 
   const fetchDash = useCallback(async () => {
+    // Don't fetch if manager hasn't selected a lot yet
+    if (isManager && !globalLotId) {
+      setFloorCount(0);
+      setZoneCount(0);
+      setRevenueData([]);
+      setDashLoading(false);
+      return;
+    }
     setDashLoading(true);
     try {
       const [sr, fr, zr, revR] = await Promise.allSettled([
         reportService.getDashboardStats(globalLotId || undefined),
-        floorService.getFloors({ limit: 2000, ...(globalLotId ? { parkingLotId: globalLotId } : {}) }),
-        zoneService.getZones({ limit: 2000, ...(globalLotId ? { parkingLotId: globalLotId } : {}) }),
+        floorService.getFloors({ limit: 2000, ...(globalLotId ? { parkingLot: globalLotId } : {}) }),
+        zoneService.getZones({ limit: 2000, ...(globalLotId ? { parkingLot: globalLotId } : {}) }),
         reportService.getRevenueReport({ period: revenuePeriod, ...(globalLotId ? { parkingLotId: globalLotId } : {}) })
       ]);
 
@@ -138,34 +156,9 @@ export default function BuildingsTab({ globalLotId, setGlobalLotId }: any) {
           revenue: item.totalRevenue || 0,
           sortKey: `${item._id.year}-${String(item._id.month).padStart(2, '0')}-${String(item._id.day).padStart(2, '0')}`
         })).sort((a: any, b: any) => a.sortKey.localeCompare(b.sortKey));
-
-        // Generate some mock data if empty for demonstration purposes of the UI
-        if (formattedData.length === 0) {
-          const mock = [];
-          for (let i = 6; i >= 0; i--) {
-            const d = new Date();
-            d.setDate(d.getDate() - i);
-            mock.push({
-              date: `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`,
-              revenue: Math.floor(Math.random() * 5000000) + 1000000
-            });
-          }
-          setRevenueData(mock);
-        } else {
-          setRevenueData(formattedData);
-        }
+        setRevenueData(formattedData);
       } else {
-        // Fallback mock data if API fails to show the UI requested
-        const mock = [];
-        for (let i = 6; i >= 0; i--) {
-          const d = new Date();
-          d.setDate(d.getDate() - i);
-          mock.push({
-            date: `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`,
-            revenue: Math.floor(Math.random() * 5000000) + 1000000
-          });
-        }
-        setRevenueData(mock);
+        setRevenueData([]);
       }
 
     } catch { /* ignore */ }
@@ -191,9 +184,15 @@ export default function BuildingsTab({ globalLotId, setGlobalLotId }: any) {
   };
 
   const handleDelete = async (lot: any) => {
-    if (!window.confirm(`Delete "${lot.name}"?`)) return;
-    try { await parkingLotService.deleteParkingLot(lot._id); showToast('Deleted'); fetchLots(); fetchDash(); }
-    catch (e: any) { showToast(e.message || 'Error', false); }
+    askConfirm(
+      `Delete "${lot.name}"?`,
+      async () => {
+        try { await parkingLotService.deleteParkingLot(lot._id); showToast('Deleted'); fetchLots(); fetchDash(); }
+        catch (e: any) { showToast(e.message || 'Error', false); }
+      },
+      'This action cannot be undone.',
+      'Delete Building'
+    );
   };
 
   return (
@@ -213,8 +212,8 @@ export default function BuildingsTab({ globalLotId, setGlobalLotId }: any) {
             <select
               value={globalLotId || ''}
               onChange={(e) => setGlobalLotId?.(e.target.value)}
-              disabled={isManager}
-              className={`pl-9 pr-8 py-2.5 bg-white border border-gray-200 rounded-xl text-sm font-medium text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 min-w-[220px] transition-all appearance-none ${isManager ? 'opacity-70 cursor-not-allowed bg-gray-50' : 'cursor-pointer hover:border-gray-300'}`}
+              disabled={isManager && assignedIds.length <= 1}
+              className={`pl-9 pr-8 py-2.5 bg-white border border-gray-200 rounded-xl text-sm font-medium text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 min-w-[220px] transition-all appearance-none ${(isManager && assignedIds.length <= 1) ? 'opacity-70 cursor-not-allowed bg-gray-50' : 'cursor-pointer hover:border-gray-300'}`}
             >
               {!isManager && <option value="">All Buildings Overview</option>}
               {lots.map((lot) => (
@@ -243,7 +242,7 @@ export default function BuildingsTab({ globalLotId, setGlobalLotId }: any) {
           <h2 className="text-sm font-bold text-gray-800 uppercase tracking-widest">System Overview</h2>
         </div>
         <button onClick={() => { fetchDash(); fetchLots(); }} className="flex items-center gap-2 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors bg-gray-50 hover:bg-gray-100 px-4 py-2 rounded-xl border border-gray-200 shadow-sm">
-          <RefreshCw className={`w-4 h-4 ${dashLoading ? 'animate-spin text-indigo-500' : ''}`} /> Refresh Data
+          <RefreshCw className={`w-4 h-4 ${dashLoading ? 'animate-spin text-indigo-500' : ''}`} /> Refresh
         </button>
       </div>
 
@@ -253,12 +252,7 @@ export default function BuildingsTab({ globalLotId, setGlobalLotId }: any) {
         <div className="lg:col-span-2 space-y-6">
 
           {/* Core Metric Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {isManager ? (
-              <StatCard icon={Building} label="Assigned Building" value={loading ? '…' : (lots[0]?.code || 'N/A')} sub={lots[0]?.name || 'N/A'} color="indigo" loading={loading} />
-            ) : (
-              <StatCard icon={Building} label="Total Buildings" value={loading ? '…' : lots.length} sub={`${activeBuildings} currently active`} color="indigo" loading={loading} />
-            )}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
             {/* Parking Slots Compound Card Redesigned */}
             <div className="bg-white rounded-2xl border border-teal-100 shadow-sm p-5 hover:shadow-md transition-shadow relative overflow-hidden group">
@@ -394,12 +388,12 @@ export default function BuildingsTab({ globalLotId, setGlobalLotId }: any) {
             <div className="col-span-2 lg:col-span-1 grid grid-cols-2 gap-4">
               <div className="bg-white rounded-2xl border border-gray-200 p-4 flex flex-col items-center justify-center text-center shadow-sm">
                 <Layers className="w-6 h-6 text-indigo-400 mb-2" />
-                {dashLoading ? <div className="h-6 w-8 bg-gray-100 rounded animate-pulse" /> : <p className="text-xl font-bold text-gray-900">{floorCount ?? '—'}</p>}
+                {dashLoading ? <div className="h-6 w-8 bg-gray-100 rounded animate-pulse" /> : <p className="text-xl font-bold text-gray-900">{(globalLotId || !isManager) ? (floorCount ?? '—') : '—'}</p>}
                 <p className="text-[10px] font-medium text-gray-500 uppercase mt-1">Floors</p>
               </div>
               <div className="bg-white rounded-2xl border border-gray-200 p-4 flex flex-col items-center justify-center text-center shadow-sm">
                 <Grid className="w-6 h-6 text-violet-400 mb-2" />
-                {dashLoading ? <div className="h-6 w-8 bg-gray-100 rounded animate-pulse" /> : <p className="text-xl font-bold text-gray-900">{zoneCount ?? '—'}</p>}
+                {dashLoading ? <div className="h-6 w-8 bg-gray-100 rounded animate-pulse" /> : <p className="text-xl font-bold text-gray-900">{(globalLotId || !isManager) ? (zoneCount ?? '—') : '—'}</p>}
                 <p className="text-[10px] font-medium text-gray-500 uppercase mt-1">Zones</p>
               </div>
             </div>
@@ -409,6 +403,7 @@ export default function BuildingsTab({ globalLotId, setGlobalLotId }: any) {
       </div>
 
       {modal && <LotModal initial={modal} onSave={handleSave} onClose={() => setModal(null)} loading={saving} />}
+      {ConfirmNode}
       {toast && <Toast msg={toast.msg} ok={toast.ok} />}
     </div>
   );

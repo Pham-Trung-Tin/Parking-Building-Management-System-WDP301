@@ -4,7 +4,7 @@ import Header from '../../components/Header/Header';
 import Footer from '../../components/Footer/Footer';
 import useProfile from '../../hooks/useProfile';
 import { authService } from '../../services/api';
-import { LogIn, LogOut, Eye, AlertTriangle, User, Users, LayoutGrid } from 'lucide-react';
+import { LogIn, LogOut, Eye, AlertTriangle, User, Users, LayoutGrid, Calendar } from 'lucide-react';
 
 const ProfilePage = () => {
   const navigate = useNavigate();
@@ -326,72 +326,80 @@ const ProfilePage = () => {
                   Assigned Workplace
                 </h2>
 
-                {user.assignedParkingLot && typeof user.assignedParkingLot === 'object' ? (
-                  <div className="p-5 bg-gradient-to-r from-blue-50/80 to-indigo-50/60 border border-blue-100 rounded-xl">
-                    <div className="flex items-start gap-4">
-                      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-sm shrink-0">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24"
-                          fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                {(() => {
+                  const lot = Array.isArray(user.assignedParkingLot) ? user.assignedParkingLot[0] : user.assignedParkingLot;
+                  if (!lot) {
+                    return (
+                      <div className="p-4 bg-amber-50/50 border border-amber-100 rounded-xl flex items-center gap-3">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
+                          fill="none" stroke="#d97706" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <circle cx="12" cy="12" r="10" />
+                          <line x1="12" y1="8" x2="12" y2="12" />
+                          <line x1="12" y1="16" x2="12.01" y2="16" />
+                        </svg>
+                        <span className="text-sm text-amber-700 font-medium">
+                          You have not been assigned to any parking lot yet. Please contact your manager.
+                        </span>
+                      </div>
+                    );
+                  }
+
+                  if (typeof lot === 'object' && lot.name) {
+                    return (
+                      <div className="p-5 bg-gradient-to-r from-blue-50/80 to-indigo-50/60 border border-blue-100 rounded-xl">
+                        <div className="flex items-start gap-4">
+                          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-sm shrink-0">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24"
+                              fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z" />
+                              <path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2" />
+                              <path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2" />
+                              <path d="M10 6h4" />
+                              <path d="M10 10h4" />
+                              <path d="M10 14h4" />
+                              <path d="M10 18h4" />
+                            </svg>
+                          </div>
+                          <div>
+                            <h3 className="text-lg font-bold text-slate-900">
+                              {lot.name}
+                            </h3>
+                            <span className="inline-block text-xs font-bold text-blue-600 bg-blue-100 px-2 py-0.5 rounded-md mt-1 border border-blue-200">
+                              {lot.code}
+                            </span>
+                            {lot.address && (
+                              <p className="text-sm text-slate-500 mt-2 flex items-center gap-1.5">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
+                                  fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
+                                  <circle cx="12" cy="10" r="3" />
+                                </svg>
+                                {[lot.address.street, lot.address.district, lot.address.city].filter(Boolean).join(', ')}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div className="p-4 bg-slate-50/50 border border-slate-100 rounded-xl flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
+                          fill="none" stroke="#2563eb" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z" />
                           <path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2" />
                           <path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2" />
-                          <path d="M10 6h4" />
-                          <path d="M10 10h4" />
-                          <path d="M10 14h4" />
-                          <path d="M10 18h4" />
                         </svg>
                       </div>
                       <div>
-                        <h3 className="text-lg font-bold text-slate-900">
-                          {(user.assignedParkingLot as any).name}
-                        </h3>
-                        <span className="inline-block text-xs font-bold text-blue-600 bg-blue-100 px-2 py-0.5 rounded-md mt-1 border border-blue-200">
-                          {(user.assignedParkingLot as any).code}
-                        </span>
-                        {(user.assignedParkingLot as any).address && (
-                          <p className="text-sm text-slate-500 mt-2 flex items-center gap-1.5">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
-                              fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
-                              <circle cx="12" cy="10" r="3" />
-                            </svg>
-                            {[(user.assignedParkingLot as any).address.street,
-                              (user.assignedParkingLot as any).address.district,
-                              (user.assignedParkingLot as any).address.city,
-                            ].filter(Boolean).join(', ')}
-                          </p>
-                        )}
+                        <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">Parking Lot ID</span>
+                        <span className="text-sm font-bold text-slate-800">{typeof lot === 'object' ? lot._id || lot : lot}</span>
                       </div>
                     </div>
-                  </div>
-                ) : user.assignedParkingLot && typeof user.assignedParkingLot === 'string' ? (
-                  <div className="p-4 bg-slate-50/50 border border-slate-100 rounded-xl flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
-                        fill="none" stroke="#2563eb" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z" />
-                        <path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2" />
-                        <path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2" />
-                      </svg>
-                    </div>
-                    <div>
-                      <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">Parking Lot ID</span>
-                      <span className="text-sm font-bold text-slate-800">{user.assignedParkingLot}</span>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="p-4 bg-amber-50/50 border border-amber-100 rounded-xl flex items-center gap-3">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
-                      fill="none" stroke="#d97706" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <circle cx="12" cy="12" r="10" />
-                      <line x1="12" y1="8" x2="12" y2="12" />
-                      <line x1="12" y1="16" x2="12.01" y2="16" />
-                    </svg>
-                    <span className="text-sm text-amber-700 font-medium">
-                      You have not been assigned to any parking lot yet. Please contact your manager.
-                    </span>
-                  </div>
-                )}
+                  );
+                })()}
               </div>
             )}
 
@@ -574,6 +582,10 @@ const ProfilePage = () => {
                   <Link to="/staff/exceptions" className={linkClass('/staff/exceptions')}>
                     <AlertTriangle className={iconClass('/staff/exceptions')} />
                     Exceptions
+                  </Link>
+                  <Link to="/staff/schedule" className={linkClass('/staff/schedule')}>
+                    <Calendar className={iconClass('/staff/schedule')} />
+                    My Schedule
                   </Link>
                 </>
               )}

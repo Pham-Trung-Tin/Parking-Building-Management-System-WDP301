@@ -8,6 +8,7 @@ import ForgotPasswordPage from './pages/HomePage/ForgotPasswordPage';
 import ResetPasswordPage from './pages/HomePage/ResetPasswordPage';
 import ProfilePage from './pages/HomePage/ProfilePage';
 import ParkingSpotPage from './pages/Customer/ParkingSpotPage';
+import PublicMapPage from './pages/Customer/PublicMapPage';
 import BookingPage from './pages/Customer/BookingPage';
 import SessionPage from './pages/Customer/SessionPage';
 import CheckoutPage from './pages/Customer/CheckoutPage';
@@ -21,6 +22,7 @@ import StaffExitPage from './pages/Staff/StaffExitPage';
 import StaffExceptionsPage from './pages/Staff/StaffExceptionsPage';
 import StaffLiveViewPage from './pages/Staff/StaffLiveViewPage';
 import StaffManageSlotPage from './pages/Staff/StaffManageSlotPage';
+import StaffWorkSchedulePage from './pages/Staff/StaffWorkSchedulePage';
 import ManagerPortal from './pages/Manager/ManagerPortal';
 import { GuestRoute, CustomerRoute, RequireAuthRoute, AdminRoute } from './router/ProtectedRoute';
 import FloatingSessionWidget from './components/FloatingSessionWidget';
@@ -50,6 +52,7 @@ function App() {
                     {/* Public customer pages */}
                     <Route path="/" element={<HomePage />} />
                     <Route path="/find-parking" element={<ParkingSpotPage />} />
+                    <Route path="/public-map/:lotId" element={<PublicMapPage />} />
 
                     {/* Authenticated customer pages */}
                     <Route element={<RequireAuthRoute />}>
@@ -72,6 +75,8 @@ function App() {
                     <Route path="/staff/live-view" element={<StaffLiveViewPage />} />
                     <Route path="/staff/exceptions" element={<StaffExceptionsPage />} />
                     <Route path="/staff/manage-slots" element={<StaffManageSlotPage />} />
+                    <Route path="/staff/assignments" element={<StaffAssignmentPage />} />
+                    <Route path="/staff/schedule" element={<StaffWorkSchedulePage />} />
                     <Route path="/staff/profile" element={<ProfilePage />} />
                     <Route path="/manager" element={<ManagerPortal />} />
                 </Route>

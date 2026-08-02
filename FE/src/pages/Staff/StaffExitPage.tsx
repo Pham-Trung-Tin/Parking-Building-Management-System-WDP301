@@ -13,7 +13,8 @@ import {
   RefreshCw,
   VideoOff,
   Camera,
-  LayoutGrid
+  LayoutGrid,
+  Calendar
 } from 'lucide-react';
 import useProfile from '../../hooks/useProfile';
 import lprService from '../../services/api/lprService';
@@ -147,15 +148,23 @@ const StaffExitPage = () => {
   }, [isExitCamActive, profile]);
   // Estimated Fee Calculation — Block-based pricing (4h blocks)
   const estimatedFees = useMemo(() => {
-    if (!activeSession) return { baseFee: 0, overtimeFee: 0, totalFee: 0 };
+    if (!activeSession) return { baseFee: 0, overtimeFee: 0, totalFee: 0, logs: [] };
     
     // Vé tháng thì không tính phí checkout
     if (activeSession.monthlyPass) {
-      return { baseFee: 0, overtimeFee: 0, totalFee: 0 };
+      return { 
+        baseFee: 0, overtimeFee: 0, totalFee: 0, 
+        logs: [{ time: new Date(activeSession.entryTime), message: 'Monthly Pass - No Fee', amount: 0 }] 
+      };
     }
 
     if (!activeSession.entryTime || !activeSession.vehicleType?.pricing) {
-      return { baseFee: activeSession.baseFee || 0, overtimeFee: activeSession.overtimeFee || 0, totalFee: activeSession.totalFee || 0 };
+      return { 
+        baseFee: activeSession.baseFee || 0, 
+        overtimeFee: activeSession.overtimeFee || 0, 
+        totalFee: activeSession.totalFee || 0,
+        logs: []
+      };
     }
 
     const now = new Date();
@@ -165,17 +174,29 @@ const StaffExitPage = () => {
     const nightBlockRate = pricing.nightBlockRate || dayBlockRate * 1.5;
     const BLOCK_MS = 4 * 60 * 60 * 1000;
 
+    const logs: any[] = [];
+
     // Helper: count blocks between two dates using same logic as BE calculateParkingFee
-    const countBlockFee = (start: Date, end: Date): number => {
+    const countBlockFee = (start: Date, end: Date, labelPrefix: string): number => {
       if (end <= start) return 0;
       let fee = 0;
       let cur = new Date(start);
+      let blockCount = 1;
       while (cur < end) {
         const h = cur.getHours();
         // 06:00–17:59 daytime, 18:00–05:59 nighttime
         const isDaytime = h >= 6 && h < 18;
-        fee += isDaytime ? dayBlockRate : nightBlockRate;
+        const blockFee = isDaytime ? dayBlockRate : nightBlockRate;
+        fee += blockFee;
+        
+        logs.push({
+          time: new Date(cur),
+          message: `${labelPrefix} - Block ${blockCount} (${isDaytime ? 'Day' : 'Night'})`,
+          amount: blockFee
+        });
+        
         cur = new Date(cur.getTime() + BLOCK_MS);
+        blockCount++;
       }
       return fee;
     };
@@ -188,6 +209,12 @@ const StaffExitPage = () => {
     if (activeSession.booking?.endTime && activeSession.booking?.scheduledDate) {
       baseFee = activeSession.booking.estimatedFee || activeSession.baseFee || activeSession.advancePayment || 0;
       
+      logs.push({
+        time: entryTime,
+        message: 'Pre-booked Base Fee',
+        amount: baseFee
+      });
+
       const dStr = activeSession.booking.scheduledDate;
       const [startH, startM] = activeSession.booking.startTime.split(':').map(Number);
       const scheduledStart = new Date(dStr);
@@ -202,25 +229,33 @@ const StaffExitPage = () => {
 
       // Early arrival logic: > 15 mins early gets charged extra blocks
       if (scheduledStart.getTime() - entryTime.getTime() > 15 * 60 * 1000) {
-        earlyArrivalFee = countBlockFee(entryTime, scheduledStart);
+        earlyArrivalFee = countBlockFee(entryTime, scheduledStart, 'Early Arrival');
       }
 
       if (now > scheduledEnd) {
         const otHours = (now.getTime() - scheduledEnd.getTime()) / (1000 * 60 * 60);
         if (otHours > 15 / 60) {
           // Overtime: same block logic, no multiplier
-          overtimeFee = countBlockFee(scheduledEnd, now);
+          overtimeFee = countBlockFee(scheduledEnd, now, 'Overtime');
         }
       }
     } else {
-      baseFee = countBlockFee(entryTime, now);
+      baseFee = countBlockFee(entryTime, now, 'Standard Parking');
     }
 
     const totalFee = baseFee + earlyArrivalFee + overtimeFee;
     const advancePayment = activeSession.advancePayment || 0;
     const balanceDue = Math.max(0, totalFee - advancePayment);
 
-    return { baseFee, earlyArrivalFee, overtimeFee, totalFee: balanceDue };
+    if (advancePayment > 0) {
+      logs.push({
+        time: now,
+        message: 'Advance Payment Deducted',
+        amount: -advancePayment
+      });
+    }
+
+    return { baseFee, earlyArrivalFee, overtimeFee, totalFee: balanceDue, logs };
   }, [activeSession]);
 
   useEffect(() => {
@@ -599,6 +634,10 @@ const StaffExitPage = () => {
                   <AlertTriangle className="w-5 h-5 mr-3 text-gray-400" />
                   Exceptions
                 </Link>
+                <Link to="/staff/schedule" className="flex items-center px-6 py-3 text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition-colors w-full text-left">
+                  <Calendar className="w-5 h-5 mr-3 text-gray-400" />
+                  My Schedule
+                </Link>
               </>
             )}
             {profile?.role !== 'parking_manager' && (
@@ -802,21 +841,22 @@ const StaffExitPage = () => {
 
                 {/* History Log */}
                 <section>
-                  <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">History Log</h3>
-                  <div className="bg-white border border-gray-200 shadow-sm flex flex-col min-h-[120px]">
-                    {sessionFound ? (
-                      <>
-                        <div className="flex items-center border-b border-gray-100 p-4">
-                          <span className="w-24 text-xs text-gray-400">08:14 AM</span>
-                          <span className="flex-1 text-sm text-gray-700">ANPR Entry Detected</span>
-                          <span className="px-2 py-1 bg-blue-50 text-blue-600 text-[10px] font-bold rounded uppercase tracking-wider">System</span>
+                  <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">History Log (Fee Details)</h3>
+                  <div className="bg-white border border-gray-200 shadow-sm flex flex-col min-h-[120px] max-h-[300px] overflow-y-auto">
+                    {sessionFound && estimatedFees.logs && estimatedFees.logs.length > 0 ? (
+                      estimatedFees.logs.map((log: any, idx: number) => (
+                        <div key={idx} className={`flex items-center p-4 ${idx !== estimatedFees.logs.length - 1 ? 'border-b border-gray-100' : ''}`}>
+                          <span className="w-24 text-xs text-gray-400 shrink-0">{new Date(log.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                          <span className="flex-1 text-sm text-gray-700">{log.message}</span>
+                          {log.amount !== 0 && (
+                            <span className={`px-2 py-1 text-[10px] font-bold rounded uppercase tracking-wider ml-2 shrink-0 ${
+                              log.amount > 0 ? 'bg-orange-50 text-orange-600' : 'bg-green-50 text-green-600'
+                            }`}>
+                              {log.amount > 0 ? '+' : ''}{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(log.amount)}
+                            </span>
+                          )}
                         </div>
-                        <div className="flex items-center p-4">
-                          <span className="w-24 text-xs text-gray-400">02:50 PM</span>
-                          <span className="flex-1 text-sm text-gray-700">Payment Received via Kiosk 4</span>
-                          <span className="px-2 py-1 bg-gray-100 text-gray-600 text-[10px] font-bold rounded uppercase tracking-wider">User</span>
-                        </div>
-                      </>
+                      ))
                     ) : (
                       <div className="flex-1 flex items-center justify-center text-sm text-gray-400">
                         No history logs available

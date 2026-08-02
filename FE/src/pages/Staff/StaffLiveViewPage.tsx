@@ -12,7 +12,8 @@ import {
   Clock,
   Users,
   RefreshCw,
-  LayoutGrid
+  LayoutGrid,
+  Calendar
 } from 'lucide-react';
 import useProfile from '../../hooks/useProfile';
 import parkingSessionService from '../../services/api/parkingSessionService';
@@ -118,6 +119,10 @@ const StaffLiveViewPage = () => {
                 <Link to="/staff/exceptions" className="flex items-center px-6 py-3 text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition-colors w-full text-left">
                   <AlertTriangle className="w-5 h-5 mr-3 text-gray-400" />
                   Exceptions
+                </Link>
+                <Link to="/staff/schedule" className="flex items-center px-6 py-3 text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition-colors w-full text-left">
+                  <Calendar className="w-5 h-5 mr-3 text-gray-400" />
+                  My Schedule
                 </Link>
               </>
             )}
@@ -282,8 +287,8 @@ const StaffLiveViewPage = () => {
                           <td className="px-6 py-4 font-medium text-gray-500">{session.sessionCode}</td>
                           <td className="px-6 py-4 font-bold text-gray-900">{session.vehicleInfo?.licensePlate}</td>
                           <td className="px-6 py-4">{session.vehicleType?.name}</td>
-                          <td className="px-6 py-4">{new Date(session.entryTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
-                          <td className="px-6 py-4 font-medium text-gray-900">{session.exitTime ? new Date(session.exitTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-xs">{new Date(session.entryTime).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</td>
+                          <td className="px-6 py-4 font-medium text-gray-900 whitespace-nowrap text-xs">{session.exitTime ? new Date(session.exitTime).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '--/--/---- --:--'}</td>
                           <td className="px-6 py-4">
                             {session.zone?.name ? `${session.zone.name}${session.slot?.slotCode ? ` - Slot ${session.slot.slotCode}` : ''}` : (session.slot?.slotCode ? `Slot ${session.slot.slotCode}` : 'Unassigned')}
                           </td>
