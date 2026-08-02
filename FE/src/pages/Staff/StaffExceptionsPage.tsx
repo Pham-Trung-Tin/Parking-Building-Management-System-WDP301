@@ -89,7 +89,7 @@ const StaffExceptionsPage = () => {
   const [notification, setNotification] = useState<{ show: boolean, message: string, type: 'success' | 'error' } | null>(null);
 
   const buildingName = (profile?.assignedParkingLot as any)?.name || 'Main Street Garage';
-  const lotId = (profile?.assignedParkingLot as any)?._id || (profile?.assignedParkingLot as any);
+  const lotId = Array.isArray(profile?.assignedParkingLot) ? profile?.assignedParkingLot[0]?._id : (profile?.assignedParkingLot as any)?._id || (profile?.assignedParkingLot as any);
 
   const fetchIncidents = async () => {
     setIsLoading(true);

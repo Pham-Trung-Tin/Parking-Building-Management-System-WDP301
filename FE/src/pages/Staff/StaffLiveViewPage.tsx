@@ -30,12 +30,16 @@ const StaffLiveViewPage = () => {
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
   const [stats, setStats] = useState({ total: 0, entering: 0, exiting: 0, overstayed: 0 });
 
-  const buildingName = (profile?.assignedParkingLot as any)?.name || 'Main Street Garage';
+  const buildingName = Array.isArray(profile?.assignedParkingLot) 
+      ? profile?.assignedParkingLot[0]?.name 
+      : (profile?.assignedParkingLot as any)?.name || 'Main Street Garage';
 
   const fetchSessions = async () => {
     setIsRefreshing(true);
     try {
-      const lotId = (profile?.assignedParkingLot as any)?._id || (profile?.assignedParkingLot as any);
+      const lotId = Array.isArray(profile?.assignedParkingLot)
+          ? profile?.assignedParkingLot[0]?._id
+          : (profile?.assignedParkingLot as any)?._id || profile?.assignedParkingLot;
       const res = await parkingSessionService.getSessions({ limit: 100, parkingLot: lotId });
       const allSessions = res.data?.docs || res.data || [];
       setSessions(allSessions);

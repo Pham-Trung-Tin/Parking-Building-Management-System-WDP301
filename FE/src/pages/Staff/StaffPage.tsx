@@ -127,7 +127,7 @@ const StaffPage = () => {
   const [floorStats, setFloorStats] = useState<Record<string, { total: number, occupied: number }>>({});
 
   useEffect(() => {
-    const lotId = (profile as any)?.assignedParkingLot?._id || (profile as any)?.assignedParkingLot || defaultLotId;
+    const lotId = Array.isArray(profile?.assignedParkingLot) ? profile?.assignedParkingLot[0]?._id : (profile as any)?.assignedParkingLot?._id || (profile as any)?.assignedParkingLot || defaultLotId;
     if (lotId) {
       floorService.getFloors({ status: 'active', parkingLot: lotId }).then(async (res: any) => {
         const fetchedFloors = res.data || res || [];
@@ -266,7 +266,7 @@ const StaffPage = () => {
       showNotification('Please wait for scan or enter a valid license plate', 'error');
       return;
     }
-    const lotId = (profile as any)?.assignedParkingLot?._id || (profile as any)?.assignedParkingLot || defaultLotId;
+    const lotId = Array.isArray(profile?.assignedParkingLot) ? profile?.assignedParkingLot[0]?._id : (profile as any)?.assignedParkingLot?._id || (profile as any)?.assignedParkingLot || defaultLotId;
     if (!lotId) {
       showNotification('System is still loading parking lot info or no lot available.', 'error');
       return;
@@ -559,26 +559,15 @@ const StaffPage = () => {
       return;
     }
 
-    const lotId = (profile as any)?.assignedParkingLot?._id
-      || (typeof (profile as any)?.assignedParkingLot === 'string' ? (profile as any)?.assignedParkingLot : null)
-      || defaultLotId;
-
-    if (!lotId) {
-      showNotification('No parking lot assigned. Please contact your manager.', 'error');
-      setIsProcessingQR(false);
-      return;
-    }
-
-    console.log('[DEBUG] QR check-in | lotId:', lotId, '| modalData:', modalData);
+    const lotId = Array.isArray(profile?.assignedParkingLot) ? profile?.assignedParkingLot[0]?._id : (profile as any)?.assignedParkingLot?._id || (profile as any)?.assignedParkingLot || defaultLotId;
 
     try {
       if (modalData.monthlyPassCode) {
-        const res = await parkingSessionService.checkIn({
+        await parkingSessionService.checkIn({
           monthlyPassCode: modalData.monthlyPassCode,
           licensePlate: modalData.plate,
           parkingLotId: lotId
         });
-        console.log('[DEBUG] Monthly pass check-in response:', res);
       } else {
         await parkingSessionService.checkIn({
           bookingId: modalData.bookingId,
@@ -596,9 +585,7 @@ const StaffPage = () => {
         setIsProcessingQR(false);
       }, 3000);
     } catch (err: any) {
-      const msg = err?.response?.data?.message || err?.message || 'Failed to check in from QR';
-      console.error('[DEBUG] QR check-in error:', err?.response?.data || err);
-      showNotification(msg, 'error');
+      showNotification(err?.response?.data?.message || err?.message || 'Failed to check in from QR', 'error');
       setIsProcessingQR(false);
     }
   };
