@@ -135,7 +135,7 @@ const HomePage = () => {
                     </Link>
                     <nav className="hidden md:flex items-center gap-8 lg:gap-12 text-[15px] font-bold text-inherit opacity-90">
                         <Link to="/find-parking" className="hover:text-blue-500 transition-colors no-underline text-inherit py-2">Find Building</Link>
-                        <a href="#pricing" onClick={scrollToPricing} className="hover:text-blue-500 transition-colors no-underline text-inherit py-2">Pricing</a>
+                        <Link to="/booking" className="hover:text-blue-500 transition-colors no-underline text-inherit py-2">Book a Slot</Link>
                         {user && <Link to="/tickets" className="hover:text-blue-500 transition-colors no-underline text-inherit py-2">My Tickets</Link>}
                     </nav>
                     <div className="flex items-center gap-6 text-[15px] font-bold text-inherit">
