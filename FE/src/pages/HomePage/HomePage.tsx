@@ -1,9 +1,9 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import Footer from '../../components/Footer/Footer';
 
 // Reveal Component for scroll animations
-const Reveal = ({ children, delay = 0, className = "" }) => {
+const Reveal = ({ children, delay = 0, className = "", direction = "up" }: { children: React.ReactNode, delay?: number, className?: string, direction?: "up" | "left" | "right" }) => {
     const [isVisible, setIsVisible] = useState(false);
     const ref = useRef(null);
 
@@ -19,10 +19,14 @@ const Reveal = ({ children, delay = 0, className = "" }) => {
         return () => observer.disconnect();
     }, []);
 
+    let transformInit = "translate-y-12";
+    if (direction === "left") transformInit = "-translate-x-12";
+    if (direction === "right") transformInit = "translate-x-12";
+
     return (
         <div
             ref={ref}
-            className={`transition-all duration-1000 ease-out ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-12'} ${className}`}
+            className={`transition-all duration-1000 ease-out ${isVisible ? 'opacity-100 translate-x-0 translate-y-0' : `opacity-0 ${transformInit}`} ${className}`}
             style={{ transitionDelay: `${delay}ms` }}
         >
             {children}
@@ -31,40 +35,53 @@ const Reveal = ({ children, delay = 0, className = "" }) => {
 };
 
 // SVG Icons
-const PhoneIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" stroke="none">
-        <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+const MapIcon = ({ size = 24 }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M14.106 5.553a2 2 0 0 0 1.788 0l3.659-1.83A1 1 0 0 1 21 4.619v12.764a1 1 0 0 1-.553.894l-4.553 2.277a2 2 0 0 1-1.788 0l-4.212-2.106a2 2 0 0 0-1.788 0l-3.659 1.83A1 1 0 0 1 3 19.381V6.618a1 1 0 0 1 .553-.894l4.553-2.277a2 2 0 0 1 1.788 0z"/><path d="M15 5.764v15"/><path d="M9 3.236v15"/>
     </svg>
 );
 
-const SearchIcon = ({ size = 24 }) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>;
-const ReceiptIcon = ({ size = 24 }) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z" /><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8" /><path d="M12 17.5v-11" /></svg>;
-const ParkingIcon = ({ size = 24 }) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2" /><path d="M9 17V7h4a3 3 0 0 1 0 6H9" /></svg>;
+const CalendarCheckIcon = ({ size = 24 }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/><path d="m9 16 2 2 4-4"/>
+    </svg>
+);
+
+const QrCodeIcon = ({ size = 24 }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect width="5" height="5" x="3" y="3" rx="1"/><rect width="5" height="5" x="16" y="3" rx="1"/><rect width="5" height="5" x="3" y="16" rx="1"/><path d="M21 16h-3a2 2 0 0 0-2 2v3"/><path d="M21 21v.01"/><path d="M12 7v3a2 2 0 0 1-2 2H7"/><path d="M3 12h.01"/><path d="M12 3h.01"/><path d="M12 16v.01"/><path d="M16 12h1"/><path d="M21 12v.01"/><path d="M12 21v-1"/>
+    </svg>
+);
+
+const ClockIcon = ({ size = 24 }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+    </svg>
+);
+
+const CheckIcon = ({ size = 18 }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="20 6 9 17 4 12"/>
+    </svg>
+);
 
 const HomePage = () => {
     const [isScrolled, setIsScrolled] = useState(false);
-    const [user, setUser] = useState(null);
+    const [user, setUser] = useState<any>(null);
     const [showDropdown, setShowDropdown] = useState(false);
-    const dropdownRef = useRef(null);
+    const dropdownRef = useRef<HTMLDivElement>(null);
+    const navigate = useNavigate();
 
     useEffect(() => {
-        // Initial scroll to top on load
         window.scrollTo(0, 0);
 
-        // Check user session
         const userData = localStorage.getItem('user');
-        if (userData) {
-            setUser(JSON.parse(userData));
-        }
+        if (userData) setUser(JSON.parse(userData));
 
-        // Sticky header logic
-        const handleScroll = () => {
-            setIsScrolled(window.scrollY > 50);
-        };
+        const handleScroll = () => setIsScrolled(window.scrollY > 50);
         window.addEventListener('scroll', handleScroll);
 
-        // Close dropdown on click outside
-        const handleClickOutside = (event) => {
+        const handleClickOutside = (event: any) => {
             if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
                 setShowDropdown(false);
             }
@@ -86,119 +103,69 @@ const HomePage = () => {
         window.location.reload();
     };
 
-    const getInitials = (name) => {
+    const getInitials = (name: string) => {
         if (!name) return 'U';
-        return name
-            .split(' ')
-            .map((n) => n[0])
-            .join('')
-            .toUpperCase()
-            .substring(0, 2);
+        return name.split(' ').map((n) => n[0]).join('').toUpperCase().substring(0, 2);
+    };
+
+    const scrollToPricing = (e: React.MouseEvent) => {
+        e.preventDefault();
+        const el = document.getElementById('pricing');
+        if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
     };
 
     return (
         <div className="font-sans overflow-x-hidden bg-white">
             {/* HERO SECTION */}
-            <section className="relative min-h-screen w-full bg-[#f4f5f7]">
+            <section className="relative min-h-screen w-full bg-[#0a0f1c]">
                 {/* Background Video */}
                 <div className="absolute inset-0 z-0 overflow-hidden">
-                    <video
-                        autoPlay
-                        loop
-                        muted
-                        playsInline
-                        className="absolute inset-0 w-full h-full object-cover"
-                    >
+                    <video autoPlay loop muted playsInline className="absolute inset-0 w-full h-full object-cover">
                         <source src="https://res.cloudinary.com/dgz3rhiv4/video/upload/v1780037325/Parking_lot_dashboard_simulation__202605291347_chy2on.mp4" type="video/mp4" />
                     </video>
-                    {/* Dark overlay to make the text pop and give a cinematic feel */}
-                    <div className="absolute inset-0 bg-black/50 pointer-events-none"></div>
+                    <div className="absolute inset-0 bg-gradient-to-r from-[#020617]/90 via-[#0f172a]/70 to-transparent pointer-events-none"></div>
                 </div>
 
                 {/* Sticky Navigation Bar */}
-                <nav className={`fixed top-0 left-0 right-0 z-50 flex justify-between items-center px-[5%] transition-all duration-300 ${isScrolled ? 'py-4 bg-white/90 backdrop-blur-md shadow-md text-black' : 'py-8 bg-transparent text-white'}`}>
+                <nav className={`fixed top-0 left-0 right-0 z-50 flex justify-between items-center px-[5%] transition-all duration-300 ${isScrolled ? 'py-4 bg-white/95 backdrop-blur-md shadow-md text-slate-900' : 'py-8 bg-transparent text-white'}`}>
                     <Link to="/" className="text-[18px] font-bold tracking-tight no-underline text-inherit">
-                        PARKING<span className="text-blue-600">BUILDING</span>
+                        PARKING<span className="text-blue-500">BUILDING</span>
                     </Link>
                     <nav className="hidden md:flex items-center gap-8 lg:gap-12 text-[15px] font-bold text-inherit opacity-90">
-                        <Link to="/find-parking" className="hover:text-blue-600 transition-colors no-underline text-inherit py-2">Find Building</Link>
-                        <Link to="/booking" className="hover:text-blue-600 transition-colors no-underline text-inherit py-2">Book a Slot</Link>
-                        {user && (
-                            <Link to="/tickets" className="hover:text-blue-600 transition-colors no-underline text-inherit py-2">My Tickets</Link>
-                        )}
+                        <Link to="/find-parking" className="hover:text-blue-500 transition-colors no-underline text-inherit py-2">Find Building</Link>
+                        <a href="#pricing" onClick={scrollToPricing} className="hover:text-blue-500 transition-colors no-underline text-inherit py-2">Pricing</a>
+                        {user && <Link to="/tickets" className="hover:text-blue-500 transition-colors no-underline text-inherit py-2">My Tickets</Link>}
                     </nav>
                     <div className="flex items-center gap-6 text-[15px] font-bold text-inherit">
                         {user ? (
                             <div className="relative" ref={dropdownRef}>
                                 <button
                                     onClick={() => setShowDropdown(!showDropdown)}
-                                    className={`flex items-center gap-3 border rounded-full py-1.5 pl-2 pr-4 transition-all duration-200 cursor-pointer ${isScrolled
-                                            ? 'bg-slate-50 hover:bg-slate-100 border-slate-100'
-                                            : 'bg-white/10 hover:bg-white/20 border-white/10'
-                                        }`}
+                                    className={`flex items-center gap-3 border rounded-full py-1.5 pl-2 pr-4 transition-all duration-200 cursor-pointer ${isScrolled ? 'bg-slate-50 hover:bg-slate-100 border-slate-200' : 'bg-white/10 hover:bg-white/20 border-white/10'}`}
                                 >
                                     {user.avatar ? (
-                                        <img
-                                            src={user.avatar}
-                                            alt={user.fullName}
-                                            className="w-8 h-8 rounded-full object-cover border border-slate-200"
-                                        />
+                                        <img src={user.avatar} alt={user.fullName} className="w-8 h-8 rounded-full object-cover border border-slate-200" />
                                     ) : (
                                         <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-500 to-indigo-600 text-white font-bold text-xs flex items-center justify-center">
                                             {getInitials(user.fullName)}
                                         </div>
                                     )}
-                                    <span className="font-semibold text-sm hidden sm:inline text-inherit">
-                                        {user.fullName}
-                                    </span>
+                                    <span className="font-semibold text-sm hidden sm:inline text-inherit">{user.fullName}</span>
                                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`transition-transform duration-200 text-inherit ${showDropdown ? 'rotate-180' : ''}`}>
                                         <polyline points="6 9 12 15 18 9"></polyline>
                                     </svg>
                                 </button>
-
                                 {showDropdown && (
                                     <div className="absolute right-0 mt-2.5 w-52 bg-white border border-slate-100 rounded-xl shadow-lg py-2 z-50 text-slate-800 text-left font-medium">
-                                        {/* <div className="px-4 py-2 border-b border-slate-50">
-                                            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Signed in as</p>
-                                            <p className="text-sm font-bold text-slate-800 truncate">{user.fullName}</p>
-                                        </div> */}
-
-                                        <Link
-                                            to="/profile"
-                                            onClick={() => setShowDropdown(false)}
-                                            className="flex items-center gap-2 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors no-underline font-semibold"
-                                        >
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-400">
-                                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                                                <circle cx="12" cy="7" r="4"></circle>
-                                            </svg>
+                                        <Link to="/profile" onClick={() => setShowDropdown(false)} className="flex items-center gap-2 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors no-underline font-semibold">
                                             My Profile
                                         </Link>
-
-                                        <Link
-                                            to="/my-vehicles"
-                                            onClick={() => setShowDropdown(false)}
-                                            className="flex items-center gap-2 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors no-underline font-semibold"
-                                        >
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-400">
-                                                <path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.5 2.8C1.4 11.3 1 12.1 1 13v3c0 .6.4 1 1 1h2"></path>
-                                                <circle cx="7" cy="17" r="2"></circle>
-                                                <circle cx="17" cy="17" r="2"></circle>
-                                            </svg>
+                                        <Link to="/my-vehicles" onClick={() => setShowDropdown(false)} className="flex items-center gap-2 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors no-underline font-semibold">
                                             My Vehicles
                                         </Link>
-
-
-
-                                        <button
-                                            onClick={handleLogout}
-                                            className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors text-left border-none bg-transparent cursor-pointer font-semibold"
-                                        >
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-                                                <polyline points="16 17 21 12 16 7"></polyline>
-                                                <line x1="21" y1="12" x2="9" y2="12"></line>
-                                            </svg>
+                                        <button onClick={handleLogout} className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors text-left border-none bg-transparent cursor-pointer font-semibold">
                                             Log Out
                                         </button>
                                     </div>
@@ -206,150 +173,238 @@ const HomePage = () => {
                             </div>
                         ) : (
                             <>
-                                <Link to="/login" className="hover:text-blue-600 transition-colors no-underline text-inherit">Login</Link>
-                                <Link to="/register" className="bg-blue-600 text-white px-5 py-2.5 rounded-sm hover:bg-blue-700 transition-colors no-underline shadow-lg hover:shadow-blue-500/30">Sign Up</Link>
+                                <Link to="/login" className="hover:text-blue-500 transition-colors no-underline text-inherit">Login</Link>
+                                <Link to="/register" className="bg-blue-600 text-white px-5 py-2.5 rounded-lg hover:bg-blue-700 transition-colors no-underline shadow-lg shadow-blue-500/30">Sign Up</Link>
                             </>
                         )}
                     </div>
                 </nav>
 
                 {/* Main Content */}
-                <main className="relative z-10 flex flex-col md:flex-row justify-between items-center px-[5%] md:px-[7%] pt-[15vh] pb-10 min-h-[calc(100vh-100px)] pointer-events-none">
-
-                    {/* Left Side Typography */}
-                    <Reveal className="w-full md:w-[50%] mb-10 md:mb-0 flex justify-start pointer-events-auto" delay={100}>
-                        <h1 className="text-[64px] md:text-[80px] lg:text-[96px] font-extrabold leading-[1.05] text-white tracking-tighter drop-shadow-lg">
-                            Parking<br />
-                            <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-300">Redefined</span>
+                <main className="relative z-10 flex flex-col justify-center items-start px-[5%] md:px-[7%] pt-[20vh] pb-10 min-h-screen pointer-events-none">
+                    <Reveal className="max-w-3xl pointer-events-auto" delay={100} direction="left">
+                        <div className="inline-block px-4 py-1.5 rounded-full bg-blue-500/20 border border-blue-400/30 text-blue-300 font-semibold text-sm mb-6 backdrop-blur-sm">
+                            Next-Generation Parking Solutions
+                        </div>
+                        <h1 className="text-[54px] md:text-[72px] lg:text-[86px] font-extrabold leading-[1.05] text-white tracking-tight drop-shadow-xl mb-6">
+                            Smart Parking<br />
+                            <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-300">Management System</span>
                         </h1>
-                    </Reveal>
-
-                    {/* Right Side Text and Button */}
-                    <Reveal className="w-full md:w-[45%] flex flex-col items-start md:items-start md:pl-[10%] text-left mt-10 md:mt-[30vh] pointer-events-auto" delay={300}>
-                        <p className="text-white/90 text-[18px] leading-[1.6] mb-8 max-w-[400px] font-medium drop-shadow-md">
-                            We provide an unrivaled standard of parking convenience, securing and protecting your automotive investment with absolute precision.
+                        <p className="text-slate-300 text-[18px] md:text-[22px] leading-relaxed mb-10 font-medium max-w-2xl drop-shadow-md">
+                            Experience the future of parking. Real-time availability, instant digital bookings, and automated payments—all in one seamless platform.
                         </p>
-                        <Link
-                            to="/find-parking"
-                            className="bg-white text-black px-10 py-[18px] text-[15px] font-bold hover:bg-blue-600 hover:text-white transition-all duration-300 no-underline rounded-none flex items-center justify-center tracking-wide shadow-2xl hover:shadow-blue-500/40 hover:-translate-y-1"
-                        >
-                            Get a Spot
-                        </Link>
+                        <div className="flex flex-col sm:flex-row gap-4">
+                            <Link to="/find-parking" className="bg-blue-600 text-white px-8 py-4 text-[16px] font-bold hover:bg-blue-500 transition-all duration-300 no-underline rounded-xl shadow-[0_0_20px_rgba(37,99,235,0.4)] hover:shadow-[0_0_30px_rgba(37,99,235,0.6)] text-center flex-1 sm:flex-none">
+                                Find Your Building
+                            </Link>
+                            <a href="#pricing" onClick={scrollToPricing} className="bg-white/10 text-white border border-white/20 backdrop-blur-sm px-8 py-4 text-[16px] font-bold hover:bg-white/20 transition-all duration-300 no-underline rounded-xl text-center flex-1 sm:flex-none">
+                                View Pricing
+                            </a>
+                        </div>
                     </Reveal>
                 </main>
             </section>
 
-            {/* PREMIUM FEATURES SECTION */}
-            <section className="relative py-32 px-[5%] md:px-[10%] bg-[#0f1115] overflow-hidden" id="services">
-                {/* Dynamic dark automotive background */}
-                <div className="absolute inset-0 bg-[#0f1115]">
-                    <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1540039155732-611425dcbd25?auto=format&fit=crop&q=80')] bg-cover bg-center opacity-15 mix-blend-luminosity"></div>
-                    <div className="absolute inset-0 bg-gradient-to-b from-[#0f1115] via-[#0f1115]/80 to-[#0f1115]"></div>
-                </div>
+            {/* CORE FEATURES SECTION */}
+            <section className="py-24 px-[5%] md:px-[7%] bg-slate-50 relative overflow-hidden" id="features">
+                <div className="max-w-7xl mx-auto">
+                    <div className="text-center mb-16">
+                        <h2 className="text-blue-600 font-bold tracking-widest text-sm uppercase mb-3">Core Features</h2>
+                        <h3 className="text-3xl md:text-5xl font-extrabold text-slate-900 tracking-tight">Everything you need to park smarter.</h3>
+                    </div>
 
-                <div className="max-w-7xl mx-auto relative z-10">
-                    <Reveal>
-                        <div className="flex flex-col md:flex-row gap-16 justify-between items-end mb-24">
-                            <div className="w-full md:w-1/2">
-                                <h2 className="text-4xl md:text-5xl font-extrabold text-white tracking-tight mb-6">Seamless <span className="text-blue-500">Experience</span></h2>
-                                <p className="text-gray-400 text-lg leading-relaxed font-medium">Experience a new standard of facility management. We integrate cutting-edge technology to ensure your vehicle is safe, accessible, and maintained to perfection.</p>
-                            </div>
-                            <div className="w-full md:w-auto">
-                                <Link to="/find-parking" className="inline-block border-b-2 border-white pb-1 text-white font-bold hover:text-blue-500 hover:border-blue-500 transition-colors">Explore All Services &rarr;</Link>
-                            </div>
-                        </div>
-                    </Reveal>
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
                         {/* Feature 1 */}
                         <Reveal delay={100} className="h-full">
-                            <div className="h-full group relative bg-[#1a1c23]/80 backdrop-blur-md p-10 rounded-2xl overflow-hidden hover:bg-[#22252e] transition-colors duration-500 cursor-pointer border border-gray-800 hover:border-blue-500/50 shadow-2xl">
-                                <div className="text-blue-500 mb-8 group-hover:text-blue-400 transition-colors transform group-hover:scale-110 duration-500 origin-left">
-                                    <SearchIcon size={48} />
+                            <div className="bg-white p-8 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.03)] border border-slate-100 hover:shadow-xl hover:-translate-y-2 transition-all duration-300 h-full">
+                                <div className="w-14 h-14 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center mb-6">
+                                    <MapIcon size={28} />
                                 </div>
-                                <h3 className="text-2xl font-bold text-white mb-4">Smart Search</h3>
-                                <p className="text-gray-400 font-medium leading-relaxed">Find and secure the perfect spot in seconds. Our real-time tracking ensures you never waste time driving in circles.</p>
+                                <h4 className="text-xl font-bold text-slate-900 mb-3">Real-time Map</h4>
+                                <p className="text-slate-600 leading-relaxed font-medium text-sm">
+                                    View a live layout of the parking building. See exactly which slots are available, occupied, or reserved right now.
+                                </p>
                             </div>
                         </Reveal>
+
                         {/* Feature 2 */}
-                        <Reveal delay={300} className="h-full">
-                            <div className="h-full group relative bg-[#1a1c23]/80 backdrop-blur-md p-10 rounded-2xl overflow-hidden hover:bg-[#22252e] transition-colors duration-500 cursor-pointer border border-gray-800 hover:border-blue-500/50 shadow-2xl">
-                                <div className="text-blue-500 mb-8 group-hover:text-blue-400 transition-colors transform group-hover:scale-110 duration-500 origin-left">
-                                    <ReceiptIcon size={48} />
+                        <Reveal delay={200} className="h-full">
+                            <div className="bg-white p-8 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.03)] border border-slate-100 hover:shadow-xl hover:-translate-y-2 transition-all duration-300 h-full">
+                                <div className="w-14 h-14 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center mb-6">
+                                    <CalendarCheckIcon size={28} />
                                 </div>
-                                <h3 className="text-2xl font-bold text-white mb-4">Instant Booking</h3>
-                                <p className="text-gray-400 font-medium leading-relaxed">Reserve your spot instantly with contactless payment. Get your digital pass and drive straight in without hassle.</p>
+                                <h4 className="text-xl font-bold text-slate-900 mb-3">Smart Booking</h4>
+                                <p className="text-slate-600 leading-relaxed font-medium text-sm">
+                                    Pre-book your slot before you arrive. Supports various vehicle types and dynamically calculates estimated fees.
+                                </p>
                             </div>
                         </Reveal>
+
                         {/* Feature 3 */}
-                        <Reveal delay={500} className="h-full">
-                            <div className="h-full group relative bg-[#1a1c23]/80 backdrop-blur-md p-10 rounded-2xl overflow-hidden hover:bg-[#22252e] transition-colors duration-500 cursor-pointer border border-gray-800 hover:border-blue-500/50 shadow-2xl">
-                                <div className="text-blue-500 mb-8 group-hover:text-blue-400 transition-colors transform group-hover:scale-110 duration-500 origin-left">
-                                    <ParkingIcon size={48} />
+                        <Reveal delay={300} className="h-full">
+                            <div className="bg-white p-8 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.03)] border border-slate-100 hover:shadow-xl hover:-translate-y-2 transition-all duration-300 h-full">
+                                <div className="w-14 h-14 bg-teal-50 text-teal-600 rounded-xl flex items-center justify-center mb-6">
+                                    <ClockIcon size={28} />
                                 </div>
-                                <h3 className="text-2xl font-bold text-white mb-4">Secure Facilities</h3>
-                                <p className="text-gray-400 font-medium leading-relaxed">24/7 surveillance and automated entry systems protect your automotive investment with scientific precision.</p>
+                                <h4 className="text-xl font-bold text-slate-900 mb-3">Live Tracking</h4>
+                                <p className="text-slate-600 leading-relaxed font-medium text-sm">
+                                    Monitor your ongoing parking session. Track exactly how much time has passed and what your current parking fee is.
+                                </p>
+                            </div>
+                        </Reveal>
+
+                        {/* Feature 4 */}
+                        <Reveal delay={400} className="h-full">
+                            <div className="bg-white p-8 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.03)] border border-slate-100 hover:shadow-xl hover:-translate-y-2 transition-all duration-300 h-full">
+                                <div className="w-14 h-14 bg-purple-50 text-purple-600 rounded-xl flex items-center justify-center mb-6">
+                                    <QrCodeIcon size={28} />
+                                </div>
+                                <h4 className="text-xl font-bold text-slate-900 mb-3">Digital Tickets</h4>
+                                <p className="text-slate-600 leading-relaxed font-medium text-sm">
+                                    Say goodbye to paper tickets. Use your generated QR code at the counter to securely check in and out of the facility.
+                                </p>
                             </div>
                         </Reveal>
                     </div>
                 </div>
             </section>
 
-            {/* INTERACTIVE SHOWCASE SECTION */}
-            <section className="relative py-32 px-[5%] md:px-[10%] text-white overflow-hidden" id="gallery">
-                {/* Premium automotive dark background */}
-                <div className="absolute inset-0 bg-[#08080a]">
-                    <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1605559424843-9e4c228bf1c2?q=80&w=2560&auto=format&fit=crop')] bg-cover bg-center opacity-20 mix-blend-luminosity"></div>
-                    <div className="absolute inset-0 bg-gradient-to-t from-[#08080a] via-transparent to-[#08080a]"></div>
-                </div>
+            {/* HOW IT WORKS SECTION */}
+            <section className="py-24 px-[5%] md:px-[7%] bg-white">
+                <div className="max-w-7xl mx-auto">
+                    <Reveal direction="up">
+                        <div className="text-center mb-16">
+                            <h3 className="text-3xl md:text-5xl font-extrabold text-slate-900 tracking-tight">How it works</h3>
+                            <p className="mt-4 text-slate-500 text-lg font-medium max-w-2xl mx-auto">Four simple steps to a stress-free parking experience.</p>
+                        </div>
+                    </Reveal>
 
-                <div className="max-w-7xl mx-auto relative z-10 flex flex-col lg:flex-row gap-16 items-center">
-                    <Reveal className="w-full lg:w-1/2">
-                        <h2 className="text-4xl md:text-5xl font-extrabold tracking-tight mb-10 leading-tight">Upgrade parking  <span className="text-blue-500">services.</span></h2>
-                        <div className="space-y-8">
-                            <div className="border-l-4 border-blue-600 pl-6 transform hover:translate-x-2 transition-transform cursor-default">
-                                <h4 className="text-xl font-bold mb-2 text-white">Climate-Controlled Parking</h4>
-                                <p className="text-gray-400 font-medium">Preservation Made Effortless: Advanced temperature and humidity management ensures your vehicle is shielded from harsh weather conditions year-round, maintaining its pristine state without you lifting a finger.</p>
-                            </div>
-                            <div className="border-l-4 border-gray-800 pl-6 hover:border-blue-600 transform hover:translate-x-2 transition-all cursor-default">
-                                <h4 className="text-xl font-bold mb-2 text-white">On-Site EV Fast-Charging</h4>
-                                <p className="text-gray-400 font-medium">Park and Recharge Seamlessly: Premium, easily accessible parking bays equipped with high-speed EV charging infrastructure, ensuring your vehicle is powered up and ready to roll when you are.</p>
-                            </div>
-                            <div className="border-l-4 border-gray-800 pl-6 hover:border-blue-600 transform hover:translate-x-2 transition-all cursor-default">
-                                <h4 className="text-xl font-bold mb-2 text-white">Premium Valet & Guest Services</h4>
-                                <p className="text-gray-400 font-medium">The Ultimate Frictionless Experience: Enjoy the convenience of professional valet parking and on-demand detailing services. Simply drop off your keys and let our dedicated team handle the rest.</p>
-                            </div>
-                        </div>
-                    </Reveal>
-                    <Reveal className="w-full lg:w-1/2" delay={300}>
-                        <div className="relative h-[500px] lg:h-[600px] rounded-2xl overflow-hidden group border border-gray-800 shadow-[0_0_50px_rgba(0,0,0,0.5)]">
-                            {/* Using a reliable image link for the gallery image */}
-                            <img src="https://images.unsplash.com/photo-1506521781263-d8422e82f27a?auto=format&fit=crop&q=80&w=2000" alt="Premium Parking Garage" className="absolute inset-0 w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-700" />
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent flex items-end p-10">
-                                <div>
-                                    <div className="text-blue-500 font-bold mb-2 tracking-widest text-sm">PREMIUM WING</div>
-                                    <h3 className="text-3xl font-bold text-white">The Platinum Garage</h3>
+                    <div className="relative">
+                        {/* Connecting Line */}
+                        <div className="hidden md:block absolute top-[60px] left-0 w-full h-[2px] bg-slate-100 -z-10"></div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-12 text-center">
+                            <Reveal delay={100} direction="up">
+                                <div className="relative flex flex-col items-center">
+                                    <div className="w-16 h-16 bg-blue-600 text-white rounded-full flex items-center justify-center text-2xl font-bold mb-6 shadow-[0_0_0_8px_rgba(255,255,255,1)]">1</div>
+                                    <h4 className="text-xl font-bold text-slate-900 mb-2">Find Building</h4>
+                                    <p className="text-slate-500 font-medium text-sm">Browse our network of supported parking facilities on the interactive map.</p>
                                 </div>
-                            </div>
+                            </Reveal>
+                            <Reveal delay={200} direction="up">
+                                <div className="relative flex flex-col items-center">
+                                    <div className="w-16 h-16 bg-white text-blue-600 border-2 border-blue-600 rounded-full flex items-center justify-center text-2xl font-bold mb-6 shadow-[0_0_0_8px_rgba(255,255,255,1)]">2</div>
+                                    <h4 className="text-xl font-bold text-slate-900 mb-2">Book Slot</h4>
+                                    <p className="text-slate-500 font-medium text-sm">Select your vehicle type, arrival time, and pay an advance fee to secure it.</p>
+                                </div>
+                            </Reveal>
+                            <Reveal delay={300} direction="up">
+                                <div className="relative flex flex-col items-center">
+                                    <div className="w-16 h-16 bg-white text-blue-600 border-2 border-blue-600 rounded-full flex items-center justify-center text-2xl font-bold mb-6 shadow-[0_0_0_8px_rgba(255,255,255,1)]">3</div>
+                                    <h4 className="text-xl font-bold text-slate-900 mb-2">Park & Track</h4>
+                                    <p className="text-slate-500 font-medium text-sm">Show your QR code to enter. Check your active session to track live duration.</p>
+                                </div>
+                            </Reveal>
+                            <Reveal delay={400} direction="up">
+                                <div className="relative flex flex-col items-center">
+                                    <div className="w-16 h-16 bg-white text-blue-600 border-2 border-blue-600 rounded-full flex items-center justify-center text-2xl font-bold mb-6 shadow-[0_0_0_8px_rgba(255,255,255,1)]">4</div>
+                                    <h4 className="text-xl font-bold text-slate-900 mb-2">Checkout</h4>
+                                    <p className="text-slate-500 font-medium text-sm">Pay any remaining overtime fees automatically via ZaloPay and exit smoothly.</p>
+                                </div>
+                            </Reveal>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            {/* PRICING SECTION */}
+            <section className="py-24 px-[5%] md:px-[7%] bg-slate-50" id="pricing">
+                <div className="max-w-7xl mx-auto">
+                    <Reveal>
+                        <div className="text-center mb-16">
+                            <h2 className="text-blue-600 font-bold tracking-widest text-sm uppercase mb-3">Transparent Pricing Policy</h2>
+                            <h3 className="text-3xl md:text-5xl font-extrabold text-slate-900 tracking-tight">How we calculate your fees.</h3>
+                            <p className="mt-4 text-slate-500 text-lg font-medium max-w-2xl mx-auto">Our pricing is based on 4-hour blocks, ensuring you only pay for the time you need, with clear rules for day, night, and overtime parking.</p>
                         </div>
                     </Reveal>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-center max-w-5xl mx-auto">
+                        {/* Rule 1: Day Block */}
+                        <Reveal delay={100} direction="up">
+                            <div className="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm hover:shadow-lg transition-all h-full flex flex-col">
+                                <div className="w-12 h-12 bg-amber-50 text-amber-500 rounded-xl flex items-center justify-center mb-6">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+                                </div>
+                                <h4 className="text-xl font-bold text-slate-900 mb-2">Day Block</h4>
+                                <p className="text-slate-500 font-medium text-sm mb-6">Standard daytime parking rate.</p>
+                                
+                                <div className="mb-6 flex items-baseline text-slate-900">
+                                    <span className="text-3xl font-extrabold">06:00 - 18:00</span>
+                                </div>
+                                <ul className="space-y-4 mb-8 flex-grow">
+                                    <li className="flex items-center gap-3 text-slate-700 font-medium text-sm"><CheckIcon /> 1 Block = 4 hours of parking</li>
+                                    <li className="flex items-center gap-3 text-slate-700 font-medium text-sm"><CheckIcon /> Base rate depends on vehicle type</li>
+                                    <li className="flex items-center gap-3 text-slate-700 font-medium text-sm"><CheckIcon /> Minimum charge is 1 block</li>
+                                </ul>
+                            </div>
+                        </Reveal>
+
+                        {/* Rule 2: Night Block */}
+                        <Reveal delay={200} direction="up">
+                            <div className="bg-blue-600 rounded-3xl p-8 border border-blue-500 shadow-xl shadow-blue-600/20 transform md:-translate-y-4 relative h-full flex flex-col">
+                                <div className="w-12 h-12 bg-white/20 text-white rounded-xl flex items-center justify-center mb-6">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+                                </div>
+                                <h4 className="text-xl font-bold text-white mb-2">Night Block</h4>
+                                <p className="text-blue-200 font-medium text-sm mb-6">Overnight and evening parking rate.</p>
+                                
+                                <div className="mb-6 flex items-baseline text-white">
+                                    <span className="text-3xl font-extrabold">18:00 - 06:00</span>
+                                </div>
+                                <ul className="space-y-4 mb-8 flex-grow">
+                                    <li className="flex items-center gap-3 text-white font-medium text-sm"><CheckIcon /> 1 Block = 4 hours of parking</li>
+                                    <li className="flex items-center gap-3 text-white font-medium text-sm"><CheckIcon /> Night rate depends on vehicle type</li>
+                                    <li className="flex items-center gap-3 text-white font-medium text-sm"><CheckIcon /> Safe & secure overnight storage</li>
+                                </ul>
+                            </div>
+                        </Reveal>
+
+                        {/* Rule 3: Overtime */}
+                        <Reveal delay={300} direction="up">
+                            <div className="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm hover:shadow-lg transition-all h-full flex flex-col">
+                                <div className="w-12 h-12 bg-red-50 text-red-500 rounded-xl flex items-center justify-center mb-6">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                                </div>
+                                <h4 className="text-xl font-bold text-slate-900 mb-2">Overtime Policy</h4>
+                                <p className="text-slate-500 font-medium text-sm mb-6">When you exceed your booked duration.</p>
+                                
+                                <div className="mb-6 flex items-baseline text-slate-900">
+                                    <span className="text-3xl font-extrabold">Auto-Surcharge</span>
+                                </div>
+                                <ul className="space-y-4 mb-8 flex-grow">
+                                    <li className="flex items-center gap-3 text-slate-700 font-medium text-sm"><CheckIcon /> Overtime is charged per extra 4-hour block</li>
+                                    <li className="flex items-center gap-3 text-slate-700 font-medium text-sm"><CheckIcon /> Crossing 18:00 triggers the Night rate</li>
+                                    <li className="flex items-center gap-3 text-slate-700 font-medium text-sm"><CheckIcon /> Pay smoothly via ZaloPay before exiting</li>
+                                </ul>
+                            </div>
+                        </Reveal>
+                    </div>
+                    <div className="text-center mt-12">
+                        <Link to="/find-parking" className="inline-block bg-slate-900 text-white px-8 py-4 font-bold rounded-xl hover:bg-slate-800 transition-colors shadow-lg tracking-wide no-underline">
+                            Find a Building & View Prices
+                        </Link>
+                    </div>
                 </div>
             </section>
 
             {/* CALL TO ACTION */}
-            <section className="relative py-32 px-[5%] text-center overflow-hidden">
-                {/* Dynamic CTA Background */}
-                <div className="absolute inset-0 bg-blue-00">
-                    <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?q=80&w=2560&auto=format&fit=crop')] bg-cover bg-center opacity-20 mix-blend-multiply"></div>
-                    <div className="absolute inset-0 bg-gradient-to-b from-transparent to-green-500/60"></div>
-                </div>
-
+            <section className="py-24 px-[5%] text-center bg-white border-t border-slate-100">
                 <Reveal>
-                    <div className="relative z-10">
-                        <h2 className="text-4xl md:text-5xl font-extrabold mb-6 tracking-tight text-white drop-shadow-lg">Ready to park with confidence?</h2>
-                        <p className="text-blue-100 text-lg mb-10 font-medium max-w-2xl mx-auto drop-shadow-md">Join thousands of drivers who trust our facilities to secure their vehicles every single day.</p>
-                        <Link to="/find-parking" className="inline-block bg-white text-black px-12 py-5 font-bold rounded-sm hover:bg-gray-100 transition-colors shadow-2xl hover:-translate-y-1 tracking-wide">
-                            Find Your Spot Now
+                    <div className="max-w-3xl mx-auto">
+                        <h2 className="text-3xl md:text-5xl font-extrabold mb-6 tracking-tight text-slate-900">Ready to secure your spot?</h2>
+                        <p className="text-slate-500 text-lg mb-10 font-medium">Join thousands of drivers who trust our facilities to manage and protect their vehicles every single day.</p>
+                        <Link to="/find-parking" className="inline-block bg-blue-600 text-white px-10 py-4 font-bold rounded-xl hover:bg-blue-700 transition-colors shadow-lg hover:shadow-blue-500/30 tracking-wide no-underline">
+                            Get Started Now
                         </Link>
                     </div>
                 </Reveal>
