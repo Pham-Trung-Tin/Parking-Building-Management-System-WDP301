@@ -19,14 +19,17 @@ import {
 import useProfile from '../../hooks/useProfile';
 import lprService from '../../services/api/lprService';
 import parkingSessionService from '../../services/api/parkingSessionService';
+import { useSocket } from '../../contexts/SocketContext';
 import { useCallback } from 'react';
 import { verifyQRToken } from '../../utils/qrToken';
 import { Scanner } from '@yudiel/react-qr-scanner';
 import bookingService from '../../services/api/bookingService';
+import paymentService from '../../services/api/paymentService';
 
 const StaffExitPage = () => {
   const { profile } = useProfile();
   const navigate = useNavigate();
+  const { socket } = useSocket();
 
   // FE Flow States
   const [searchQuery, setSearchQuery] = useState('');
@@ -42,6 +45,9 @@ const StaffExitPage = () => {
   const [isProcessingQR, setIsProcessingQR] = useState(false);
   const videoRefExit = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  
+  const [checkoutQrUrl, setCheckoutQrUrl] = useState<string | null>(null);
+  const [isLoadingQr, setIsLoadingQr] = useState(false);
 
   const buildingName = (profile?.assignedParkingLot as any)?.name || 'Main Street Garage';
 
@@ -257,6 +263,26 @@ const StaffExitPage = () => {
 
     return { baseFee, earlyArrivalFee, overtimeFee, totalFee: balanceDue, logs };
   }, [activeSession]);
+
+  useEffect(() => {
+    if (sessionFound && activeSession && activeSession.paymentStatus !== 'paid' && estimatedFees.totalFee > 0) {
+      const sessionId = activeSession._id || activeSession.id;
+      setIsLoadingQr(true);
+      paymentService.initiateBankTransfer(sessionId, estimatedFees.totalFee)
+        .then((res: any) => {
+          setCheckoutQrUrl(res.data?.qrUrl || res.qrUrl);
+        })
+        .catch(err => {
+          console.error("Failed to fetch checkout QR", err);
+          showNotification('Could not generate bank transfer QR.', 'error');
+        })
+        .finally(() => {
+          setIsLoadingQr(false);
+        });
+    } else {
+      setCheckoutQrUrl(null);
+    }
+  }, [sessionFound, activeSession, estimatedFees.totalFee]);
 
   useEffect(() => {
     let interval: ReturnType<typeof setInterval>;
@@ -588,6 +614,26 @@ const StaffExitPage = () => {
       showNotification('Gate closed.', 'info');
     }, 5000);
   };
+
+  useEffect(() => {
+    if (!socket || !sessionFound || !activeSession) return;
+
+    const handlePaymentConfirmed = async (data: any) => {
+      const sessionId = activeSession._id || activeSession.id;
+      if (data.sessionId && String(data.sessionId) === String(sessionId)) {
+        showNotification('Bank transfer confirmed via Webhook!', 'success');
+        // Wait a brief moment, then auto release
+        setTimeout(() => {
+          handleProcessAndRelease();
+        }, 1500);
+      }
+    };
+
+    socket.on('paymentConfirmed', handlePaymentConfirmed);
+    return () => {
+      socket.off('paymentConfirmed', handlePaymentConfirmed);
+    };
+  }, [socket, sessionFound, activeSession, handleProcessAndRelease]);
 
   return (
     <div className="flex h-screen bg-gray-50 font-sans text-gray-800 relative">
@@ -1002,6 +1048,35 @@ const StaffExitPage = () => {
                       </span>
                     </div>
                   </div>
+
+                  {sessionFound && activeSession?.paymentStatus !== 'paid' && estimatedFees.totalFee > 0 && (
+                    <div className="flex flex-col items-center pt-6 border-t border-gray-100">
+                      <p className="text-xs font-bold text-blue-600 uppercase tracking-widest mb-3">Scan to Pay (VietQR)</p>
+                      
+                      {isLoadingQr ? (
+                        <div className="w-48 h-48 flex flex-col items-center justify-center border border-gray-200 border-dashed rounded-xl p-2 bg-gray-50">
+                          <RefreshCw className="w-8 h-8 text-blue-500 animate-spin mb-3" />
+                          <span className="text-xs font-medium text-gray-500">Generating QR...</span>
+                        </div>
+                      ) : checkoutQrUrl ? (
+                        <>
+                          <div className="relative group">
+                            <img 
+                              src={checkoutQrUrl} 
+                              alt="VietQR Payment" 
+                              className="w-48 h-48 object-contain border border-gray-200 rounded-xl p-2 shadow-sm bg-white"
+                            />
+                            <div className="absolute inset-0 border-2 border-blue-400 rounded-xl animate-pulse pointer-events-none opacity-50"></div>
+                          </div>
+                          <div className="flex items-center justify-center mt-3 text-blue-600 bg-blue-50 px-3 py-1.5 rounded-full border border-blue-100">
+                            <RefreshCw className="w-3.5 h-3.5 mr-2 animate-spin" />
+                            <span className="text-[10px] font-bold uppercase tracking-wider">Waiting for transfer...</span>
+                          </div>
+                          <p className="text-[10px] text-gray-400 mt-2 text-center">Use any banking app that supports VietQR</p>
+                        </>
+                      ) : null}
+                    </div>
+                  )}
 
                   <div className="pt-6 flex flex-col space-y-4">
                     <button

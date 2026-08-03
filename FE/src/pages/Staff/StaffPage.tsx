@@ -99,19 +99,34 @@ const StaffPage = () => {
   const [defaultLotId, setDefaultLotId] = useState('');
 
   useEffect(() => {
-    parkingLotService.getParkingLots({ limit: 1 }).then((res: any) => {
-      const lots = res.data?.docs || res.data || [];
-      if (lots.length > 0) {
-        const lotId = lots[0]._id;
-        setDefaultLotId(lotId);
-        vehicleTypeService.getAll({ parkingLot: lotId }).then((vRes: any) => {
-          const types = vRes.data || vRes;
-          setVehicleTypesList(types);
-          if (types.length > 0) setSelectedVehicle(types[0]._id);
-        }).catch(console.error);
-      }
-    }).catch(console.error);
-  }, []);
+    if (profile === undefined) return; // Wait for profile to load
+
+    const fetchVehicles = (lotId: string) => {
+      vehicleTypeService.getAll({ parkingLot: lotId }).then((vRes: any) => {
+        const types = vRes.data || vRes;
+        setVehicleTypesList(types);
+        if (types.length > 0) setSelectedVehicle(types[0]._id);
+      }).catch(console.error);
+    };
+
+    const assignedLotId = Array.isArray(profile?.assignedParkingLot) 
+      ? profile?.assignedParkingLot[0]?._id 
+      : (profile as any)?.assignedParkingLot?._id || (profile as any)?.assignedParkingLot;
+
+    if (assignedLotId) {
+      setDefaultLotId(assignedLotId);
+      fetchVehicles(assignedLotId);
+    } else {
+      parkingLotService.getParkingLots({ limit: 1 }).then((res: any) => {
+        const lots = res.data?.docs || res.data || [];
+        if (lots.length > 0) {
+          const lotId = lots[0]._id;
+          setDefaultLotId(lotId);
+          fetchVehicles(lotId);
+        }
+      }).catch(console.error);
+    }
+  }, [profile]);
 
   const [plate, setPlate] = useState('ABC-1234');
   const [confidence, setConfidence] = useState<number | null>(98);
@@ -862,7 +877,7 @@ const StaffPage = () => {
                         >
                           <Icon className={`w-8 h-8 mb-3 ${isSelected ? 'text-gray-900' : 'text-gray-400'}`} />
                           <span className={`text-xs font-bold tracking-wider ${isSelected ? 'text-gray-900' : 'text-gray-500'}`}>
-                            {type.name.toUpperCase()}
+                            {(type?.code || type?.name || '').toUpperCase()}
                           </span>
                         </button>
                       )

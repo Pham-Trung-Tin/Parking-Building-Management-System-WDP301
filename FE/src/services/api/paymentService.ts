@@ -59,8 +59,8 @@ const paymentService = {
     },
 
     /** POST /payments/bank-transfer/initiate — Initiate bank transfer payment */
-    initiateBankTransfer: (sessionId: string): Promise<PaymentInitiateBankTransferResponse> => {
-        return axiosClient.post('/payments/bank-transfer/initiate', { sessionId });
+    initiateBankTransfer: (sessionId: string, amount?: number): Promise<PaymentInitiateBankTransferResponse> => {
+        return axiosClient.post('/payments/bank-transfer/initiate', { sessionId, amount });
     },
 
     /** POST /payments/bank-transfer/booking/initiate — Initiate bank transfer payment for Booking */
