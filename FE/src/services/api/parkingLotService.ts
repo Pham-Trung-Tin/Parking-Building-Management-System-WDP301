@@ -102,6 +102,10 @@ const parkingLotService = {
     addStaffByEmail: (parkingLotId: string, email: string): Promise<any> => {
         return axiosClient.post(`/parking-lots/${parkingLotId}/add-staff`, { email });
     },
+    // Admin/Manager: Resync totalSlots, availableSlots, occupiedSlots from actual slot data
+    syncSlotCounts: (parkingLotId: string): Promise<any> => {
+        return axiosClient.post(`/parking-lots/${parkingLotId}/sync-slots`);
+    },
 };
 
 export default parkingLotService;
