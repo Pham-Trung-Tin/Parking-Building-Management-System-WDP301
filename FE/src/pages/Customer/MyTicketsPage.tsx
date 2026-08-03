@@ -53,7 +53,15 @@ const getVehicleEmoji = (code: string) => {
 
 // ── A single session card with its own live clock ───────────────────────────
 const LiveSessionCard = ({ session, onClick }: { session: ParkingSession; onClick: () => void }) => {
-    const elapsed = useLiveElapsed(session.entryTime);
+    const isCompleted = session.status === 'completed';
+    let fixedElapsed = 0;
+    if (isCompleted && session.exitTime && session.entryTime) {
+        fixedElapsed = Math.floor((new Date(session.exitTime).getTime() - new Date(session.entryTime).getTime()) / 1000);
+    }
+    
+    const liveElapsed = useLiveElapsed(session.entryTime);
+    const elapsed = isCompleted ? fixedElapsed : liveElapsed;
+    
     const h = Math.floor(elapsed / 3600);
     const m = Math.floor((elapsed % 3600) / 60);
     const s = elapsed % 60;
@@ -63,7 +71,7 @@ const LiveSessionCard = ({ session, onClick }: { session: ParkingSession; onClic
         typeof session.vehicleType === 'object'
             ? (session.vehicleType as any)?.pricing?.hourlyRate ?? 0
             : 0;
-    const currentFee = (elapsed / 3600) * hourlyRate;
+    const currentFee = isCompleted ? (session.totalFee || 0) : ((elapsed / 3600) * hourlyRate);
 
     const slotCode =
         typeof session.slot === 'object' ? (session.slot as any)?.slotCode ?? '—' : '—';
@@ -80,32 +88,44 @@ const LiveSessionCard = ({ session, onClick }: { session: ParkingSession; onClic
         typeof session.parkingLot === 'object' ? (session.parkingLot as any)?.name ?? '' : '';
 
     return (
-        <div className="t-list-item" onClick={onClick}>
+        <div className="t-list-item" onClick={onClick} style={{ background: isCompleted ? '#f8fafc' : '#fff', border: isCompleted ? '1px solid #e2e8f0' : undefined }}>
             <div className="t-list-item-left">
-                <div className="t-list-item-icon">
+                <div className="t-list-item-icon" style={{ opacity: isCompleted ? 0.5 : 1, filter: isCompleted ? 'grayscale(100%)' : 'none' }}>
                     {getVehicleEmoji(vtName)}
                 </div>
                 <div className="t-list-item-info">
-                    <h3 className="t-list-item-title">{parkingLotName || 'Parking Lot'}</h3>
+                    <h3 className="t-list-item-title" style={{ color: isCompleted ? '#64748b' : '#0f172a' }}>{parkingLotName || 'Parking Lot'}</h3>
                     <div className="t-list-item-subtitle">
-                        <span>Plate: <strong style={{ color: '#334155' }}>{plate}</strong></span>
+                        <span>Plate: <strong style={{ color: isCompleted ? '#64748b' : '#334155' }}>{plate}</strong></span>
                         <span className="t-list-item-meta">{floorName} — {slotCode}</span>
                         <span style={{ color: '#cbd5e1' }}>|</span>
                         <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700 }}>
-                            <span className="ls-pulse-dot" style={{ width: 6, height: 6 }} />
-                            <span style={{ color: '#2563eb' }}>{hms}</span>
+                            {!isCompleted && <span className="ls-pulse-dot" style={{ width: 6, height: 6 }} />}
+                            <span style={{ color: isCompleted ? '#64748b' : '#2563eb' }}>{hms}</span>
                         </span>
                     </div>
                 </div>
             </div>
             <div className="t-list-item-right" style={{ flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span className="t-badge" style={{ background: '#dcfce7', color: '#15803d' }}>
-                        LIVE
-                    </span>
-                    <strong style={{ fontSize: 14, color: '#10b981' }}>{new Intl.NumberFormat('vi-VN').format(Math.round(currentFee))} ₫</strong>
+                    {isCompleted ? (
+                        <span className="t-badge" style={{ background: '#f1f5f9', color: '#64748b' }}>
+                            DONE
+                        </span>
+                    ) : (
+                        <span className="t-badge" style={{ background: '#dcfce7', color: '#15803d' }}>
+                            LIVE
+                        </span>
+                    )}
+                    <strong style={{ fontSize: 14, color: isCompleted ? '#64748b' : '#10b981' }}>{new Intl.NumberFormat('vi-VN').format(Math.round(currentFee))} ₫</strong>
                 </div>
-                <button className="t-list-item-btn" onClick={(e) => { e.stopPropagation(); onClick(); }}>View Details</button>
+                <button 
+                    className="t-list-item-btn" 
+                    onClick={(e) => { e.stopPropagation(); onClick(); }}
+                    style={isCompleted ? { background: '#e2e8f0', color: '#475569' } : undefined}
+                >
+                    View Details
+                </button>
             </div>
         </div>
     );
@@ -118,6 +138,15 @@ const MyTicketsPage = () => {
     const [qrTokens, setQrTokens] = useState<Record<string, string>>({});
     const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
     const [zoomedQr, setZoomedQr] = useState<string | null>(null);
+    const [activeTab, setActiveTab] = useState<'upcoming' | 'active' | 'history'>('upcoming');
+    const [historyBookings, setHistoryBookings] = useState<Ticket[]>([]);
+    const [historySessions, setHistorySessions] = useState<ParkingSession[]>([]);
+    const [historyFilter, setHistoryFilter] = useState<'completed' | 'cancelled'>('completed');
+    
+    // Pagination states
+    const [completedPage, setCompletedPage] = useState(1);
+    const [cancelledPage, setCancelledPage] = useState(1);
+    const ITEMS_PER_PAGE = 5;
 
     // Custom Modal & Notification
     const [cancelModalData, setCancelModalData] = useState<{receiptId: string, bookingId: string} | null>(null);
@@ -159,6 +188,7 @@ const MyTicketsPage = () => {
     }, [socket, navigate]);
     const [sessionsLoading, setSessionsLoading] = useState(true);
     const [sessionsError, setSessionsError] = useState<string | null>(null);
+    const [bookingsLoading, setBookingsLoading] = useState(true);
     const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     const [hiddenTickets, setHiddenTickets] = useState<string[]>(() => {
@@ -199,10 +229,12 @@ const MyTicketsPage = () => {
             let list = Array.isArray(res) ? res : (res?.data ?? res?.docs ?? []);
 
             // Show active bookings that are either paid (online) OR pending payment (pay-at-counter)
-            list = list.filter((b: any) => ['pending', 'approved', 'no_show'].includes(b.status) && ['paid', 'pending'].includes(b.paymentStatus));
+            const activeList = list.filter((b: any) => ['pending', 'approved', 'no_show'].includes(b.status) && ['paid', 'pending'].includes(b.paymentStatus));
+            
+            // Show history bookings (cancelled, rejected, etc)
+            const histList = list.filter((b: any) => ['cancelled', 'rejected', 'abandoned'].includes(b.status) || (b.status === 'no_show' && !['paid', 'pending'].includes(b.paymentStatus)));
 
-            // Map backend booking objects to our local Ticket interface for rendering
-            const mappedTickets: Ticket[] = list.map((b: any) => {
+            const mapBookingToTicket = (b: any): Ticket => {
                 const lotName = typeof b.parkingLot === 'object' ? b.parkingLot?.name : 'Parking Lot';
                 const floorName = typeof b.floor === 'object' ? (b.floor?.name ?? `Floor ${b.floor?.floorNumber}`) : '—';
                 const slotCode = typeof b.assignedSlot === 'object' ? b.assignedSlot?.slotCode : '—';
@@ -219,7 +251,6 @@ const MyTicketsPage = () => {
                 const entryDt = parseDateTime(b.scheduledDate, b.startTime);
                 const exitTimeStr = b.endTime || b.startTime;
                 let exitDt = parseDateTime(b.scheduledDate, exitTimeStr);
-                // If exit time is earlier than start time, exit is the NEXT day (overnight booking)
                 if (b.endTime && b.endTime < b.startTime) {
                     const nextDay = new Date(exitDt);
                     nextDay.setDate(nextDay.getDate() + 1);
@@ -238,15 +269,15 @@ const MyTicketsPage = () => {
                     exitTime: exitDt,
                     elapsed: 0,
                     totalAmount: b.estimatedFee || 0,
-                    // paymentMethod is on Payment doc, not Booking — infer from paymentStatus
                     payMethod: b.paymentStatus === 'paid' ? (b.payment?.method || 'bank_transfer') : 'cash',
                     status: b.status,
                     paymentStatus: b.paymentStatus,
                     createdAt: b.createdAt,
                 };
-            });
+            };
 
-            setTickets(mappedTickets);
+            setTickets(activeList.map(mapBookingToTicket));
+            setHistoryBookings(histList.map(mapBookingToTicket));
         } catch (err) {
             console.error("Failed to load upcoming bookings:", err);
         } finally {
@@ -254,13 +285,25 @@ const MyTicketsPage = () => {
         }
     }, []);
 
+    const fetchHistorySessions = useCallback(async () => {
+        try {
+            const res = await parkingSessionService.getSessions({ status: 'completed', limit: 20 });
+            let list: ParkingSession[] = Array.isArray(res) ? res : (res?.data ?? res?.docs ?? []);
+            list = list.filter((s: any) => !s.monthlyPass);
+            setHistorySessions(list);
+        } catch (err) {
+            console.error("Failed to load history sessions:", err);
+        }
+    }, []);
+
     useEffect(() => {
         fetchActiveSessions();
         fetchUpcomingBookings();
+        fetchHistorySessions();
         // Poll every 15 s so the list stays fresh
         pollRef.current = setInterval(fetchActiveSessions, 15000);
         return () => { if (pollRef.current) clearInterval(pollRef.current); };
-    }, [fetchActiveSessions, fetchUpcomingBookings]);
+    }, [fetchActiveSessions, fetchUpcomingBookings, fetchHistorySessions]);
 
     // ── REALTIME INTEGRATION (LIVE SESSION TRACKER) ───────────────────────────
     useEffect(() => {
@@ -280,74 +323,7 @@ const MyTicketsPage = () => {
         };
     }, [socket, fetchActiveSessions, fetchUpcomingBookings]);
 
-    // ── Upcoming bookings from Backend ──────────────────────────────────────
-    const [bookingsLoading, setBookingsLoading] = useState(true);
-
-    useEffect(() => {
-        const fetchBookings = async () => {
-            setBookingsLoading(true);
-            try {
-                // Fetch all recent bookings and filter valid ones manually to support multiple statuses
-                const res = await bookingService.getMyBookings({ limit: 50 });
-                let list = Array.isArray(res) ? res : (res?.data ?? res?.docs ?? []);
-
-                // Show active bookings that are either paid (online) OR pending payment (pay-at-counter)
-                list = list.filter((b: any) => ['pending', 'approved', 'no_show'].includes(b.status) && ['paid', 'pending'].includes(b.paymentStatus));
-
-                // Map backend booking objects to our local Ticket interface for rendering
-                const mappedTickets: Ticket[] = list.map((b: any) => {
-                    const lotName = typeof b.parkingLot === 'object' ? b.parkingLot?.name : 'Parking Lot';
-                    const floorName = typeof b.floor === 'object' ? (b.floor?.name ?? `Floor ${b.floor?.floorNumber}`) : '—';
-                    const slotCode = typeof b.assignedSlot === 'object' ? b.assignedSlot?.slotCode : '—';
-                    const vTypeName = typeof b.vehicleType === 'object' ? b.vehicleType?.name : 'Vehicle';
-
-                    const parseDateTime = (dStr: string, tStr: string) => {
-                        if (!dStr || !tStr) return new Date().toISOString();
-                        const d = new Date(dStr);
-                        const [hh, mm] = tStr.split(':').map(Number);
-                        if (!isNaN(hh)) d.setHours(hh, mm || 0, 0, 0);
-                        return d.toISOString();
-                    };
-
-                    const entryDt = parseDateTime(b.scheduledDate, b.startTime);
-                    const exitTimeStr = b.endTime || b.startTime;
-                    let exitDt = parseDateTime(b.scheduledDate, exitTimeStr);
-                    // If exit time is earlier than start time, exit is the NEXT day (overnight booking)
-                    if (b.endTime && b.endTime < b.startTime) {
-                        const nextDay = new Date(exitDt);
-                        nextDay.setDate(nextDay.getDate() + 1);
-                        exitDt = nextDay.toISOString();
-                    }
-
-                    return {
-                        receiptId: b.bookingCode || b._id,
-                        bookingId: b._id,
-                        spot: { title: lotName },
-                        vehicleType: vTypeName,
-                        floorName: floorName,
-                        slotCode: slotCode,
-                        licensePlate: b.vehicleInfo?.licensePlate || '—',
-                        entryDate: entryDt,
-                        exitTime: exitDt,
-                        elapsed: 0,
-                        totalAmount: b.estimatedFee || 0,
-                        payMethod: b.paymentStatus === 'paid' ? (b.payment?.method || 'bank_transfer') : 'cash',
-                        status: b.status,
-                        paymentStatus: b.paymentStatus,
-                        createdAt: b.createdAt,
-                    };
-                });
-
-                setTickets(mappedTickets);
-            } catch (err) {
-                console.error("Failed to load upcoming bookings:", err);
-            } finally {
-                setBookingsLoading(false);
-            }
-        };
-
-        fetchBookings();
-    }, []);
+    // ── Upcoming bookings from Backend (Logic removed as it duplicates fetchUpcomingBookings) ──
 
     useEffect(() => {
         if (tickets.length === 0) return;
@@ -447,6 +423,13 @@ const MyTicketsPage = () => {
     const visibleTickets = tickets.filter(t => !hiddenTickets.includes(t.receiptId));
     const hasTickets = visibleTickets.length > 0;
     const isEmpty = !hasActiveSessions && !hasTickets && !sessionsLoading;
+
+    // Pagination calculations
+    const totalCompletedPages = Math.ceil(historySessions.length / ITEMS_PER_PAGE) || 1;
+    const paginatedCompleted = historySessions.slice((completedPage - 1) * ITEMS_PER_PAGE, completedPage * ITEMS_PER_PAGE);
+
+    const totalCancelledPages = Math.ceil(historyBookings.length / ITEMS_PER_PAGE) || 1;
+    const paginatedCancelled = historyBookings.slice((cancelledPage - 1) * ITEMS_PER_PAGE, cancelledPage * ITEMS_PER_PAGE);
 
     return (
         <>
@@ -932,6 +915,13 @@ const MyTicketsPage = () => {
                     .t-list-item { flex-direction: column; align-items: flex-start; gap: 14px; }
                     .t-list-item-right { width: 100%; justify-content: space-between; }
                 }
+
+                .t-tabs { display: flex; gap: 8px; margin-bottom: 24px; padding: 4px; background: #f1f5f9; border-radius: 12px; width: fit-content; }
+                .t-tab-btn { padding: 10px 20px; font-size: 14px; font-weight: 700; border-radius: 8px; cursor: pointer; color: #64748b; transition: all 0.2s; border: none; background: transparent; display: flex; align-items: center; gap: 8px; }
+                .t-tab-btn:hover { color: #0f172a; }
+                .t-tab-btn.active { background: white; color: #2563eb; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+                .t-tab-badge { background: #e2e8f0; color: #475569; font-size: 11px; padding: 2px 6px; border-radius: 10px; font-weight: 800; }
+                .t-tab-btn.active .t-tab-badge { background: #dbeafe; color: #2563eb; }
             `}</style>
 
             <div className="t-root">
@@ -941,48 +931,217 @@ const MyTicketsPage = () => {
                     <h1 className="t-header-title">My Tickets &amp; Sessions</h1>
                     <p className="t-header-sub">Manage your active parking sessions and upcoming bookings.</p>
 
-                    {/* ── SECTION 1: Active Sessions ── */}
-                    <div className="t-section-heading">
-                        <span className="t-section-title"> Active Sessions</span>
-                        {hasActiveSessions && (
-                            <span className="t-section-count live">{activeSessions.length} active</span>
-                        )}
+                    <div className="t-tabs">
+                        <button className={`t-tab-btn ${activeTab === 'upcoming' ? 'active' : ''}`} onClick={() => setActiveTab('upcoming')}>
+                            Upcoming Bookings
+                            {hasTickets && <span className="t-tab-badge">{visibleTickets.length}</span>}
+                        </button>
+                        <button className={`t-tab-btn ${activeTab === 'active' ? 'active' : ''}`} onClick={() => setActiveTab('active')}>
+                            Active Sessions
+                            {hasActiveSessions && <span className="t-tab-badge">{activeSessions.length}</span>}
+                        </button>
+                        <button className={`t-tab-btn ${activeTab === 'history' ? 'active' : ''}`} onClick={() => setActiveTab('history')}>
+                            History
+                        </button>
                     </div>
 
-                    {sessionsLoading && (
-                        <div className="ls-loading">
-                            <div className="ls-spinner" />
-                            Checking active parking sessions...
-                        </div>
+                    {activeTab === 'active' && (
+                        <>
+                            {/* ── SECTION 1: Active Sessions ── */}
+                            <div className="t-section-heading">
+                                <span className="t-section-title"> Active Sessions</span>
+                                {hasActiveSessions && (
+                                    <span className="t-section-count live">{activeSessions.length} active</span>
+                                )}
+                            </div>
+
+                            {sessionsLoading && (
+                                <div className="ls-loading">
+                                    <div className="ls-spinner" />
+                                    Checking active parking sessions...
+                                </div>
+                            )}
+
+                            {!sessionsLoading && sessionsError && (
+                                <div className="ls-error">
+                                    ⚠️ {sessionsError}
+                                </div>
+                            )}
+
+                            {!sessionsLoading && !hasActiveSessions && (
+                                <div style={{
+                                    background: 'white', borderRadius: 14, border: '1.5px dashed #e2e8f0',
+                                    padding: '20px 24px', marginBottom: 8,
+                                    display: 'flex', alignItems: 'center', gap: 14,
+                                    color: '#94a3b8', fontSize: 14, fontWeight: 600,
+                                }}>
+                                    <span style={{ fontSize: 24 }}>🅿️</span>
+                                    <span>You currently have no vehicles parked.</span>
+                                </div>
+                            )}
+
+                            {hasActiveSessions && activeSessions.map(session => (
+                                <LiveSessionCard
+                                    key={session._id}
+                                    session={session}
+                                    onClick={() => handleOpenSession(session)}
+                                />
+                            ))}
+                        </>
                     )}
 
-                    {!sessionsLoading && sessionsError && (
-                        <div className="ls-error">
-                            ⚠️ {sessionsError}
-                        </div>
+                    {activeTab === 'history' && (
+                        <>
+                            <div style={{ display: 'flex', gap: '12px', marginBottom: '24px' }}>
+                                <button 
+                                    onClick={() => setHistoryFilter('completed')}
+                                    style={{
+                                        flex: 1, padding: '12px', borderRadius: '10px', border: 'none', fontWeight: 600, fontSize: 14, cursor: 'pointer', transition: 'all 0.2s',
+                                        background: historyFilter === 'completed' ? '#334155' : '#f1f5f9',
+                                        color: historyFilter === 'completed' ? '#fff' : '#64748b',
+                                        boxShadow: historyFilter === 'completed' ? '0 4px 6px -1px rgba(0, 0, 0, 0.1)' : 'none'
+                                    }}
+                                >
+                                    Completed Sessions {historySessions.length > 0 && `(${historySessions.length})`}
+                                </button>
+                                <button 
+                                    onClick={() => setHistoryFilter('cancelled')}
+                                    style={{
+                                        flex: 1, padding: '12px', borderRadius: '10px', border: 'none', fontWeight: 600, fontSize: 14, cursor: 'pointer', transition: 'all 0.2s',
+                                        background: historyFilter === 'cancelled' ? '#334155' : '#f1f5f9',
+                                        color: historyFilter === 'cancelled' ? '#fff' : '#64748b',
+                                        boxShadow: historyFilter === 'cancelled' ? '0 4px 6px -1px rgba(0, 0, 0, 0.1)' : 'none'
+                                    }}
+                                >
+                                    Cancelled Bookings {historyBookings.length > 0 && `(${historyBookings.length})`}
+                                </button>
+                            </div>
+
+                            {historyFilter === 'completed' && (
+                                <>
+                                    <div className="t-section-heading">
+                                        <span className="t-section-title"> Completed Sessions</span>
+                                    </div>
+                                    
+                                    {historySessions.length === 0 ? (
+                                        <div style={{
+                                            background: 'white', borderRadius: 14, border: '1.5px dashed #e2e8f0',
+                                            padding: '20px 24px', marginBottom: 24,
+                                            display: 'flex', alignItems: 'center', gap: 14,
+                                            color: '#94a3b8', fontSize: 14, fontWeight: 600,
+                                        }}>
+                                            <span style={{ fontSize: 24 }}>📭</span>
+                                            <span>No completed parking sessions.</span>
+                                        </div>
+                                    ) : (
+                                        <>
+                                            {paginatedCompleted.map(session => (
+                                                <LiveSessionCard
+                                                    key={session._id}
+                                                    session={session}
+                                                    onClick={() => handleOpenSession(session)}
+                                                />
+                                            ))}
+                                            {totalCompletedPages > 1 && (
+                                                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 16, marginTop: 20 }}>
+                                                    <button 
+                                                        disabled={completedPage === 1} 
+                                                        onClick={() => setCompletedPage(p => p - 1)}
+                                                        style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid #cbd5e1', background: completedPage === 1 ? '#f8fafc' : '#fff', color: completedPage === 1 ? '#94a3b8' : '#334155', cursor: completedPage === 1 ? 'not-allowed' : 'pointer', fontWeight: 600, transition: 'all 0.2s' }}
+                                                    >
+                                                        Prev
+                                                    </button>
+                                                    <span style={{ fontSize: 14, fontWeight: 600, color: '#64748b' }}>
+                                                        Page {completedPage} of {totalCompletedPages}
+                                                    </span>
+                                                    <button 
+                                                        disabled={completedPage === totalCompletedPages} 
+                                                        onClick={() => setCompletedPage(p => p + 1)}
+                                                        style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid #cbd5e1', background: completedPage === totalCompletedPages ? '#f8fafc' : '#fff', color: completedPage === totalCompletedPages ? '#94a3b8' : '#334155', cursor: completedPage === totalCompletedPages ? 'not-allowed' : 'pointer', fontWeight: 600, transition: 'all 0.2s' }}
+                                                    >
+                                                        Next
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </>
+                                    )}
+                                </>
+                            )}
+
+                            {historyFilter === 'cancelled' && (
+                                <>
+                                    <div className="t-section-heading">
+                                        <span className="t-section-title"> Cancelled / No-Show Bookings</span>
+                                    </div>
+
+                                    {historyBookings.length === 0 ? (
+                                        <div style={{
+                                            background: 'white', borderRadius: 14, border: '1.5px dashed #e2e8f0',
+                                            padding: '20px 24px', marginBottom: 8,
+                                            display: 'flex', alignItems: 'center', gap: 14,
+                                            color: '#94a3b8', fontSize: 14, fontWeight: 600,
+                                        }}>
+                                            <span style={{ fontSize: 24 }}>📭</span>
+                                            <span>No cancelled bookings.</span>
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <div className="t-list">
+                                                {paginatedCancelled.map(ticket => (
+                                                    <div 
+                                                        key={ticket.receiptId} 
+                                                        className="t-list-item"
+                                                    >
+                                                        <div className="t-list-item-left">
+                                                            <div className="t-list-item-icon" style={{ opacity: 0.5 }}>
+                                                                {getVehicleEmoji(ticket.vehicleType)}
+                                                            </div>
+                                                            <div className="t-list-item-info">
+                                                                <h3 className="t-list-item-title" style={{ color: '#64748b', textDecoration: 'line-through' }}>{ticket.spot.title}</h3>
+                                                                <div className="t-list-item-subtitle">
+                                                                    <span>Plate: <strong style={{ color: '#334155' }}>{ticket.licensePlate}</strong></span>
+                                                                    <span className="t-list-item-meta">{ticket.floorName} — {ticket.slotCode}</span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <div className="t-list-item-right">
+                                                            <span className="t-badge unpaid" style={{ background: '#f1f5f9', color: '#64748b', border: '1px solid #cbd5e1' }}>
+                                                                {ticket.status?.toUpperCase() || 'CANCELLED'}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                            {totalCancelledPages > 1 && (
+                                                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 16, marginTop: 20 }}>
+                                                    <button 
+                                                        disabled={cancelledPage === 1} 
+                                                        onClick={() => setCancelledPage(p => p - 1)}
+                                                        style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid #cbd5e1', background: cancelledPage === 1 ? '#f8fafc' : '#fff', color: cancelledPage === 1 ? '#94a3b8' : '#334155', cursor: cancelledPage === 1 ? 'not-allowed' : 'pointer', fontWeight: 600, transition: 'all 0.2s' }}
+                                                    >
+                                                        Prev
+                                                    </button>
+                                                    <span style={{ fontSize: 14, fontWeight: 600, color: '#64748b' }}>
+                                                        Page {cancelledPage} of {totalCancelledPages}
+                                                    </span>
+                                                    <button 
+                                                        disabled={cancelledPage === totalCancelledPages} 
+                                                        onClick={() => setCancelledPage(p => p + 1)}
+                                                        style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid #cbd5e1', background: cancelledPage === totalCancelledPages ? '#f8fafc' : '#fff', color: cancelledPage === totalCancelledPages ? '#94a3b8' : '#334155', cursor: cancelledPage === totalCancelledPages ? 'not-allowed' : 'pointer', fontWeight: 600, transition: 'all 0.2s' }}
+                                                    >
+                                                        Next
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </>
+                                    )}
+                                </>
+                            )}
+                        </>
                     )}
 
-                    {!sessionsLoading && !hasActiveSessions && (
-                        <div style={{
-                            background: 'white', borderRadius: 14, border: '1.5px dashed #e2e8f0',
-                            padding: '20px 24px', marginBottom: 8,
-                            display: 'flex', alignItems: 'center', gap: 14,
-                            color: '#94a3b8', fontSize: 14, fontWeight: 600,
-                        }}>
-                            <span style={{ fontSize: 24 }}>🅿️</span>
-                            <span>You currently have no vehicles parked.</span>
-                        </div>
-                    )}
-
-                    {hasActiveSessions && activeSessions.map(session => (
-                        <LiveSessionCard
-                            key={session._id}
-                            session={session}
-                            onClick={() => handleOpenSession(session)}
-                        />
-                    ))}
-
-                    <div className="t-section-divider" />
+                    {activeTab === 'upcoming' && (
+                        <>
 
                     {/* ── SECTION 2: Upcoming Bookings (localStorage tickets) ── */}
                     <div className="t-section-heading">
@@ -1232,6 +1391,8 @@ const MyTicketsPage = () => {
                                     </div>
                                 );
                             })()}
+                        </>
+                    )}
                         </>
                     )}
                 </div>

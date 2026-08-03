@@ -203,15 +203,22 @@ const SessionPage = () => {
         return () => window.removeEventListener('devTimeOffsetChanged', handleOffsetChange);
     }, []);
 
-    const initialElapsed = Math.floor((Date.now() + devTimeOffset - sessionStart.current) / 1000);
+    const isCompleted = session?.status === 'completed';
+    const endTimeMs = isCompleted && session?.exitTime ? new Date(session.exitTime).getTime() : (Date.now() + devTimeOffset);
+
+    const initialElapsed = Math.floor((endTimeMs - sessionStart.current) / 1000);
     const [elapsed, setElapsed] = useState(Math.max(0, initialElapsed));
 
     useEffect(() => {
+        if (isCompleted) {
+            setElapsed(Math.floor((endTimeMs - sessionStart.current) / 1000));
+            return;
+        }
         const id = setInterval(() => {
             setElapsed(Math.floor((Date.now() + devTimeOffset - sessionStart.current) / 1000));
         }, 1000);
         return () => clearInterval(id);
-    }, [devTimeOffset]);
+    }, [devTimeOffset, isCompleted, session?.exitTime]);
 
     // ── Phí ước tính thực tế (Pre-booked Overtime logic) ────────────────────
     let overtimeFee = 0;
@@ -276,7 +283,7 @@ const SessionPage = () => {
             scheduledEnd = new Date(scheduledEnd.getTime() + 24 * 60 * 60 * 1000);
         }
 
-        const now = new Date(Date.now() + devTimeOffset);
+        const now = new Date(endTimeMs);
 
         if (now > scheduledEnd) {
             isOvertime = true;
@@ -330,7 +337,7 @@ const SessionPage = () => {
         const elapsedHours = elapsed / 3600;
         if (elapsedHours > 4) { // Đã lố qua 4h
             const scheduledEnd = new Date(sessionStart.current + 4 * 60 * 60 * 1000);
-            const now = new Date(Date.now() + devTimeOffset);
+            const now = new Date(endTimeMs);
 
             let tempStart = new Date(scheduledEnd.getTime());
             let calculatedOtFee = 0;
@@ -356,9 +363,9 @@ const SessionPage = () => {
 
     // Vì khách đã thanh toán lúc book nên phí hiện tại chỉ hiện Overtime Fee, ngoại trừ chọn Pay at counter (pending)
     const baseUnpaidFee = bookingInfo?.paymentStatus === 'pending' ? (bookingInfo?.estimatedFee || 0) : 0;
-    const currentFee = baseUnpaidFee + overtimeFee;
+    const currentFee = isCompleted ? (session.totalFee || 0) : (baseUnpaidFee + overtimeFee);
     // Số tiền cần thanh toán thêm cũng bao gồm tiền vé gốc nếu chưa thanh toán
-    const amountDue = baseUnpaidFee + overtimeFee;
+    const amountDue = currentFee;
 
     // ── Lắng nghe sự kiện Checkout từ Staff qua Socket ────────────────────────
     useEffect(() => {
