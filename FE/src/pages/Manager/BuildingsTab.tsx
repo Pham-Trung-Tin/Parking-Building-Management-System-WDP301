@@ -101,12 +101,13 @@ export default function BuildingsTab({ globalLotId, setGlobalLotId, setTab }: an
   const user = useMemo(() => { try { return JSON.parse(localStorage.getItem('user') || '{}'); } catch { return {}; } }, []);
   const isManager = user?.role === 'parking_manager';
 
-  // Support both string (legacy) and string[] (new) for assignedParkingLot
   const assignedIds: string[] = useMemo(() => {
     const raw = user?.assignedParkingLot;
     if (!raw) return [];
-    if (Array.isArray(raw)) return raw.filter(Boolean);
-    return [raw];
+    if (Array.isArray(raw)) {
+      return raw.map((v: any) => v?._id?.toString?.() || v?.toString?.() || '').filter(Boolean);
+    }
+    return [(raw as any)?._id?.toString?.() || raw?.toString?.() || ''].filter(Boolean);
   }, [user]);
 
   const [stats, setStats] = useState<DashboardStats | null>(null);

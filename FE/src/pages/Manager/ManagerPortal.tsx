@@ -26,12 +26,12 @@ export default function ManagerPortal() {
   const [tab, setTab] = useState('buildings');
   const user = useMemo(() => { try { return JSON.parse(localStorage.getItem('user') || '{}'); } catch { return {}; } }, []);
 
-  // assignedParkingLot can be string (legacy) or string[] (new)
+  // assignedParkingLot can be string (legacy), string[], or populated objects [{_id, name}]
   const assignedIds: string[] = useMemo(() => {
     const raw = user?.assignedParkingLot;
     if (!raw) return [];
-    if (Array.isArray(raw)) return raw.filter(Boolean);
-    return [raw];
+    if (Array.isArray(raw)) return raw.map((v: any) => v?._id?.toString?.() || v?.toString?.() || '').filter(Boolean);
+    return [(raw as any)?._id?.toString?.() || raw?.toString?.() || ''].filter(Boolean);
   }, [user]);
 
   const [assignedLots, setAssignedLots] = useState<any[]>([]);
@@ -61,6 +61,31 @@ export default function ManagerPortal() {
     navigate('/login');
   };
 
+  // Manager without assigned building: show profile-only empty state
+  const hasNoBuilding = isManager && assignedIds.length === 0;
+
+  if (hasNoBuilding) {
+    return (
+      <div className="min-h-screen bg-[#F8F8F6] flex items-center justify-center">
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-10 max-w-md text-center">
+          <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <Building className="w-8 h-8 text-gray-400" />
+          </div>
+          <h2 className="text-lg font-semibold text-gray-900 mb-1">No Building Assigned</h2>
+          <p className="text-sm text-gray-400 mb-6">You haven't been assigned to manage any parking lot yet. Please contact your system administrator.</p>
+          <div className="border border-gray-100 rounded-xl p-4 text-left mb-6">
+            <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">Logged in as</p>
+            <p className="text-sm font-semibold text-gray-900">{user?.fullName || 'Manager'}</p>
+            <p className="text-xs text-gray-400">{user?.email}</p>
+          </div>
+          <button onClick={handleLogout} className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50 rounded-xl transition-colors border border-red-100">
+            <LogOut className="w-4 h-4" /> Logout
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#F8F8F6] flex">
       {/* Sidebar */}
@@ -76,7 +101,7 @@ export default function ManagerPortal() {
             </div>
           </div>
 
-
+          {/* Multi-lot selector */}
         </div>
 
         <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">

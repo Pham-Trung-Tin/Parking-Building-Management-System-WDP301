@@ -49,6 +49,15 @@ const monthlyPassService = {
   changeVehicle: async (id: string, newLicensePlate: string) => {
     return axiosClient.patch(`/monthly-passes/${id}/change-vehicle`, { licensePlate: newLicensePlate });
   },
+
+  cancelMyPass: async (id: string) => {
+    return axiosClient.delete(`/monthly-passes/my-passes/${id}`);
+  },
+
+  /** GET /monthly-passes/verify?passCode=... — staff validates pass lot before check-in */
+  verifyPassByCode: async (passCode: string): Promise<any> => {
+    return axiosClient.get('/monthly-passes/verify', { params: { passCode } });
+  },
 };
 
 export default monthlyPassService;

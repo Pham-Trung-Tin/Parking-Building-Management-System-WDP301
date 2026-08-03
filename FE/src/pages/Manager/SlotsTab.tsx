@@ -261,8 +261,11 @@ export default function SlotsTab({ globalLotId, setGlobalLotId }: any) {
       let ls = res.data || res.docs || res || [];
       if (isManager) {
         const raw = user?.assignedParkingLot;
-        const ids: string[] = Array.isArray(raw) ? raw.filter(Boolean) : (raw ? [raw] : []);
-        if (ids.length) ls = ls.filter((l: any) => ids.includes(l._id));
+        // assignedParkingLot can be string[], ObjectId[], or populated objects [{_id, name}]
+        const ids: string[] = Array.isArray(raw)
+          ? raw.map((v: any) => (v?._id?.toString?.() || v?.toString?.() || '')).filter(Boolean)
+          : (raw ? [(raw as any)?._id?.toString?.() || raw?.toString?.() || ''].filter(Boolean) : []);
+        if (ids.length) ls = ls.filter((l: any) => ids.includes(l._id?.toString?.() || l._id));
       }
       setLots(ls);
     }).catch(() => {});
@@ -278,6 +281,9 @@ export default function SlotsTab({ globalLotId, setGlobalLotId }: any) {
   // Fetch floors when lot changes
   useEffect(() => {
     if (!globalLotId) { setFloors([]); setSelFloor(null); return; }
+    // Immediately reset so fetchSlots doesn't fire with old floor + new lot
+    setFloors([]);
+    setSelFloor(null);
     floorService.getFloors({ limit: 100, parkingLot: globalLotId }).then(res => {
       const list = (res.data || res.docs || res || []).sort((a: any, b: any) => a.floorNumber - b.floorNumber);
       setFloors(list);

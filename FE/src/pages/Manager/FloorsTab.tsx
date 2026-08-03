@@ -131,8 +131,10 @@ export default function FloorsTab({ globalLotId, setGlobalLotId }: any) {
       let ls = res.data || res.docs || res || [];
       if (isManager) {
         const raw = user?.assignedParkingLot;
-        const ids: string[] = Array.isArray(raw) ? raw.filter(Boolean) : (raw ? [raw] : []);
-        if (ids.length) ls = ls.filter((l: any) => ids.includes(l._id));
+        const ids: string[] = Array.isArray(raw)
+          ? raw.map((v: any) => (v?._id?.toString?.() || v?.toString?.() || '')).filter(Boolean)
+          : (raw ? [(raw as any)?._id?.toString?.() || raw?.toString?.() || ''].filter(Boolean) : []);
+        if (ids.length) ls = ls.filter((l: any) => ids.includes(l._id?.toString?.() || l._id));
       }
       setLots(ls);
     }).catch(() => {});
@@ -155,7 +157,8 @@ export default function FloorsTab({ globalLotId, setGlobalLotId }: any) {
       // Sort: basement first (floorNumber < 0), then ascending
       list.sort((a: any, b: any) => a.floorNumber - b.floorNumber);
       setFloors(list);
-      if (!selectedFloor && list.length) setSelectedFloor(list[0]);
+      // Always reset to first floor when building changes
+      setSelectedFloor(list[0] || null);
     } catch (e: any) { showToast(e.message || 'Error', false); }
     finally { setLoading(false); }
   }, [globalLotId]);

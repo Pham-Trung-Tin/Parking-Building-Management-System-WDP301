@@ -86,8 +86,10 @@ export default function ZonesTab({ globalLotId, setGlobalLotId }: any) {
       let fetchedLots = rl.data || rl.docs || rl || [];
       if (isManager) {
         const raw = user?.assignedParkingLot;
-        const ids: string[] = Array.isArray(raw) ? raw.filter(Boolean) : (raw ? [raw] : []);
-        if (ids.length > 0) fetchedLots = fetchedLots.filter((l: any) => ids.includes(l._id));
+        const ids: string[] = Array.isArray(raw)
+          ? raw.map((v: any) => (v?._id?.toString?.() || v?.toString?.() || '')).filter(Boolean)
+          : (raw ? [(raw as any)?._id?.toString?.() || raw?.toString?.() || ''].filter(Boolean) : []);
+        if (ids.length > 0) fetchedLots = fetchedLots.filter((l: any) => ids.includes(l._id?.toString?.() || l._id));
       }
       setLots(fetchedLots);
       const rf = await floorService.getFloors({ limit: 500 });

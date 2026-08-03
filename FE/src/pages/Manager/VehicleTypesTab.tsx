@@ -17,6 +17,7 @@ const PRESET_TYPES = [
 
 function VehicleTypeModal({ initial, onSave, onClose, loading }: any) {
   const [form, setForm] = useState(initial);
+  const [codeError, setCodeError] = useState('');
   const set = (k: string, v: any) => setForm((f: any) => ({ ...f, [k]: v }));
   const setPricing = (k: string, v: any) =>
     setForm((f: any) => ({ ...f, pricing: { ...f.pricing, [k]: v === '' ? 0 : (parseInt(v, 10) || 0) } }));
@@ -25,6 +26,20 @@ function VehicleTypeModal({ initial, onSave, onClose, loading }: any) {
     const preset = PRESET_TYPES.find(p => p.name === name);
     if (preset) setForm((f: any) => ({ ...f, name: preset.name, code: preset.code, size: preset.size }));
     else set('name', name);
+  };
+
+  // Auto-format code: uppercase, spaces → underscore, strip invalid chars
+  const handleCodeChange = (raw: string) => {
+    const formatted = raw.toUpperCase().replace(/\s+/g, '_').replace(/[^A-Z0-9_]/g, '');
+    set('code', formatted);
+    setCodeError('');
+  };
+
+  const handleCodeBlur = () => {
+    const code = form.code || '';
+    if (code && !/^[A-Z][A-Z0-9_]*$/.test(code)) {
+      setCodeError('Code must start with a letter, only A–Z, 0–9, _ allowed');
+    }
   };
 
   return (
@@ -39,12 +54,44 @@ function VehicleTypeModal({ initial, onSave, onClose, loading }: any) {
         </div>
 
         <div className="space-y-4">
+          {/* Preset selector */}
           <div>
-            <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">Vehicle Type *</label>
+            <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">Preset Types</label>
             <select value={form.name || ''} onChange={e => handleNameSelect(e.target.value)}
               className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 bg-white">
-              <option value="">-- Select vehicle type --</option>
-              {PRESET_TYPES.map(p => <option key={p.code} value={p.name}>{p.code}</option>)}
+              <option value="">-- Select preset or type custom below --</option>
+              {PRESET_TYPES.map(p => <option key={p.code} value={p.name}>{p.name} ({p.code})</option>)}
+            </select>
+          </div>
+
+          {/* Custom code input */}
+          <div>
+            <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">
+              Code <span className="text-gray-400 font-normal normal-case">(DB identifier — UPPERCASE, underscore only)</span>
+            </label>
+            <input
+              value={form.code || ''}
+              onChange={e => handleCodeChange(e.target.value)}
+              onBlur={handleCodeBlur}
+              placeholder="e.g. ELECTRIC_TRUCK"
+              className={`w-full border rounded-xl px-4 py-2.5 text-sm font-mono font-bold uppercase tracking-widest focus:outline-none focus:ring-2 ${
+                codeError ? 'border-red-300 focus:ring-red-400 bg-red-50' : 'border-gray-200 focus:ring-gray-900'
+              }`}
+            />
+            {codeError && <p className="text-[11px] text-red-500 mt-1">{codeError}</p>}
+            {!codeError && form.code && (
+              <p className="text-[11px] text-emerald-600 mt-1">✓ Will be saved as <span className="font-mono font-bold">{form.code}</span></p>
+            )}
+          </div>
+
+          {/* Size */}
+          <div>
+            <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">Size</label>
+            <select value={form.size || 'medium'} onChange={e => set('size', e.target.value)}
+              className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 bg-white">
+              <option value="small">Small (bicycle, motorbike)</option>
+              <option value="medium">Medium (sedan, SUV)</option>
+              <option value="large">Large (truck, bus)</option>
             </select>
           </div>
 
@@ -86,7 +133,7 @@ function VehicleTypeModal({ initial, onSave, onClose, loading }: any) {
 
         <div className="flex gap-3 mt-6">
           <button onClick={onClose} className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50">Cancel</button>
-          <button onClick={() => onSave(form)} disabled={loading}
+          <button onClick={() => onSave(form)} disabled={loading || !!codeError || !form.code}
             className="flex-1 py-2.5 bg-gray-900 text-white rounded-xl text-sm font-medium hover:bg-gray-700 disabled:opacity-50">
             {loading ? 'Saving...' : 'Save'}
           </button>
@@ -114,7 +161,9 @@ export default function VehicleTypesTab({ globalLotId, setGlobalLotId }: { globa
       let ls = res.data || res.docs || res || [];
       if (isManager) {
         const raw = user?.assignedParkingLot;
-        const ids: string[] = Array.isArray(raw) ? raw.filter(Boolean) : (raw ? [raw] : []);
+        const ids: string[] = Array.isArray(raw)
+          ? raw.map((v: any) => (v?._id?.toString?.() || v?.toString?.() || '')).filter(Boolean)
+          : (raw ? [(raw as any)?._id?.toString?.() || raw?.toString?.() || ''].filter(Boolean) : []);
         if (ids.length) ls = ls.filter((l: any) => ids.includes(l._id));
       }
       setLots(ls);

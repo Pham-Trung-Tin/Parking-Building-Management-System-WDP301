@@ -115,7 +115,9 @@ export default function StaffAssignmentTab({ globalLotId, setGlobalLotId }: { gl
       // Manager only sees their own buildings (support both string and string[])
       if (user?.role === 'parking_manager') {
         const raw = user?.assignedParkingLot;
-        const ids: string[] = Array.isArray(raw) ? raw.filter(Boolean) : (raw ? [raw] : []);
+        const ids: string[] = Array.isArray(raw)
+          ? raw.map((v: any) => (v?._id?.toString?.() || v?.toString?.() || '')).filter(Boolean)
+          : (raw ? [(raw as any)?._id?.toString?.() || raw?.toString?.() || ''].filter(Boolean) : []);
         if (ids.length > 0) data = data.filter(l => ids.includes(l._id));
       }
       setLots(data);

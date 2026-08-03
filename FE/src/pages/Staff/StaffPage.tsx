@@ -39,6 +39,7 @@ import parkingLotService from '../../services/api/parkingLotService';
 import floorService from '../../services/api/floorService';
 import parkingSlotService from '../../services/api/parkingSlotService';
 import bookingService from '../../services/api/bookingService';
+import monthlyPassService from '../../services/api/monthlyPassService';
 
 interface BookingData {
   id: string;
@@ -109,8 +110,8 @@ const StaffPage = () => {
       }).catch(console.error);
     };
 
-    const assignedLotId = Array.isArray(profile?.assignedParkingLot) 
-      ? profile?.assignedParkingLot[0]?._id 
+    const assignedLotId = Array.isArray(profile?.assignedParkingLot)
+      ? profile?.assignedParkingLot[0]?._id
       : (profile as any)?.assignedParkingLot?._id || (profile as any)?.assignedParkingLot;
 
     if (assignedLotId) {
@@ -135,7 +136,7 @@ const StaffPage = () => {
   const [gateStatus, setGateStatus] = useState('Closed');
   const [notification, setNotification] = useState<{ show: boolean, message: string, type: 'success' | 'info' | 'error' } | null>(null);
   const [capturedImageBase64, setCapturedImageBase64] = useState<string | null>(null);
-  
+
   const [isPlateRegistered, setIsPlateRegistered] = useState(false);
   const [isPlateMonthlyPass, setIsPlateMonthlyPass] = useState(false);
   const [customerName, setCustomerName] = useState<string | null>(null);
@@ -422,11 +423,29 @@ const StaffPage = () => {
     try {
       let payload: any;
 
-      // ── Ưu tiên 1: QR mới — plain prefix "ci_<bookingId>" ──────────────────
-      if (code.startsWith('ci_')) {
+      // Strip surrounding quotes some scanners add: "MP:..." → MP:...
+      if (code.startsWith('"') && code.endsWith('"')) {
+        code = code.slice(1, -1);
+      }
+      if (code.startsWith("'") && code.endsWith("'")) {
+        code = code.slice(1, -1);
+      }
+      code = code.trim();
+
+      // ── Ưu tiên 1: Format mới vé tháng "MP:passCode:lotId" ─────────────
+      if (code.startsWith('MP:')) {
+        const parts = code.split(':');
+        // parts = ['MP', passCode, lotId]
+        payload = {
+          type: 'monthly_pass',
+          passCode: parts[1] || '',
+          lotId: parts[2] || ''
+        };
+        // ── Ưu tiên 2: QR booking — plain prefix "ci_<bookingId>" ──────────
+      } else if (code.startsWith('ci_')) {
         payload = { bookingId: code.slice(3).trim(), type: 'checkin' };
       } else {
-        // ── Ưu tiên 2: HMAC token cũ (dạng <base64>.<sig>) ─────────────────
+        // ── Ưu tiên 3: HMAC token cũ (dạng <base64>.<sig>) ────────────────
         try {
           payload = await verifyQRToken(code);
         } catch (tokenErr: any) {
@@ -457,10 +476,50 @@ const StaffPage = () => {
         throw new Error('Invalid QR Code. Only Booking or Monthly Pass supported.');
       }
 
-      if (payload.type === 'monthly_pass') {
+      if (payload.type === 'monthly_pass' || payload.passCode) {
+        const passCode = payload.passCode;
+        if (!passCode) throw new Error('Invalid monthly pass QR: missing pass code.');
+
+        // --- Validate parking lot match ---
+        const qrLotId = payload.lotId; // present in new format MP:passCode:lotId
+        const staffLotId = defaultLotId;
+        console.log('[QR] Monthly pass scan — passCode:', passCode, 'qrLotId:', qrLotId, 'staffLotId:', staffLotId);
+
+        // Always call verifyPassByCode to get licensePlate (needed for modal + duplicate check)
+        try {
+          const verifyRes: any = await monthlyPassService.verifyPassByCode(passCode);
+          const passData = verifyRes?.data?.data || verifyRes?.data || verifyRes;
+          console.log('[QR] verifyPassByCode result:', passData);
+          const passLotId = passData?.parkingLotId?.toString?.();
+
+          // Validate lot match (use verifyPassByCode result as source of truth)
+          if (staffLotId && passLotId && passLotId !== staffLotId) {
+            throw new Error(`❌ This monthly pass belongs to "${passData.parkingLotName || passLotId}" — not the parking lot you are managing.`);
+          }
+
+          // Populate payload with data from API
+          payload.licensePlate = passData.licensePlate || payload.licensePlate;
+          payload.parkingLotName = passData.parkingLotName;
+          payload.passStatus = passData.status;
+          
+          // Override passCode with the exact one from DB in case scanner read 'O' instead of '0'
+          if (passData.passCode) {
+            payload.passCode = passData.passCode;
+          }
+
+        } catch (verifyErr: any) {
+          if (verifyErr.message?.startsWith('❌')) throw verifyErr;
+          console.warn('[QR] Could not verify pass via API:', verifyErr.message);
+          // If old QR had lotId, fall back to direct comparison
+          if (qrLotId && staffLotId && qrLotId !== staffLotId) {
+            throw new Error('❌ This monthly pass is not valid for the parking lot you are managing.');
+          }
+        }
+        // -----------------------------------------------
+
         // --- Prevent duplicate check-in at scan time ---
         const plate = payload.licensePlate;
-        if (plate) {
+        if (plate && plate !== 'N/A') {
           try {
             const activeRes = await parkingSessionService.findActive({ licensePlate: plate });
             if (activeRes && (activeRes.data || activeRes._id)) {
@@ -470,7 +529,7 @@ const StaffPage = () => {
             if (err.message === `Vehicle ${plate} is already checked in.`) {
               throw err;
             }
-            // 404 means no active session found (which is good)
+            // 404 = no active session (expected — not an error)
           }
         }
         // -----------------------------------------------
@@ -482,10 +541,11 @@ const StaffPage = () => {
           customerName: 'Monthly Pass Member',
           spot: 'Auto-assigned on Check-in',
           status: 'VALID',
-          monthlyPassCode: payload.passCode,
+          monthlyPassCode: payload.passCode, // use payload.passCode which is corrected from DB
           isMonthlyPass: true
         };
         setModalData(mockResult);
+
         setShowModal(true);
         return;
       }
@@ -528,7 +588,7 @@ const StaffPage = () => {
         if (fetchErr.message && fetchErr.message.includes('already checked in')) {
           throw fetchErr;
         }
-        throw new Error('Could not find Booking info for this QR code.');
+        throw new Error('❌ Could not find valid Booking info for this QR code. Please double check.');
       }
     } catch (error: any) {
       setIsLoadingQR(false);
@@ -576,7 +636,9 @@ const StaffPage = () => {
       return;
     }
 
-    const lotId = Array.isArray(profile?.assignedParkingLot) ? profile?.assignedParkingLot[0]?._id : (profile as any)?.assignedParkingLot?._id || (profile as any)?.assignedParkingLot || defaultLotId;
+    // Use pre-computed defaultLotId (string) to avoid ObjectId type mismatch
+    const lotId = defaultLotId;
+    console.log('[CheckIn] Sending check-in — monthlyPassCode:', modalData.monthlyPassCode, 'plate:', modalData.plate, 'lotId:', lotId);
 
     try {
       if (modalData.monthlyPassCode) {
@@ -602,6 +664,7 @@ const StaffPage = () => {
         setIsProcessingQR(false);
       }, 3000);
     } catch (err: any) {
+      console.error('[CheckIn] Check-in failed with error:', err?.response?.data || err?.message || err);
       showNotification(err?.response?.data?.message || err?.message || 'Failed to check in from QR', 'error');
       setIsProcessingQR(false);
     }
@@ -804,27 +867,27 @@ const StaffPage = () => {
                   {/* Customer Type Indicator */}
                   {!isScanningStandard && plate && plate.length > 0 && (
                     <div className="mt-3 flex justify-center flex-col items-center gap-1">
-                       {isPlateMonthlyPass ? (
-                          <div className="px-4 py-1.5 bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-full text-sm font-bold flex items-center gap-2">
-                             <CheckCircle className="w-4 h-4" />
-                             MONTHLY PASS
-                          </div>
-                       ) : isPlateRegistered ? (
-                          <div className="px-4 py-1.5 bg-blue-100 text-blue-800 border border-blue-300 rounded-full text-sm font-bold flex items-center gap-2">
-                             <User className="w-4 h-4" />
-                             REGISTERED GUEST
-                          </div>
-                       ) : (
-                          <div className="px-4 py-1.5 bg-gray-100 text-gray-600 border border-gray-300 rounded-full text-sm font-bold flex items-center gap-2">
-                             <Car className="w-4 h-4" />
-                             GUEST
-                          </div>
-                       )}
-                       {customerName && (
-                         <span className="text-xs font-semibold text-gray-700">
-                           {customerName}
-                         </span>
-                       )}
+                      {isPlateMonthlyPass ? (
+                        <div className="px-4 py-1.5 bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-full text-sm font-bold flex items-center gap-2">
+                          <CheckCircle className="w-4 h-4" />
+                          MONTHLY PASS
+                        </div>
+                      ) : isPlateRegistered ? (
+                        <div className="px-4 py-1.5 bg-blue-100 text-blue-800 border border-blue-300 rounded-full text-sm font-bold flex items-center gap-2">
+                          <User className="w-4 h-4" />
+                          REGISTERED GUEST
+                        </div>
+                      ) : (
+                        <div className="px-4 py-1.5 bg-gray-100 text-gray-600 border border-gray-300 rounded-full text-sm font-bold flex items-center gap-2">
+                          <Car className="w-4 h-4" />
+                          GUEST
+                        </div>
+                      )}
+                      {customerName && (
+                        <span className="text-xs font-semibold text-gray-700">
+                          {customerName}
+                        </span>
+                      )}
                     </div>
                   )}
 

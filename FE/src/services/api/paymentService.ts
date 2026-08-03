@@ -86,6 +86,20 @@ const paymentService = {
     /** POST /payments/momo/initiate — Initiate MoMo payment */
     initiateMomo: (data: { sessionId: string, returnUrl: string }): Promise<any> => {
         return axiosClient.post('/payments/momo/initiate', data);
+    },
+
+    /**
+     * POST /payments/monthly-pass/create-and-pay
+     * Create pass + generate QR in one shot — no pass in DB until user clicks Pay
+     */
+    createMonthlyPassAndPay: (data: {
+        parkingLotId: string;
+        vehicleTypeId: string;
+        licensePlate: string;
+        months: number;
+        startDate?: string;
+    }): Promise<any> => {
+        return axiosClient.post('/payments/monthly-pass/create-and-pay', data);
     }
 };
 

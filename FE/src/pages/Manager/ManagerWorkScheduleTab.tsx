@@ -83,7 +83,9 @@ export default function ManagerWorkScheduleTab({ globalLotId, setGlobalLotId }: 
         let data: any[] = res.data || res.docs || (Array.isArray(res) ? res : []);
         if (user?.role === 'parking_manager') {
           const raw = user?.assignedParkingLot;
-          const ids: string[] = Array.isArray(raw) ? raw.filter(Boolean) : (raw ? [raw] : []);
+          const ids: string[] = Array.isArray(raw)
+            ? raw.map((v: any) => (v?._id?.toString?.() || v?.toString?.() || '')).filter(Boolean)
+            : (raw ? [(raw as any)?._id?.toString?.() || raw?.toString?.() || ''].filter(Boolean) : []);
           if (ids.length > 0) data = data.filter((l: any) => ids.includes(l._id));
         }
         setLots(data);

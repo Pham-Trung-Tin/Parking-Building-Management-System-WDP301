@@ -175,7 +175,9 @@ export default function RevenueTab({ globalLotId, setGlobalLotId }: { globalLotI
       let ls: any[] = res.data || res.docs || (Array.isArray(res) ? res : []);
       if (isManager) {
         const raw = user?.assignedParkingLot;
-        const ids: string[] = Array.isArray(raw) ? raw.filter(Boolean) : (raw ? [raw] : []);
+        const ids: string[] = Array.isArray(raw)
+          ? raw.map((v: any) => (v?._id?.toString?.() || v?.toString?.() || '')).filter(Boolean)
+          : (raw ? [(raw as any)?._id?.toString?.() || raw?.toString?.() || ''].filter(Boolean) : []);
         if (ids.length) ls = ls.filter((l: any) => ids.includes(l._id));
       }
       setLots(ls);

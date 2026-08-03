@@ -85,6 +85,22 @@ const CheckoutPage = () => {
     const data = location.state || {};
 
     // Session data passed from SessionPage
+    // Payment state
+    const [payMethod, setPayMethod] = useState('bank_transfer'); // 'bank_transfer' | 'cash'
+    const [cardNumber, setCardNumber] = useState('');
+    const [cardName, setCardName] = useState('');
+    const [expiry, setExpiry] = useState('');
+    const [cvv, setCvv] = useState('');
+    const [saveCard, setSaveCard] = useState(false);
+    const [processing, setProcessing] = useState(false);
+    const [errors, setErrors] = useState<Record<string, string>>({});
+    const [monthlyPassId, setMonthlyPassId] = useState<string | null>(data.monthlyPassId || null);
+    const [bookingDetail, setBookingDetail] = useState<any>(null);
+    const [paymentId, setPaymentId] = useState<string | null>(null);
+    const [bankInfo, setBankInfo] = useState<PaymentInitiateBankTransferResponse | null>(null);
+    const [polling, setPolling] = useState(false);
+    const [pollingError, setPollingError] = useState('');
+
     const spot = data.spot || { title: 'Bitexco Financial Tower Parking', price: 20000 };
     const vehicleType = data.vehicleType || 'car';
     const floorObj = data.floor;
@@ -98,29 +114,17 @@ const CheckoutPage = () => {
 
     const entryDate = data.entryDate ? new Date(data.entryDate) : new Date(Date.now() - 7200000);
     const elapsed = data.elapsed || 7200; // seconds
-    const amountDue = data.totalAmount !== undefined ? data.totalAmount : 0;
-    const currentFee = data.currentFee ?? amountDue;
+    const amountDue = data.totalAmount != null ? data.totalAmount : (bankInfo?.amount ?? null);
+    const currentFee = data.currentFee ?? amountDue ?? 0;
     const advancePayment = data.advancePayment ?? 0;
 
     const licensePlate = data.licensePlate || (isMoto ? '59T1-23456' : '51A-12345');
     const exitTime = new Date();
 
-    // Payment state
-    const [payMethod, setPayMethod] = useState('bank_transfer'); // 'bank_transfer' | 'cash'
-    const [cardNumber, setCardNumber] = useState('');
-    const [cardName, setCardName] = useState('');
-    const [expiry, setExpiry] = useState('');
-    const [cvv, setCvv] = useState('');
-    const [saveCard, setSaveCard] = useState(false);
-    const [processing, setProcessing] = useState(false);
-    const [errors, setErrors] = useState<Record<string, string>>({});
-
     const sessionId = data.sessionId || data.session?._id;
     const bookingId = data.bookingId;
-    const monthlyPassId = data.monthlyPassId;
 
     // ── Fetch booking detail for isBooking flow (resume payment) ─────────────
-    const [bookingDetail, setBookingDetail] = useState<any>(null);
     useEffect(() => {
         if (!data.isBooking || !bookingId) return;
         bookingService.getById(bookingId).then((res: any) => {
@@ -166,13 +170,6 @@ const CheckoutPage = () => {
         ? { ...data, ...bookingDetail }
         : data;
 
-    // Store paymentId separately for reliable polling
-    const [paymentId, setPaymentId] = useState<string | null>(null);
-
-    // Bank Transfer State
-    const [bankInfo, setBankInfo] = useState<PaymentInitiateBankTransferResponse | null>(null);
-    const [polling, setPolling] = useState(false);
-    const [pollingError, setPollingError] = useState('');
     // Init countdown: for isBooking flow use remaining time from createdAt, else 600s
     const calcInitialCountdown = () => {
         if (data.isBooking && bookingDetail?.createdAt) {
@@ -197,8 +194,12 @@ const CheckoutPage = () => {
     // Use a ref to avoid stale closure in navigate callback
     const dataRef = useRef(data);
     const payMethodRef = useRef(payMethod);
+    const monthlyPassIdRef = useRef(monthlyPassId);
+    // Extra data from API (endDate, price, passCode) — separate ref so re-renders don't wipe it
+    const passApiDataRef = useRef<any>({});
     dataRef.current = data;
     payMethodRef.current = payMethod;
+    monthlyPassIdRef.current = monthlyPassId;
 
     // ── Socket: react instantly when SEPay webhook confirms payment ───────────
     useEffect(() => {
@@ -209,6 +210,7 @@ const CheckoutPage = () => {
             navigate('/checkoutsuccess', {
                 state: {
                     ...dataRef.current,
+                    ...passApiDataRef.current,  // merge API-returned pass fields (endDate, price, passCode)
                     transactionId: invoiceCode,
                     payMethod: payMethodRef.current,
                 }
@@ -217,9 +219,10 @@ const CheckoutPage = () => {
 
         // Monthly pass confirmed via webhook
         const onMonthlyPassConfirmed = (payload: any) => {
-            if (!monthlyPassId) return;
+            const currentPassId = monthlyPassIdRef.current;
+            if (!currentPassId) return;
             const pid = payload?.monthlyPassId?.toString?.() || payload?.monthlyPassId;
-            if (pid === monthlyPassId) {
+            if (pid === currentPassId) {
                 console.log('[CheckoutPage] 🎉 monthlyPassPaymentConfirmed via socket!');
                 goToSuccess(payload?.invoiceCode);
             }
@@ -315,6 +318,7 @@ const CheckoutPage = () => {
                         navigate('/checkoutsuccess', {
                             state: {
                                 ...dataRef.current,
+                                ...passApiDataRef.current,  // merge API-returned pass fields
                                 transactionId: statusData.invoiceCode,
                                 payMethod: payMethodRef.current,
                             }
@@ -347,7 +351,7 @@ const CheckoutPage = () => {
         setErrors({});
 
         if (payMethod === 'bank_transfer') {
-            if (!sessionId && !bookingId && !monthlyPassId) {
+            if (!sessionId && !bookingId && !monthlyPassId && !data.isMonthlyPass) {
                 setPollingError('No active parking session, booking, or pass found to pay for.');
                 return;
             }
@@ -355,23 +359,61 @@ const CheckoutPage = () => {
             setPollingError('');
             try {
                 let res: any;
-                if (data.isMonthlyPass && monthlyPassId) {
+                if (data.isMonthlyPass && !monthlyPassId) {
+                    // NEW FLOW: create pass + QR in one shot
+                    res = await paymentService.createMonthlyPassAndPay({
+                        parkingLotId: data.parkingLotId,
+                        vehicleTypeId: data.vehicleTypeId,
+                        licensePlate: data.licensePlate,
+                        months: data.durationMonths || 1,
+                        startDate: data.startDate,
+                    });
+                    const resData = res?.data?.data || res?.data || res;
+                    console.log('[CheckoutPage] createMonthlyPassAndPay resData:', resData);
+                    // Store the new monthlyPassId so socket listener can match it
+                    const newPassId = resData?.monthlyPass?._id || resData?.monthlyPass?.id;
+                    if (newPassId) setMonthlyPassId(String(newPassId));
+                    const bankData = resData;
+                    console.log('[CheckoutPage] createMonthlyPassAndPay bankData:', bankData);
+                    if (bankData?.monthlyPass) {
+                        passApiDataRef.current = {
+                            endDate: bankData.monthlyPass.endDate,
+                            passCode: bankData.monthlyPass.passCode,
+                            price: bankData.monthlyPass.price,
+                            totalAmount: bankData.monthlyPass.price || bankData.payment?.amount
+                        };
+                        console.log('[CheckoutPage] passApiDataRef set:', passApiDataRef.current);
+                    }
+                    setBankInfo(bankData);
+                    const pid = bankData?.payment?._id || bankData?.payment?.id || bankData?.paymentId;
+                    if (pid) setPaymentId(String(pid));
+                    setPolling(true);
+                } else if (data.isMonthlyPass && monthlyPassId) {
                     res = await paymentService.initiateMonthlyPassBankTransfer(monthlyPassId);
+                    const bankData = res?.data || res;
+                    setBankInfo(bankData);
+                    const pid = bankData?.payment?._id || bankData?.payment?.id || bankData?.paymentId;
+                    if (pid) setPaymentId(String(pid));
+                    setPolling(true);
                 } else if (data.isBooking && bookingId) {
                     res = await paymentService.initiateBookingBankTransfer(bookingId);
+                    const bankData = res?.data || res;
+                    setBankInfo(bankData);
+                    const pid = bankData?.payment?._id || bankData?.payment?.id || bankData?.paymentId;
+                    if (pid) setPaymentId(String(pid));
+                    setPolling(true);
                 } else if (sessionId) {
                     res = await paymentService.initiateBankTransfer(sessionId);
+                    const bankData = res?.data || res;
+                    setBankInfo(bankData);
+                    const pid = bankData?.payment?._id || bankData?.payment?.id || bankData?.paymentId;
+                    if (pid) setPaymentId(String(pid));
+                    setPolling(true);
                 } else {
                     setPollingError('Invalid payment data.');
                     setProcessing(false);
                     return;
                 }
-                const bankData = res?.data || res;
-                setBankInfo(bankData);
-                // Store paymentId reliably — handle both _id and id
-                const pid = bankData?.payment?._id || bankData?.payment?.id || bankData?.paymentId;
-                if (pid) setPaymentId(String(pid));
-                setPolling(true);
             } catch (error: any) {
                 console.error(error);
                 setPollingError(error.response?.data?.message || 'Failed to generate QR code.');
@@ -407,7 +449,7 @@ const CheckoutPage = () => {
         return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
     };
 
-    const grandTotal = Math.round(amountDue);
+    const grandTotal = amountDue != null ? Math.round(amountDue) : null;
 
     const allPayMethods = [
         { id: 'bank_transfer', label: 'Bank Transfer (VietQR)', icon: <QrCodeIcon size={22} />, color: '#0ea5e9' },
@@ -1033,10 +1075,12 @@ const CheckoutPage = () => {
                                         <span className="co-row-label">License Plate</span>
                                         <span className="co-row-value" style={{ fontFamily: 'monospace', letterSpacing: '0.06em' }}>{data.licensePlate}</span>
                                     </div>
-                                    <div className="co-row">
-                                        <span className="co-row-label">Pass Code</span>
-                                        <span className="co-row-value" style={{ fontFamily: 'monospace', letterSpacing: '0.06em' }}>{data.passCode}</span>
-                                    </div>
+                                    {data.passCode && (
+                                        <div className="co-row">
+                                            <span className="co-row-label">Pass Code</span>
+                                            <span className="co-row-value" style={{ fontFamily: 'monospace', letterSpacing: '0.06em' }}>{data.passCode}</span>
+                                        </div>
+                                    )}
                                     <div className="co-row">
                                         <span className="co-row-label">Vehicle Type</span>
                                         <span className="co-row-value" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -1046,20 +1090,24 @@ const CheckoutPage = () => {
                                     </div>
                                     <div className="co-row">
                                         <span className="co-row-label">Valid From</span>
-                                        <span className="co-row-value">{new Date(data.startDate).toLocaleDateString('en-GB')}</span>
+                                        <span className="co-row-value">{data.startDate ? new Date(data.startDate).toLocaleDateString('en-GB') : 'From today'}</span>
                                     </div>
-                                    <div className="co-row">
-                                        <span className="co-row-label">Valid To</span>
-                                        <span className="co-row-value">{new Date(data.endDate).toLocaleDateString('en-GB')}</span>
-                                    </div>
+                                    {data.endDate && (
+                                        <div className="co-row">
+                                            <span className="co-row-label">Valid To</span>
+                                            <span className="co-row-value">{new Date(data.endDate).toLocaleDateString('en-GB')}</span>
+                                        </div>
+                                    )}
                                     <div className="co-row">
                                         <span className="co-row-label">Duration</span>
                                         <span className="co-row-value">{data.durationMonths} Month{data.durationMonths > 1 ? 's' : ''}</span>
                                     </div>
-                                    <div className="co-row">
-                                        <span className="co-row-label">Monthly Rate</span>
-                                        <span className="co-row-value">{Math.round(amountDue / data.durationMonths).toLocaleString('vi-VN')} ₫ / month</span>
-                                    </div>
+                                    {amountDue > 0 && (
+                                        <div className="co-row">
+                                            <span className="co-row-label">Monthly Rate</span>
+                                            <span className="co-row-value">{Math.round(amountDue / data.durationMonths).toLocaleString('vi-VN')} ₫ / month</span>
+                                        </div>
+                                    )}
                                 </>
                             ) : data.isBooking ? (
                                 <>
@@ -1140,12 +1188,17 @@ const CheckoutPage = () => {
 
                             <div className="co-row">
                                 <span className="co-row-label">Amount Due</span>
-                                <span className="co-row-value">{Math.round(amountDue).toLocaleString('vi-VN')} ₫</span>
+                                <span className="co-row-value">
+                                    {amountDue != null ? `${Math.round(amountDue).toLocaleString('vi-VN')} ₫` : <span style={{color:'#94a3b8',fontStyle:'italic',fontSize:12}}>Calculated on payment</span>}
+                                </span>
                             </div>
 
                             <div className="co-total-row">
                                 <span className="co-total-label">Grand Total</span>
-                                <span className="co-total-amount">{grandTotal.toLocaleString('vi-VN')} ₫</span>
+                                {grandTotal != null
+                                    ? <span className="co-total-amount">{grandTotal.toLocaleString('vi-VN')} ₫</span>
+                                    : <span className="co-total-amount" style={{fontSize:15,color:'#64748b'}}>See QR below</span>
+                                }
                             </div>
                         </div>
 
