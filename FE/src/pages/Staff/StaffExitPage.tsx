@@ -25,6 +25,7 @@ import { verifyQRToken } from '../../utils/qrToken';
 import { Scanner } from '@yudiel/react-qr-scanner';
 import bookingService from '../../services/api/bookingService';
 import paymentService from '../../services/api/paymentService';
+import monthlyPassService from '../../services/api/monthlyPassService';
 
 const StaffExitPage = () => {
   const { profile } = useProfile();
@@ -328,9 +329,14 @@ const StaffExitPage = () => {
       const query = searchQuery.trim();
       const lotId = Array.isArray(profile?.assignedParkingLot) ? profile?.assignedParkingLot[0]?._id : (profile?.assignedParkingLot as any)?._id || (profile?.assignedParkingLot as any);
 
+      let cleanQuery = query.trim();
+      if (cleanQuery.startsWith('"') && cleanQuery.endsWith('"')) {
+        cleanQuery = cleanQuery.substring(1, cleanQuery.length - 1);
+      }
+
       // ── Ưu tiên 1: QR mới — plain prefix "co_<sessionId>" ─────────────────
-      if (query.startsWith('co_')) {
-        const sessionId = query.slice(3).trim();
+      if (cleanQuery.startsWith('co_')) {
+        const sessionId = cleanQuery.slice(3).trim();
         const sessionRes = await parkingSessionService.getById(sessionId);
         if (sessionRes.data) {
           setActiveSession(sessionRes.data);
@@ -339,15 +345,33 @@ const StaffExitPage = () => {
         } else {
           throw new Error('Session not found.');
         }
-      } else if ((query.includes('.') && query.length > 20) || query.startsWith('{')) {
+      } else if (cleanQuery.startsWith('MP:')) {
+        // ── Ưu tiên 2: Monthly Pass QR ─────────────────
+        const parts = cleanQuery.split(':');
+        const passCode = parts[1];
+        try {
+          const verifyRes: any = await monthlyPassService.verifyPassByCode(passCode);
+          const passData = verifyRes.data || verifyRes;
+          const sessionRes = await parkingSessionService.findActive({ licensePlate: passData.licensePlate, parkingLotId: lotId });
+          if (sessionRes.data) {
+            setActiveSession(sessionRes.data);
+            setSessionFound(true);
+            showNotification(`Session found from Monthly Pass QR for plate: ${sessionRes.data.vehicleInfo?.licensePlate}`, 'success');
+          } else {
+            throw new Error("Vehicle not checked in (session not found).");
+          }
+        } catch (err: any) {
+          throw new Error('Invalid or expired Monthly Pass.');
+        }
+      } else if ((cleanQuery.includes('.') && cleanQuery.length > 20) || cleanQuery.startsWith('{')) {
         // ── Ưu tiên 2: HMAC token cũ (dạng <base64>.<sig>) hoặc JSON ────────
         try {
           let payload: any;
           try {
-            payload = await verifyQRToken(query);
+            payload = await verifyQRToken(cleanQuery);
           } catch (tokenErr) {
             try {
-              let cleanCode = query.replace(/\\\"/g, '"').replace(/\\'/g, "'").trim();
+              let cleanCode = cleanQuery.replace(/\\\"/g, '"').replace(/\\'/g, "'").trim();
               if (cleanCode.startsWith('"') && cleanCode.endsWith('"')) {
                 cleanCode = cleanCode.substring(1, cleanCode.length - 1);
               }
@@ -468,9 +492,14 @@ const StaffExitPage = () => {
     try {
       let payload: any;
 
+      let cleanQr = qrValue.trim();
+      if (cleanQr.startsWith('"') && cleanQr.endsWith('"')) {
+        cleanQr = cleanQr.substring(1, cleanQr.length - 1);
+      }
+
       // ── Ưu tiên 1: QR mới — plain prefix "co_<sessionId>" ─────────────────
-      if (qrValue.startsWith('co_')) {
-        const sessionId = qrValue.slice(3).trim();
+      if (cleanQr.startsWith('co_')) {
+        const sessionId = cleanQr.slice(3).trim();
         const sessionRes = await parkingSessionService.getById(sessionId);
         if (sessionRes.data) {
           setActiveSession(sessionRes.data);
@@ -484,12 +513,29 @@ const StaffExitPage = () => {
         return;
       }
 
-      // ── Ưu tiên 2: HMAC token cũ (dạng <base64>.<sig>) ─────────────────
-      try {
-        payload = await verifyQRToken(qrValue);
-      } catch (tokenErr: any) {
+
+
+      // ── Ưu tiên 2: Monthly Pass QR (Format: MP:passCode:lotId) ─────────────────
+      if (cleanQr.startsWith('MP:')) {
+        const parts = cleanQr.split(':');
+        const passCode = parts[1];
+        payload = { type: 'monthly_pass', passCode, licensePlate: '' };
+        
         try {
-          let cleanCode = qrValue.replace(/\\\"/g, '"').replace(/\\'/g, "'").trim();
+          const verifyRes: any = await monthlyPassService.verifyPassByCode(passCode);
+          const passData = verifyRes.data || verifyRes;
+          payload.licensePlate = passData.licensePlate;
+        } catch (err: any) {
+          console.error("Error verifying Monthly Pass on Exit:", err);
+          throw new Error('Invalid or expired Monthly Pass.');
+        }
+      } else {
+        // ── Ưu tiên 3: HMAC token cũ (dạng <base64>.<sig>) ─────────────────
+        try {
+          payload = await verifyQRToken(cleanQr);
+        } catch (tokenErr: any) {
+        try {
+          let cleanCode = cleanQr.replace(/\\\"/g, '"').replace(/\\'/g, "'").trim();
           if (cleanCode.startsWith('"') && cleanCode.endsWith('"')) {
             cleanCode = cleanCode.substring(1, cleanCode.length - 1);
           }
@@ -498,8 +544,8 @@ const StaffExitPage = () => {
             payload = JSON.parse(payload);
           }
         } catch (jsonErr) {
-          if (typeof qrValue === 'string' && qrValue.trim().length > 0) {
-            const trimmed = qrValue.trim();
+          if (typeof cleanQr === 'string' && cleanQr.trim().length > 0) {
+            const trimmed = cleanQr.trim();
             // Nếu là sessionCode dạng PS-XXXXX → tìm qua findActive
             if (trimmed.toUpperCase().startsWith('PS-')) {
               payload = { sessionCode: trimmed, type: 'checkout' };
@@ -512,6 +558,7 @@ const StaffExitPage = () => {
           } else {
             throw new Error('Unsupported QR format.');
           }
+        }
         }
       }
 

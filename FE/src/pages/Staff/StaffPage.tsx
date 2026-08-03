@@ -50,6 +50,7 @@ interface BookingData {
   bookingId?: string;
   monthlyPassCode?: string;
   isMonthlyPass?: boolean;
+  vehicleTypeName?: string;
 }
 
 const StaffPage = () => {
@@ -542,7 +543,8 @@ const StaffPage = () => {
           spot: 'Auto-assigned on Check-in',
           status: 'VALID',
           monthlyPassCode: payload.passCode, // use payload.passCode which is corrected from DB
-          isMonthlyPass: true
+          isMonthlyPass: true,
+          vehicleTypeName: payload.vehicleTypeName
         };
         setModalData(mockResult);
 
@@ -1232,6 +1234,12 @@ const StaffPage = () => {
                     <span className="text-slate-500 font-medium">Customer Name:</span>
                     <span className="font-extrabold text-slate-800 text-lg">{modalData.customerName}</span>
                   </div>
+                  {modalData.vehicleTypeName && (
+                    <div className="flex justify-between items-center border-b border-slate-100 pb-4">
+                      <span className="text-slate-500 font-medium">Vehicle Type:</span>
+                      <span className="font-extrabold text-slate-800 text-lg">{modalData.vehicleTypeName}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between items-center pb-2">
                     <span className="text-slate-500 font-medium">Allocated Spot:</span>
                     <span className="font-extrabold text-blue-700 bg-blue-100 px-4 py-1.5 rounded-lg text-lg border border-blue-200">
