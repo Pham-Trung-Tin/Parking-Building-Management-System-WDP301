@@ -153,12 +153,13 @@ const LockIcon = () => (
 
 // ─── Step Definitions ────────────────────────────────────────────────────────
 const STEPS = [
-    { id: 1, label: 'Vehicle Type', icon: '🚗' },
-    { id: 2, label: 'License Plate', icon: '🪪' },
-    { id: 3, label: 'Date & Time', icon: '📅' },
-    { id: 4, label: 'Select Floor', icon: '🏢' },
-    { id: 5, label: 'Select Zone', icon: '📍' },
-    { id: 6, label: 'Select Slot', icon: '🅿️' },
+    { id: 1, label: 'Select Building', icon: '🏢' },
+    { id: 2, label: 'Vehicle Type', icon: '🚗' },
+    { id: 3, label: 'License Plate', icon: '🪪' },
+    { id: 4, label: 'Date & Time', icon: '📅' },
+    { id: 5, label: 'Select Floor', icon: '🏢' },
+    { id: 6, label: 'Select Zone', icon: '📍' },
+    { id: 7, label: 'Select Slot', icon: '🅿️' },
 ];
 
 // ─── Vehicle B&W SVG Icon ───────────────────────────────────────────────────
@@ -522,20 +523,11 @@ const BookingPage = () => {
     const navigate = useNavigate();
     const location = useLocation();
     const { isConnected, joinParkingLot, leaveParkingLot, onSlotUpdate } = useSocket();
-    const [parkingSpot, setParkingSpot] = useState<any>(location.state?.spot || { title: 'Bitexco Financial Tower Parking', price: 50000 });
+    // If a spot was passed via navigation state, use it. Otherwise start empty.
+    const hasSpotFromNav = !!location.state?.spot?._id;
+    const [parkingSpot, setParkingSpot] = useState<any>(location.state?.spot || {});
 
-    useEffect(() => {
-        if (!parkingSpot._id) {
-            parkingLotService.getParkingLots({ status: 'active', limit: 1 })
-                .then((res: any) => {
-                    const lots = res.data?.data || res.data || res;
-                    if (Array.isArray(lots) && lots.length > 0) {
-                        setParkingSpot({ ...lots[0], title: lots[0].name, price: lots[0].settings?.pricePerHour || 50000 });
-                    }
-                })
-                .catch(console.error);
-        }
-    }, []);
+    // No longer auto-fetching a random lot. The user must select one.
 
     // ── Real-time: join / leave parking lot socket room ──
     useEffect(() => {
@@ -567,7 +559,8 @@ const BookingPage = () => {
 
 
     // ── Step state ──
-    const [currentStep, setCurrentStep] = useState(1);
+    // Start at step 1 (select building) unless a building was already chosen
+    const [currentStep, setCurrentStep] = useState(hasSpotFromNav ? 2 : 1);
 
     // ── Step 1: License Plate ──
     const [licensePlate, setLicensePlate] = useState('');
@@ -793,7 +786,7 @@ const BookingPage = () => {
     }, [vehicleType]);
 
     useEffect(() => {
-        if (currentStep === 4) {
+        if (currentStep === 5) {
             setShowMotorbikeToast(true);
         }
     }, [currentStep]);
@@ -1093,22 +1086,22 @@ const BookingPage = () => {
         }) || null;
     }, [licensePlate, vehicleType, myMonthlyPasses, parkingSpot._id]);
 
-    // ─── Navigation ─────────────────────────────────────────────────────────
     const canProceed = (step: number): boolean => {
         switch (step) {
-            case 1: return !!vehicleType;
-            case 2: return licensePlate.trim().length >= 4 && licensePlate.trim().length <= 10 && !activePlatePass;
-            case 3: return !!entryDate && !!exitDate && new Date(exitDate).getTime() > new Date(entryDate).getTime();
-            case 4: return !!selectedFloor;
-            case 5: return !!selectedZone;
-            case 6: return !!selectedSlot;
+            case 1: return !!parkingSpot?._id;
+            case 2: return !!vehicleType;
+            case 3: return licensePlate.trim().length >= 4 && licensePlate.trim().length <= 10 && !activePlatePass;
+            case 4: return !!entryDate && !!exitDate && new Date(exitDate).getTime() > new Date(entryDate).getTime();
+            case 5: return !!selectedFloor;
+            case 6: return !!selectedZone;
+            case 7: return !!selectedSlot;
             default: return false;
         }
     };
 
 
     const handleNext = async () => {
-        if (currentStep === 2) {
+        if (currentStep === 3) {
             const cleaned = formatPlate(licensePlate, vehicleType?.code);
             setLicensePlate(cleaned);
             if (cleaned.length < 4 || cleaned.length > 10) {
@@ -1181,7 +1174,7 @@ const BookingPage = () => {
 
             setPlateError('');
         }
-        if (currentStep < 6) setCurrentStep(s => s + 1);
+        if (currentStep < 7) setCurrentStep(s => s + 1);
         else setShowConfirmModal(true);
     };
 
@@ -2149,14 +2142,81 @@ const BookingPage = () => {
                     {/* ── LEFT: Step Content ── */}
                     <div key={currentStep}>
 
-                        {/* ── STEP 1: Vehicle Type ── */}
+                        {/* ── STEP 1: Select Building ── */}
                         {currentStep === 1 && (
+                            <div className="bk-card">
+                                <div className="bk-step-header">
+                                    <div>
+                                        <div className="bk-step-title">Select a Parking Building</div>
+                                        <div className="bk-step-sub">Step 1 of 7 — Choose where you want to park</div>
+                                    </div>
+                                </div>
+
+                                {parkingSpot?._id ? (
+                                    // Building already chosen
+                                    <div style={{ textAlign: 'center', padding: '32px 0' }}>
+                                        <div style={{ fontSize: 48, marginBottom: 12 }}>🏢</div>
+                                        <div style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', marginBottom: 6 }}>
+                                            {parkingSpot.name || parkingSpot.title}
+                                        </div>
+                                        <div style={{ fontSize: 13, color: '#64748b', marginBottom: 24 }}>
+                                            {parkingSpot.address || 'Parking building selected'}
+                                        </div>
+                                        <button
+                                            style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: 10, padding: '8px 20px', fontSize: 13, color: '#64748b', cursor: 'pointer', marginBottom: 8 }}
+                                            onClick={() => setParkingSpot({})}
+                                        >
+                                            Change Building
+                                        </button>
+                                    </div>
+                                ) : (
+                                    // No building selected
+                                    <div style={{ textAlign: 'center', padding: '40px 20px' }}>
+                                        <div style={{ fontSize: 56, marginBottom: 16 }}>🗺️</div>
+                                        <div style={{ fontSize: 17, fontWeight: 700, color: '#0f172a', marginBottom: 8 }}>No building selected yet</div>
+                                        <p style={{ fontSize: 14, color: '#64748b', marginBottom: 32, lineHeight: 1.6 }}>
+                                            You need to choose a parking building first. Browse available buildings on the map and tap <strong>"Book a Slot"</strong> to continue here.
+                                        </p>
+                                        <button
+                                            onClick={() => navigate('/find-parking')}
+                                            style={{
+                                                background: 'linear-gradient(135deg, #2563eb, #1d4ed8)',
+                                                color: '#fff',
+                                                border: 'none',
+                                                borderRadius: 12,
+                                                padding: '14px 32px',
+                                                fontSize: 15,
+                                                fontWeight: 700,
+                                                cursor: 'pointer',
+                                                boxShadow: '0 6px 20px rgba(37,99,235,0.35)',
+                                            }}
+                                        >
+                                            🔍 Find a Building
+                                        </button>
+                                    </div>
+                                )}
+
+                                <div className="bk-nav">
+                                    <button className="bk-btn-back" onClick={handleBack}>← Back</button>
+                                    <button
+                                        className="bk-btn-next"
+                                        disabled={!parkingSpot?._id}
+                                        onClick={() => setCurrentStep(2)}
+                                    >
+                                        Continue → Select Vehicle
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* ── STEP 2: Vehicle Type ── */}
+                        {currentStep === 2 && (
                             <div className="bk-card">
                                 <div className="bk-step-header">
 
                                     <div>
                                         <div className="bk-step-title">Select Vehicle Type</div>
-                                        <div className="bk-step-sub">Step 1 of 6 — Choose your vehicle category</div>
+                                        <div className="bk-step-sub">Step 2 of 7 — Choose your vehicle category</div>
                                     </div>
                                 </div>
 
@@ -2213,7 +2273,8 @@ const BookingPage = () => {
                         )}
 
                         {/* ── STEP 2: License Plate ── */}
-                        {currentStep === 2 && (
+                        {/* ── STEP 3: License Plate ── */}
+                        {currentStep === 3 && (
                             <div className="bk-card">
                                 <div className="bk-step-header">
                                     {/* <div className="bk-step-icon">🪪</div> */}
@@ -2463,7 +2524,7 @@ const BookingPage = () => {
                         )}
 
                         {/* ── STEP 3: Date & Time ── */}
-                        {currentStep === 3 && (() => {
+                        {currentStep === 4 && (() => {
                             const now = new Date();
                             const todayStr = now.toISOString().slice(0, 10);
                             const selectedDate = entryDate.slice(0, 10);
@@ -2815,7 +2876,7 @@ const BookingPage = () => {
                                                     {new Intl.NumberFormat('vi-VN').format(Math.round(totalEstCost))}₫
                                                 </div>
                                                 <div style={{ fontSize: 10, color: '#64748b', fontWeight: 500, marginTop: 4, maxWidth: '120px' }}>
-                                                    Phí tính theo block. {duration}h = {blockDetails.length} block(s).
+                                                    Billed by block. {duration}h = {blockDetails.length} block(s).
                                                 </div>
                                             </div>
                                         )}
@@ -2834,7 +2895,8 @@ const BookingPage = () => {
 
 
                         {/* ── STEP 4: Floor ── */}
-                        {currentStep === 4 && (
+                        {/* ── STEP 5: Select Floor ── */}
+                        {currentStep === 5 && (
                             <div className="bk-card">
                                 <div className="bk-step-header">
                                     {/* <div className="bk-step-icon">🏢</div> */}
@@ -2913,7 +2975,8 @@ const BookingPage = () => {
                         )}
 
                         {/* ── STEP 5: Zone ── */}
-                        {currentStep === 5 && (
+                        {/* ── STEP 6: Select Zone ── */}
+                        {currentStep === 6 && (
                             <div className="bk-card">
                                 <div className="bk-step-header">
                                     {/* <div className="bk-step-icon">📍</div> */}
@@ -2989,7 +3052,8 @@ const BookingPage = () => {
                         )}
 
                         {/* ── STEP 6: Slot ── */}
-                        {currentStep === 6 && (
+                        {/* ── STEP 7: Select Slot ── */}
+                        {currentStep === 7 && (
                             <div className="bk-card">
                                 <div className="bk-step-header">
                                     {/* <div className="bk-step-icon">🅿️</div> */}
@@ -3275,7 +3339,7 @@ const BookingPage = () => {
                 );
             })()}
             {/* ── Motorbike Toast Notice ── */}
-            {currentStep === 4 && isMotorbike && showMotorbikeToast && (
+            {currentStep === 5 && isMotorbike && showMotorbikeToast && (
                 <div style={{
                     position: 'fixed',
                     bottom: '24px',
