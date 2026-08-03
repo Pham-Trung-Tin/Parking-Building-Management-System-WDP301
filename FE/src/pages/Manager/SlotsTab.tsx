@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Plus, Pencil, Trash2, X, MapPin, RefreshCw, Car, CircleCheck, Wrench } from 'lucide-react';
+import { Plus, Pencil, Trash2, X, MapPin, RefreshCw, Car, CircleCheck, Wrench, Building } from 'lucide-react';
 import parkingSlotService from '../../services/api/parkingSlotService';
 import parkingLotService from '../../services/api/parkingLotService';
 import floorService from '../../services/api/floorService';
@@ -248,6 +248,7 @@ export default function SlotsTab({ globalLotId, setGlobalLotId }: any) {
   const [saving, setSaving] = useState(false);
   const [editModal, setEditModal] = useState<any>(null);
   const [addModal, setAddModal] = useState(false);
+  const [vehicleInfoModal, setVehicleInfoModal] = useState<any>(null);
   const { toast, showToast } = useToast();
   const { askConfirm, ConfirmNode } = useConfirm();
 
@@ -361,12 +362,21 @@ export default function SlotsTab({ globalLotId, setGlobalLotId }: any) {
           <h1 className="text-2xl font-semibold text-gray-900 flex items-center gap-2"><MapPin className="w-6 h-6" /> Parking Slots</h1>
         </div>
         <div className="flex items-center gap-3">
-          <select value={globalLotId || ''} onChange={e => setGlobalLotId?.(e.target.value)}
-            disabled={isManager && lots.length <= 1}
-            className="border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none bg-white">
-            {!isManager && <option value="">-- Select Building --</option>}
-            {lots.map(l => <option key={l._id} value={l._id}>{l.name}</option>)}
-          </select>
+          {/* Building selector — same design as BuildingsTab */}
+          <div className="relative">
+            <Building className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <select
+              value={globalLotId || ''}
+              onChange={e => setGlobalLotId?.(e.target.value)}
+              disabled={isManager && lots.length <= 1}
+              className={`pl-9 pr-8 py-2.5 bg-white border border-gray-200 rounded-xl text-sm font-medium text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 min-w-[220px] transition-all appearance-none ${
+                isManager && lots.length <= 1 ? 'opacity-70 cursor-not-allowed bg-gray-50' : 'cursor-pointer hover:border-gray-300'
+              }`}
+            >
+              {!isManager && <option value="">-- Select Building --</option>}
+              {lots.map(l => <option key={l._id} value={l._id}>{l.name}</option>)}
+            </select>
+          </div>
           {!noLot && selFloor && (
             <button onClick={() => setAddModal(true)}
               className="flex items-center gap-2 px-4 py-2.5 bg-gray-900 text-white text-sm font-medium rounded-xl hover:bg-gray-700">
@@ -384,7 +394,7 @@ export default function SlotsTab({ globalLotId, setGlobalLotId }: any) {
       ) : (
         <>
           {/* Floor tabs */}
-          <div className="flex gap-1 border-b border-gray-100 mb-0 overflow-x-auto pb-0">
+          <div className="flex gap-1 border-b border-gray-100 mb-0 overflow-x-auto pb-0" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' } as any}>
             {floors.map(f => (
               <button key={f._id} onClick={() => setSelFloor(f)}
                 className={`px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition-colors -mb-px ${selFloor?._id === f._id ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
@@ -445,47 +455,121 @@ export default function SlotsTab({ globalLotId, setGlobalLotId }: any) {
                 </button>
               )}
             </div>
-          ) : (
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-              {/* Entry/Exit labels */}
-              <div className="flex justify-between text-xs font-bold text-gray-400 mb-3 px-1">
-                <span>← ENTRY</span>
-                <span>EXIT →</span>
-              </div>
+          ) : (() => {
 
-              {/* Slot grid */}
-              <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))' }}>
-                {slots.map(slot => {
-                  const st = S[slot.status] || S.available;
-                  return (
-                    <div key={slot._id} className="group relative">
-                      <div
-                        onClick={() => setEditModal(slot)}
-                        className={`cursor-pointer rounded-xl border-2 p-2 text-center transition-all hover:shadow-md hover:-translate-y-0.5 ${st.bg} ${st.border}`}>
-                        <p className={`text-[10px] font-mono font-bold leading-tight ${st.text}`}>{slot.slotCode}</p>
-                        {slot.vehicleType?.code && (
-                          <p className={`text-[9px] mt-0.5 opacity-60 ${st.text}`}>{slot.vehicleType.code}</p>
-                        )}
-                      </div>
-                      {/* Delete on hover */}
-                      <button
-                        onClick={() => handleDelete(slot)}
-                        className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full text-[8px] items-center justify-center hidden group-hover:flex shadow-sm z-10">
-                        ×
-                      </button>
+            // Build slot card helper
+            const SlotCard = ({ slot }: { slot: any }) => {
+              const st = S[slot.status] || S.available;
+              const isOccupied = slot.status === 'occupied';
+              const isReserved = slot.status === 'reserved';
+              const isLocked = isOccupied || isReserved;
+
+              const handleClick = () => {
+                if (isOccupied) return setVehicleInfoModal(slot);
+                if (isReserved) return setVehicleInfoModal({ ...slot, _showBooking: true });
+                setEditModal(slot);
+              };
+
+              return (
+                <div className="group relative">
+                  <div
+                    onClick={handleClick}
+                    className={`cursor-pointer rounded-xl border-2 p-2 text-center transition-all hover:shadow-md hover:-translate-y-0.5 ${st.bg} ${st.border}`}
+                  >
+                    <p className={`text-[10px] font-mono font-bold leading-tight ${st.text}`}>{slot.slotCode}</p>
+                    {slot.vehicleType?.code && (
+                      <p className={`text-[9px] mt-0.5 opacity-60 ${st.text}`}>{slot.vehicleType.code}</p>
+                    )}
+                  </div>
+                  {/* Delete — disabled when occupied or reserved */}
+                  {isLocked ? (
+                    <div
+                      className="absolute -top-1 -right-1 w-4 h-4 bg-gray-300 text-white rounded-full text-[8px] items-center justify-center hidden group-hover:flex shadow-sm z-10 cursor-not-allowed"
+                      title={isOccupied ? 'Cannot delete: slot is occupied' : 'Cannot delete: slot is reserved'}>
+                      ×
                     </div>
-                  );
-                })}
-              </div>
+                  ) : (
+                    <button
+                      onClick={() => handleDelete(slot)}
+                      className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full text-[8px] items-center justify-center hidden group-hover:flex shadow-sm z-10">
+                      ×
+                    </button>
+                  )}
+                </div>
+              );
+            };
 
-              {/* Aisle divider visual */}
-              <div className="my-4 flex items-center gap-2">
-                <div className="flex-1 border-t border-dashed border-gray-200" />
-                <span className="text-[10px] text-gray-300 font-medium">AISLE</span>
-                <div className="flex-1 border-t border-dashed border-gray-200" />
+            // When a specific zone is selected → flat grid (unchanged)
+            if (selZone) {
+              return (
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+                  <div className="flex justify-between text-xs font-bold text-gray-400 mb-3 px-1">
+                    <span>← ENTRY</span><span>EXIT →</span>
+                  </div>
+                  <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))' }}>
+                    {slots.map(slot => <SlotCard key={slot._id} slot={slot} />)}
+                  </div>
+                  <div className="my-4 flex items-center gap-2">
+                    <div className="flex-1 border-t border-dashed border-gray-200" />
+                    <span className="text-[10px] text-gray-300 font-medium">AISLE</span>
+                    <div className="flex-1 border-t border-dashed border-gray-200" />
+                  </div>
+                </div>
+              );
+            }
+
+            // All Zones → group by zone, each zone gets its own labeled row
+            const grouped: Record<string, { name: string; slots: any[] }> = {};
+            const noZone: any[] = [];
+
+            slots.forEach(slot => {
+              const zId = slot.zone?._id || slot.zone;
+              if (!zId) {
+                noZone.push(slot);
+              } else {
+                if (!grouped[zId]) {
+                  const zoneObj = zones.find((z: any) => z._id === zId);
+                  grouped[zId] = { name: zoneObj?.name || 'Zone', slots: [] };
+                }
+                grouped[zId].slots.push(slot);
+              }
+            });
+
+            const groups = [
+              ...Object.entries(grouped).map(([id, g]) => ({ id, name: g.name, slots: g.slots })),
+              ...(noZone.length > 0 ? [{ id: '__none__', name: 'No Zone', slots: noZone }] : []),
+            ];
+
+            return (
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-5">
+                <div className="flex justify-between text-xs font-bold text-gray-400 px-1">
+                  <span>← ENTRY</span><span>EXIT →</span>
+                </div>
+                {groups.map((group, idx) => (
+                  <div key={group.id}>
+                    {/* Zone label */}
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest">{group.name}</span>
+                      <div className="flex-1 border-t border-gray-100" />
+                      <span className="text-[10px] text-gray-300">{group.slots.length} slots</span>
+                    </div>
+                    {/* Slots row */}
+                    <div className="flex flex-wrap gap-2">
+                      {group.slots.map(slot => <SlotCard key={slot._id} slot={slot} />)}
+                    </div>
+                    {/* Divider between zones */}
+                    {idx < groups.length - 1 && (
+                      <div className="mt-4 flex items-center gap-2">
+                        <div className="flex-1 border-t border-dashed border-gray-200" />
+                        <span className="text-[10px] text-gray-300 font-medium">AISLE</span>
+                        <div className="flex-1 border-t border-dashed border-gray-200" />
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
-            </div>
-          )}
+            );
+          })()}
         </>
       )}
 
@@ -503,6 +587,76 @@ export default function SlotsTab({ globalLotId, setGlobalLotId }: any) {
       {editModal && (
         <EditSlotModal slot={editModal} vTypes={vTypes} onSave={handleEdit} onClose={() => setEditModal(null)} loading={saving} />
       )}
+
+      {/* Slot Info Modal — click on occupied or reserved slot */}
+      {vehicleInfoModal && (() => {
+        const slot = vehicleInfoModal;
+        const isReserved = slot._showBooking;
+        const booking = slot.currentBooking;
+        const close = () => setVehicleInfoModal(null);
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center">
+            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={close} />
+            <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-xs mx-4 overflow-hidden">
+
+              {/* Header */}
+              <div className={`flex items-center justify-between px-5 py-4 border-b ${isReserved ? 'bg-amber-50 border-amber-100' : 'bg-rose-50 border-rose-100'}`}>
+                <div>
+                  <p className={`text-[10px] font-semibold uppercase tracking-wider ${isReserved ? 'text-amber-500' : 'text-rose-400'}`}>
+                    {isReserved ? 'Reserved Slot' : 'Occupied Slot'}
+                  </p>
+                  <p className="font-mono text-xl font-black text-gray-900">{slot.slotCode}</p>
+                </div>
+                <button onClick={close} className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:bg-white/60">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Body */}
+              <div className="px-5 py-5 text-center space-y-2">
+                {isReserved ? (
+                  // Reserved: show booking info
+                  <>
+                    <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mb-1">Booked By</p>
+                    <p className="text-xl font-black font-mono text-gray-900 tracking-wider">
+                      {booking?.vehicleInfo?.licensePlate || '—'}
+                    </p>
+                    {booking?.user?.fullName && (
+                      <p className="text-xs text-gray-500">{booking.user.fullName}</p>
+                    )}
+                    {booking?.scheduledDate && (
+                      <p className="text-[10px] text-gray-400 mt-1">
+                        {new Date(booking.scheduledDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                        {booking.startTime ? ` · ${booking.startTime}` : ''}
+                        {booking.endTime ? ` – ${booking.endTime}` : ''}
+                      </p>
+                    )}
+                    {booking?.bookingCode && (
+                      <p className="text-[10px] text-gray-300 font-mono mt-2">{booking.bookingCode}</p>
+                    )}
+                    {!booking && <p className="text-xs text-gray-400">No booking info found</p>}
+                  </>
+                ) : (
+                  // Occupied: show license plate from currentSession
+                  <>
+                    <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mb-1">Vehicle Parked</p>
+                    <p className="text-3xl font-black tracking-widest font-mono text-gray-900">
+                      {slot.currentSession?.vehicleInfo?.licensePlate || '—'}
+                    </p>
+                    {slot.vehicleType?.name && (
+                      <p className="text-xs text-gray-400 mt-1">{slot.vehicleType.name}</p>
+                    )}
+                  </>
+                )}
+              </div>
+
+            </div>
+          </div>
+        );
+      })()}
+
+
       {ConfirmNode}
       {toast && <Toast msg={toast.msg} ok={toast.ok} />}
     </div>

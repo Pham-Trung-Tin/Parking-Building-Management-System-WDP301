@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Users, UserPlus, UserMinus, Mail, Loader2, Check, X, Phone, Search, Shield } from 'lucide-react';
+import { Users, UserPlus, UserMinus, Mail, Loader2, Check, X, Phone, Search, Shield, Building } from 'lucide-react';
 import parkingLotService from '../../services/api/parkingLotService';
 import type { StaffMember } from '../../services/api/parkingLotService';
 import { useConfirm } from '../../components/ConfirmDialog';
@@ -181,32 +181,35 @@ export default function StaffAssignmentTab({ globalLotId, setGlobalLotId }: { gl
           <h1 className="text-3xl font-semibold text-gray-900 leading-tight">Staff Assignment</h1>
           <p className="text-sm text-gray-400 mt-1">Manage personnel for your building</p>
         </div>
-        {selectedLot && (
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="flex items-center gap-2 px-5 py-2.5 bg-gray-900 text-white text-sm font-medium rounded-xl hover:bg-gray-700 transition shadow-sm"
-          >
-            <UserPlus className="w-4 h-4" /> Add Staff by Email
-          </button>
-        )}
+        <div className="flex items-center gap-3">
+          {/* Building selector — same design as BuildingsTab */}
+          <div className="relative">
+            <Building className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <select
+              value={selectedLot?._id || ''}
+              onChange={e => {
+                const lot = lots.find(l => l._id === e.target.value);
+                if (lot) { setSelectedLot(lot); setGlobalLotId?.(lot._id); }
+              }}
+              disabled={lots.length <= 1}
+              className={`pl-9 pr-8 py-2.5 bg-white border border-gray-200 rounded-xl text-sm font-medium text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 min-w-[220px] transition-all appearance-none ${
+                lots.length <= 1 ? 'opacity-70 cursor-not-allowed bg-gray-50' : 'cursor-pointer hover:border-gray-300'
+              }`}
+            >
+              {lots.map(l => <option key={l._id} value={l._id}>{l.name}</option>)}
+            </select>
+          </div>
+          {selectedLot && (
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="flex items-center gap-2 px-5 py-2.5 bg-gray-900 text-white text-sm font-medium rounded-xl hover:bg-gray-700 transition shadow-sm"
+            >
+              <UserPlus className="w-4 h-4" /> Add Staff by Email
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* Building selector (only for admin viewing as manager or if multiple lots) */}
-      {lots.length > 1 && (
-        <div className="mb-6">
-          <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">Building</label>
-          <select
-            value={selectedLot?._id || ''}
-            onChange={e => {
-              const lot = lots.find(l => l._id === e.target.value);
-              if (lot) { setSelectedLot(lot); setGlobalLotId?.(lot._id); }
-            }}
-            className="px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 shadow-sm min-w-[260px]"
-          >
-            {lots.map(l => <option key={l._id} value={l._id}>{l.name}</option>)}
-          </select>
-        </div>
-      )}
 
       {/* Current building info banner */}
       {selectedLot && (

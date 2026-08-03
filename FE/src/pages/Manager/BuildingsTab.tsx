@@ -20,10 +20,13 @@ const COLORS: Record<string, { bg: string; icon: string; val: string; border: st
   teal: { bg: 'bg-teal-50', icon: 'text-teal-500', val: 'text-teal-800', border: 'border-teal-100' },
 };
 
-function StatCard({ icon: Icon, label, value, sub, color, loading }: { icon: any; label: string; value: any; sub?: string; color: string; loading?: boolean }) {
+function StatCard({ icon: Icon, label, value, sub, color, loading, onClick }: { icon: any; label: string; value: any; sub?: string; color: string; loading?: boolean; onClick?: () => void }) {
   const c = COLORS[color] ?? COLORS.blue;
   return (
-    <div className={`bg-white rounded-2xl border ${c.border} shadow-sm p-5 flex flex-col gap-3 hover:shadow-md transition-shadow group relative overflow-hidden`}>
+    <div
+      onClick={onClick}
+      className={`bg-white rounded-2xl border ${c.border} shadow-sm p-5 flex flex-col gap-3 hover:shadow-md transition-all group relative overflow-hidden ${onClick ? 'cursor-pointer hover:-translate-y-0.5' : ''}`}
+    >
       <div className="absolute top-0 right-0 p-4 opacity-5 transform translate-x-4 -translate-y-4 group-hover:scale-110 transition-transform">
         <Icon className="w-24 h-24" />
       </div>
@@ -86,7 +89,7 @@ function LotModal({ initial, onSave, onClose, loading }: any) {
   );
 }
 
-export default function BuildingsTab({ globalLotId, setGlobalLotId }: any) {
+export default function BuildingsTab({ globalLotId, setGlobalLotId, setTab }: any) {
   const [lots, setLots] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -110,7 +113,7 @@ export default function BuildingsTab({ globalLotId, setGlobalLotId }: any) {
   const [floorCount, setFloorCount] = useState<number | null>(null);
   const [zoneCount, setZoneCount] = useState<number | null>(null);
   const [revenueData, setRevenueData] = useState<any[]>([]);
-  const [revenuePeriod, setRevenuePeriod] = useState<'last_7_days' | 'last_30_days' | 'this_year'>('last_7_days');
+  const [revenuePeriod, setRevenuePeriod] = useState<'this_month' | 'last_7_days' | 'last_30_days' | 'this_year'>('this_month');
   const [dashLoading, setDashLoading] = useState(true);
 
   const fetchLots = useCallback(async () => {
@@ -170,6 +173,13 @@ export default function BuildingsTab({ globalLotId, setGlobalLotId }: any) {
 
   const activeBuildings = lots.filter(l => l.status === 'active').length;
   const fmt = (n: number) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(n);
+  // Sum of chart data = total revenue for selected period
+  const periodTotal = revenueData.reduce((sum: number, d: any) => sum + (d.revenue || 0), 0);
+  const periodLabel = revenuePeriod === 'this_month'
+    ? new Date().toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })
+    : revenuePeriod === 'last_7_days' ? 'Last 7 Days'
+    : revenuePeriod === 'last_30_days' ? 'Last 30 Days'
+    : 'This Year';
 
   const handleSave = async (form: any) => {
     if (!form.name || !form.code) return showToast('Name and code are required', false);
@@ -254,8 +264,11 @@ export default function BuildingsTab({ globalLotId, setGlobalLotId }: any) {
           {/* Core Metric Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
-            {/* Parking Slots Compound Card Redesigned */}
-            <div className="bg-white rounded-2xl border border-teal-100 shadow-sm p-5 hover:shadow-md transition-shadow relative overflow-hidden group">
+            {/* Parking Slots Compound Card — click to go to Slots tab */}
+            <div
+              onClick={() => setTab?.('slots')}
+              className="bg-white rounded-2xl border border-teal-100 shadow-sm p-5 hover:shadow-md transition-all relative overflow-hidden group cursor-pointer hover:-translate-y-0.5"
+            >
               <div className="absolute top-0 right-0 p-4 opacity-5 transform translate-x-4 -translate-y-4 group-hover:scale-110 transition-transform">
                 <ParkingSquare className="w-24 h-24" />
               </div>
@@ -280,7 +293,7 @@ export default function BuildingsTab({ globalLotId, setGlobalLotId }: any) {
               </div>
             </div>
 
-            <StatCard icon={Activity} label="Active Sessions" value={stats?.activeSessions ?? '—'} sub={`${stats?.todaySessions ?? 0} check-ins today`} color="amber" loading={dashLoading} />
+            <StatCard icon={Activity} label="Active Sessions" value={stats?.activeSessions ?? '—'} sub={`${stats?.todaySessions ?? 0} check-ins today`} color="amber" loading={dashLoading} onClick={() => setTab?.('revenue')} />
           </div>
 
           {/* Revenue Growth Chart */}
@@ -294,6 +307,7 @@ export default function BuildingsTab({ globalLotId, setGlobalLotId }: any) {
                 value={revenuePeriod}
                 onChange={(e) => setRevenuePeriod(e.target.value as any)}
               >
+                <option value="this_month">This Month</option>
                 <option value="last_7_days">Last 7 Days</option>
                 <option value="last_30_days">Last 30 Days</option>
                 <option value="this_year">This Year</option>
@@ -356,8 +370,11 @@ export default function BuildingsTab({ globalLotId, setGlobalLotId }: any) {
         {/* RIGHT COLUMN: Secondary Stats & Highlights */}
         <div className="space-y-4 pt-0 lg:pt-8">
 
-          {/* Highlighted Today Revenue Card */}
-          <div className="bg-gradient-to-br from-emerald-500 to-teal-700 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden group">
+          {/* Highlighted Revenue Card — shows period total, click to go to Revenue tab */}
+          <div
+            onClick={() => setTab?.('revenue')}
+            className="bg-gradient-to-br from-emerald-500 to-teal-700 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden group cursor-pointer hover:-translate-y-0.5 transition-transform"
+          >
             <div className="absolute -right-4 -bottom-4 opacity-10 transform group-hover:scale-110 transition-transform duration-500">
               <DollarSign className="w-40 h-40" />
             </div>
@@ -366,13 +383,13 @@ export default function BuildingsTab({ globalLotId, setGlobalLotId }: any) {
                 <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center backdrop-blur-sm">
                   <DollarSign className="w-4 h-4 text-white" />
                 </div>
-                <p className="text-emerald-50 text-xs font-bold uppercase tracking-widest">Today's Revenue</p>
+                <p className="text-emerald-50 text-xs font-bold uppercase tracking-widest">{periodLabel} Revenue</p>
               </div>
               {dashLoading ? (
                 <div className="h-10 w-32 bg-white/20 rounded animate-pulse" />
               ) : (
                 <p className="text-4xl font-extrabold tracking-tight drop-shadow-sm">
-                  {fmt(stats?.todayRevenue ?? 0)}
+                  {fmt(periodTotal)}
                 </p>
               )}
               <div className="mt-4 flex items-center gap-2 text-sm text-emerald-100 bg-black/10 w-fit px-3 py-1.5 rounded-lg backdrop-blur-sm">
@@ -383,15 +400,23 @@ export default function BuildingsTab({ globalLotId, setGlobalLotId }: any) {
 
           <div className="grid grid-cols-2 lg:grid-cols-1 gap-4">
             {!isManager && <StatCard icon={Users} label="Total Users" value={stats?.totalUsers ?? '—'} sub="Registered customers" color="blue" loading={dashLoading} />}
-            <StatCard icon={Car} label="Total Sessions" value={stats?.totalSessions ?? '—'} sub="All-time parking sessions" color="violet" loading={dashLoading} />
+            <StatCard icon={Car} label="Total Sessions" value={stats?.totalSessions ?? '—'} sub="All-time parking sessions" color="violet" loading={dashLoading} onClick={() => setTab?.('revenue')} />
 
             <div className="col-span-2 lg:col-span-1 grid grid-cols-2 gap-4">
-              <div className="bg-white rounded-2xl border border-gray-200 p-4 flex flex-col items-center justify-center text-center shadow-sm">
+              {/* Floors mini-card → Floors tab */}
+              <div
+                onClick={() => setTab?.('floors')}
+                className="bg-white rounded-2xl border border-gray-200 p-4 flex flex-col items-center justify-center text-center shadow-sm cursor-pointer hover:shadow-md hover:-translate-y-0.5 transition-all"
+              >
                 <Layers className="w-6 h-6 text-indigo-400 mb-2" />
                 {dashLoading ? <div className="h-6 w-8 bg-gray-100 rounded animate-pulse" /> : <p className="text-xl font-bold text-gray-900">{(globalLotId || !isManager) ? (floorCount ?? '—') : '—'}</p>}
                 <p className="text-[10px] font-medium text-gray-500 uppercase mt-1">Floors</p>
               </div>
-              <div className="bg-white rounded-2xl border border-gray-200 p-4 flex flex-col items-center justify-center text-center shadow-sm">
+              {/* Zones mini-card → Floors tab */}
+              <div
+                onClick={() => setTab?.('floors')}
+                className="bg-white rounded-2xl border border-gray-200 p-4 flex flex-col items-center justify-center text-center shadow-sm cursor-pointer hover:shadow-md hover:-translate-y-0.5 transition-all"
+              >
                 <Grid className="w-6 h-6 text-violet-400 mb-2" />
                 {dashLoading ? <div className="h-6 w-8 bg-gray-100 rounded animate-pulse" /> : <p className="text-xl font-bold text-gray-900">{(globalLotId || !isManager) ? (zoneCount ?? '—') : '—'}</p>}
                 <p className="text-[10px] font-medium text-gray-500 uppercase mt-1">Zones</p>

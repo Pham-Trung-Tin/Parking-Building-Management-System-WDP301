@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Plus, Pencil, Trash2, X, Car, RefreshCw, DollarSign } from 'lucide-react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { Plus, Pencil, Trash2, X, Car, RefreshCw, DollarSign, Building } from 'lucide-react';
 import vehicleTypeService from '../../services/api/vehicleTypeService';
+import parkingLotService from '../../services/api/parkingLotService';
 import { Toast, useToast } from './shared';
 import { useConfirm } from '../../components/ConfirmDialog';
 
@@ -95,13 +96,30 @@ function VehicleTypeModal({ initial, onSave, onClose, loading }: any) {
   );
 }
 
-export default function VehicleTypesTab({ globalLotId }: { globalLotId?: string }) {
+export default function VehicleTypesTab({ globalLotId, setGlobalLotId }: { globalLotId?: string; setGlobalLotId?: (id: string) => void }) {
   const [types, setTypes] = useState<any[]>([]);
+  const [lots, setLots] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [modal, setModal] = useState<any>(null);
   const { toast, showToast } = useToast();
   const { askConfirm, ConfirmNode } = useConfirm();
+
+  const user = useMemo(() => { try { return JSON.parse(localStorage.getItem('user') || '{}'); } catch { return {}; } }, []);
+  const isManager = user?.role === 'parking_manager';
+
+  // Fetch lots for dropdown
+  useEffect(() => {
+    parkingLotService.getParkingLots({ limit: 100 }).then(res => {
+      let ls = res.data || res.docs || res || [];
+      if (isManager) {
+        const raw = user?.assignedParkingLot;
+        const ids: string[] = Array.isArray(raw) ? raw.filter(Boolean) : (raw ? [raw] : []);
+        if (ids.length) ls = ls.filter((l: any) => ids.includes(l._id));
+      }
+      setLots(ls);
+    }).catch(() => {});
+  }, []);
 
   const fetchTypes = useCallback(async () => {
     setLoading(true);
@@ -160,14 +178,31 @@ export default function VehicleTypesTab({ globalLotId }: { globalLotId?: string 
           <h1 className="text-2xl font-semibold text-gray-900 flex items-center gap-2">
             <Car className="w-6 h-6" /> Vehicle Types
           </h1>
-          <p className="text-sm text-gray-400 mt-1">{types.length} vehicle types & pricing policies</p>
+          <p className="text-sm text-gray-400 mt-1">{types.length} vehicle types &amp; pricing policies</p>
         </div>
-        <button
-          onClick={() => setModal({ ...EMPTY })}
-          className="flex items-center gap-2 px-4 py-2.5 bg-gray-900 text-white text-sm font-medium rounded-xl hover:bg-gray-700"
-        >
-          <Plus className="w-4 h-4" /> Add Vehicle Type
-        </button>
+        <div className="flex items-center gap-3">
+          {/* Building selector dropdown */}
+          <div className="relative">
+            <Building className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <select
+              value={globalLotId || ''}
+              onChange={e => setGlobalLotId?.(e.target.value)}
+              disabled={isManager && lots.length <= 1}
+              className={`pl-9 pr-8 py-2.5 bg-white border border-gray-200 rounded-xl text-sm font-medium text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-gray-900 min-w-[200px] appearance-none ${
+                isManager && lots.length <= 1 ? 'opacity-70 cursor-not-allowed bg-gray-50' : 'cursor-pointer hover:border-gray-300'
+              }`}
+            >
+              {!isManager && <option value="">-- All Buildings --</option>}
+              {lots.map(l => <option key={l._id} value={l._id}>{l.name}</option>)}
+            </select>
+          </div>
+          <button
+            onClick={() => setModal({ ...EMPTY })}
+            className="flex items-center gap-2 px-4 py-2.5 bg-gray-900 text-white text-sm font-medium rounded-xl hover:bg-gray-700"
+          >
+            <Plus className="w-4 h-4" /> Add Vehicle Type
+          </button>
+        </div>
       </div>
 
       <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { workScheduleService } from '../../services/api';
 import parkingLotService from '../../services/api/parkingLotService';
-import { Loader2, Check, X, Calendar, AlertTriangle, MessageSquare, Eye, Settings } from 'lucide-react';
+import { Loader2, Check, X, Calendar, AlertTriangle, MessageSquare, Eye, Settings, Building } from 'lucide-react';
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
 
@@ -230,21 +230,21 @@ export default function ManagerWorkScheduleTab({ globalLotId, setGlobalLotId }: 
             <p className="text-sm text-gray-500">Manage monthly staff schedules and approve shift requests</p>
           </div>
 
-          <div className="flex items-center gap-4">
-            {lots.length > 1 && (
-              <div className="flex items-center gap-3 bg-white px-3 py-1.5 border border-gray-200 rounded-lg shadow-sm">
-                <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Building:</span>
-                <select
-                  value={globalLotId || ''}
-                  onChange={e => {
-                    if (setGlobalLotId) setGlobalLotId(e.target.value);
-                  }}
-                  className="bg-transparent text-sm font-bold text-gray-900 focus:outline-none focus:ring-0 min-w-[180px] cursor-pointer"
-                >
-                  {lots.map((l: any) => <option key={l._id} value={l._id}>{l.name}</option>)}
-                </select>
-              </div>
-            )}
+          <div className="flex items-center gap-3">
+            {/* Building selector — same design as BuildingsTab */}
+            <div className="relative">
+              <Building className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <select
+                value={globalLotId || ''}
+                onChange={e => { if (setGlobalLotId) setGlobalLotId(e.target.value); }}
+                disabled={lots.length <= 1}
+                className={`pl-9 pr-8 py-2.5 bg-white border border-gray-200 rounded-xl text-sm font-medium text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 min-w-[220px] transition-all appearance-none ${
+                  lots.length <= 1 ? 'opacity-70 cursor-not-allowed bg-gray-50' : 'cursor-pointer hover:border-gray-300'
+                }`}
+              >
+                {lots.map((l: any) => <option key={l._id} value={l._id}>{l.name}</option>)}
+              </select>
+            </div>
 
             <button onClick={() => setQuotaModalOpen(true)} className="p-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 shadow-sm transition-colors" title="Shift Quota Settings">
               <Settings className="w-5 h-5" />

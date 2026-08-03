@@ -118,13 +118,13 @@ export default function ManagerPortal() {
       {/* Main */}
       <div className="flex-1 overflow-auto">
         <div className="max-w-6xl mx-auto px-10 py-8">
-          {tab === 'buildings' && <BuildingsTab globalLotId={globalLotId} setGlobalLotId={setGlobalLotId} />}
-          {tab === 'vehicleTypes' && <VehicleTypesTab globalLotId={globalLotId} />}
+          {tab === 'buildings' && <BuildingsTab globalLotId={globalLotId} setGlobalLotId={setGlobalLotId} setTab={setTab} />}
+          {tab === 'vehicleTypes' && <VehicleTypesTab globalLotId={globalLotId} setGlobalLotId={setGlobalLotId} />}
           {tab === 'floors' && <FloorsTab globalLotId={globalLotId} setGlobalLotId={setGlobalLotId} />}
           {tab === 'slots' && <SlotsTab globalLotId={globalLotId} setGlobalLotId={setGlobalLotId} />}
           {tab === 'staff' && <StaffAssignmentTab globalLotId={globalLotId} setGlobalLotId={setGlobalLotId} />}
           {tab === 'schedules' && <ManagerWorkScheduleTab globalLotId={globalLotId} setGlobalLotId={setGlobalLotId} />}
-          {tab === 'revenue' && <RevenueTab globalLotId={globalLotId} />}
+          {tab === 'revenue' && <RevenueTab globalLotId={globalLotId} setGlobalLotId={setGlobalLotId} />}
         </div>
       </div>
     </div>

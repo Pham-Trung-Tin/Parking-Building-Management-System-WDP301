@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import axiosClient from '../../services/api/axiosClient';
-import { CalendarDays, Tag, DollarSign, RefreshCw, ChevronLeft, ChevronRight, AlertCircle, Calendar, X, User, CreditCard, Receipt, Clock, Hash } from 'lucide-react';
+import parkingLotService from '../../services/api/parkingLotService';
+import { CalendarDays, Tag, DollarSign, RefreshCw, ChevronLeft, ChevronRight, AlertCircle, Calendar, X, User, CreditCard, Receipt, Clock, Hash, Building } from 'lucide-react';
 
 type Tab = 'session_checkout' | 'booking' | 'monthly_pass';
 
@@ -155,14 +156,31 @@ function TransactionDetailModal({ tx, onClose, fmt, fmtDate, activeTab }: {
   );
 }
 
-export default function RevenueTab({ globalLotId }: { globalLotId?: string }) {
+export default function RevenueTab({ globalLotId, setGlobalLotId }: { globalLotId?: string; setGlobalLotId?: (id: string) => void }) {
   const [activeTab, setActiveTab] = useState<Tab>('session_checkout');
   const [allTransactions, setAllTransactions] = useState<TxPayment[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [selectedTx, setSelectedTx] = useState<TxPayment | null>(null);
+  const [lots, setLots] = useState<any[]>([]);
   const LIMIT = 10;
+
+  const user = useMemo(() => { try { return JSON.parse(localStorage.getItem('user') || '{}'); } catch { return {}; } }, []);
+  const isManager = user?.role === 'parking_manager';
+
+  // Fetch lots for dropdown
+  useEffect(() => {
+    parkingLotService.getParkingLots({ limit: 100 }).then(res => {
+      let ls: any[] = res.data || res.docs || (Array.isArray(res) ? res : []);
+      if (isManager) {
+        const raw = user?.assignedParkingLot;
+        const ids: string[] = Array.isArray(raw) ? raw.filter(Boolean) : (raw ? [raw] : []);
+        if (ids.length) ls = ls.filter((l: any) => ids.includes(l._id));
+      }
+      setLots(ls);
+    }).catch(() => {});
+  }, []);
 
   const [allTabDocs, setAllTabDocs] = useState<Record<Tab, TxPayment[]>>({
     session_checkout: [],
@@ -345,6 +363,22 @@ export default function RevenueTab({ globalLotId }: { globalLotId?: string }) {
           </h1>
         </div>
         <div className="flex items-center gap-2">
+          {/* Building selector — same design as other tabs */}
+          <div className="relative">
+            <Building className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <select
+              value={globalLotId || ''}
+              onChange={e => setGlobalLotId?.(e.target.value)}
+              disabled={isManager && lots.length <= 1}
+              className={`pl-9 pr-8 py-2.5 bg-white border border-gray-200 rounded-xl text-sm font-medium text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 min-w-[220px] transition-all appearance-none ${
+                isManager && lots.length <= 1 ? 'opacity-70 cursor-not-allowed bg-gray-50' : 'cursor-pointer hover:border-gray-300'
+              }`}
+            >
+              {!isManager && <option value="">-- All Buildings --</option>}
+              {lots.map(l => <option key={l._id} value={l._id}>{l.name}</option>)}
+            </select>
+          </div>
+
           {/* Single date picker */}
           <div className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-sm">
             <Calendar className="w-4 h-4 text-gray-400 shrink-0" />

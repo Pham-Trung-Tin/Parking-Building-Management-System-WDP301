@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Plus, Pencil, Trash2, X, Layers, RefreshCw, ChevronRight, Grid3x3, Car } from 'lucide-react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { Plus, Pencil, Trash2, X, Layers, RefreshCw, ChevronRight, Grid3x3, Car, Building } from 'lucide-react';
 import floorService from '../../services/api/floorService';
 import zoneService from '../../services/api/zoneService';
 import parkingLotService from '../../services/api/parkingLotService';
@@ -122,7 +122,7 @@ export default function FloorsTab({ globalLotId, setGlobalLotId }: any) {
   const { toast, showToast } = useToast();
   const { askConfirm, ConfirmNode } = useConfirm();
 
-  const user = (() => { try { return JSON.parse(localStorage.getItem('user') || '{}'); } catch { return {}; } })();
+  const user = useMemo(() => { try { return JSON.parse(localStorage.getItem('user') || '{}'); } catch { return {}; } }, []);
   const isManager = user?.role === 'parking_manager';
 
   // Fetch lots for dropdown
@@ -256,12 +256,21 @@ export default function FloorsTab({ globalLotId, setGlobalLotId }: any) {
           <h1 className="text-2xl font-semibold text-gray-900 flex items-center gap-2"><Layers className="w-6 h-6" /> Floors & Zones</h1>
         </div>
         <div className="flex items-center gap-3">
-          <select value={globalLotId || ''} onChange={e => setGlobalLotId?.(e.target.value)}
-            disabled={isManager && lots.length <= 1}
-            className="border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none bg-white">
-            {!isManager && <option value="">-- Select Building --</option>}
-            {lots.map(l => <option key={l._id} value={l._id}>{l.name}</option>)}
-          </select>
+          {/* Building selector — same design as BuildingsTab */}
+          <div className="relative">
+            <Building className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <select
+              value={globalLotId || ''}
+              onChange={e => setGlobalLotId?.(e.target.value)}
+              disabled={isManager && lots.length <= 1}
+              className={`pl-9 pr-8 py-2.5 bg-white border border-gray-200 rounded-xl text-sm font-medium text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 min-w-[220px] transition-all appearance-none ${
+                isManager && lots.length <= 1 ? 'opacity-70 cursor-not-allowed bg-gray-50' : 'cursor-pointer hover:border-gray-300'
+              }`}
+            >
+              {!isManager && <option value="">-- Select Building --</option>}
+              {lots.map(l => <option key={l._id} value={l._id}>{l.name}</option>)}
+            </select>
+          </div>
           {!noLot && (
             <button onClick={() => setFloorModal({})} className="flex items-center gap-2 px-4 py-2.5 bg-gray-900 text-white text-sm font-medium rounded-xl hover:bg-gray-700">
               <Plus className="w-4 h-4" /> Add Floor
