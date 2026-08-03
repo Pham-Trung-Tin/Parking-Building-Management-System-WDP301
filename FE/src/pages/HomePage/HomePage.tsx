@@ -73,13 +73,10 @@ const HomePage = () => {
     const navigate = useNavigate();
 
     useEffect(() => {
-        window.scrollTo(0, 0);
+        // window.scrollTo(0, 0); // Not needed for container scroll
 
         const userData = localStorage.getItem('user');
         if (userData) setUser(JSON.parse(userData));
-
-        const handleScroll = () => setIsScrolled(window.scrollY > 50);
-        window.addEventListener('scroll', handleScroll);
 
         const handleClickOutside = (event: any) => {
             if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -89,10 +86,13 @@ const HomePage = () => {
         document.addEventListener('mousedown', handleClickOutside);
 
         return () => {
-            window.removeEventListener('scroll', handleScroll);
             document.removeEventListener('mousedown', handleClickOutside);
         };
     }, []);
+
+    const handleContainerScroll = (e: React.UIEvent<HTMLDivElement>) => {
+        setIsScrolled(e.currentTarget.scrollTop > 50);
+    };
 
     const handleLogout = () => {
         localStorage.removeItem('accessToken');
@@ -117,9 +117,9 @@ const HomePage = () => {
     };
 
     return (
-        <div className="font-sans overflow-x-hidden bg-white">
+        <div className="font-sans overflow-x-hidden bg-white h-screen overflow-y-scroll snap-y snap-mandatory scroll-smooth" onScroll={handleContainerScroll}>
             {/* HERO SECTION */}
-            <section className="relative min-h-screen w-full bg-[#0a0f1c]">
+            <section className="relative h-screen w-full bg-[#0a0f1c] snap-start flex flex-col justify-center">
                 {/* Background Video */}
                 <div className="absolute inset-0 z-0 overflow-hidden">
                     <video autoPlay loop muted playsInline className="absolute inset-0 w-full h-full object-cover">
@@ -181,7 +181,7 @@ const HomePage = () => {
                 </nav>
 
                 {/* Main Content */}
-                <main className="relative z-10 flex flex-col justify-center items-start px-[5%] md:px-[7%] pt-[20vh] pb-10 min-h-screen pointer-events-none">
+                <main className="relative z-10 flex flex-col justify-center items-start px-[5%] md:px-[7%] pointer-events-none">
                     <Reveal className="max-w-3xl pointer-events-auto" delay={100} direction="left">
                         <div className="inline-block px-4 py-1.5 rounded-full bg-blue-500/20 border border-blue-400/30 text-blue-300 font-semibold text-sm mb-6 backdrop-blur-sm">
                             Next-Generation Parking Solutions
@@ -206,7 +206,7 @@ const HomePage = () => {
             </section>
 
             {/* CORE FEATURES SECTION */}
-            <section className="py-24 px-[5%] md:px-[7%] bg-slate-50 relative overflow-hidden" id="features">
+            <section className="h-screen w-full px-[5%] md:px-[7%] bg-slate-50 relative overflow-hidden flex flex-col justify-center snap-start" id="features">
                 <div className="max-w-7xl mx-auto">
                     <div className="text-center mb-16">
                         <h2 className="text-blue-600 font-bold tracking-widest text-sm uppercase mb-3">Core Features</h2>
@@ -270,7 +270,7 @@ const HomePage = () => {
             </section>
 
             {/* HOW IT WORKS SECTION */}
-            <section className="py-24 px-[5%] md:px-[7%] bg-white">
+            <section className="h-screen w-full px-[5%] md:px-[7%] bg-white flex flex-col justify-center snap-start">
                 <div className="max-w-7xl mx-auto">
                     <Reveal direction="up">
                         <div className="text-center mb-16">
@@ -318,7 +318,7 @@ const HomePage = () => {
             </section>
 
             {/* PRICING SECTION */}
-            <section className="py-24 px-[5%] md:px-[7%] bg-slate-50" id="pricing">
+            <section className="h-screen w-full px-[5%] md:px-[7%] bg-slate-50 flex flex-col justify-center snap-start" id="pricing">
                 <div className="max-w-7xl mx-auto">
                     <Reveal>
                         <div className="text-center mb-16">
@@ -389,28 +389,24 @@ const HomePage = () => {
                             </div>
                         </Reveal>
                     </div>
-                    <div className="text-center mt-12">
-                        <Link to="/find-parking" className="inline-block bg-slate-900 text-white px-8 py-4 font-bold rounded-xl hover:bg-slate-800 transition-colors shadow-lg tracking-wide no-underline">
-                            Find a Building & View Prices
-                        </Link>
-                    </div>
                 </div>
             </section>
 
-            {/* CALL TO ACTION */}
-            <section className="py-24 px-[5%] text-center bg-white border-t border-slate-100">
-                <Reveal>
-                    <div className="max-w-3xl mx-auto">
-                        <h2 className="text-3xl md:text-5xl font-extrabold mb-6 tracking-tight text-slate-900">Ready to secure your spot?</h2>
-                        <p className="text-slate-500 text-lg mb-10 font-medium">Join thousands of drivers who trust our facilities to manage and protect their vehicles every single day.</p>
-                        <Link to="/find-parking" className="inline-block bg-blue-600 text-white px-10 py-4 font-bold rounded-xl hover:bg-blue-700 transition-colors shadow-lg hover:shadow-blue-500/30 tracking-wide no-underline">
-                            Get Started Now
-                        </Link>
-                    </div>
-                </Reveal>
+            {/* CALL TO ACTION & FOOTER SECTION */}
+            <section className="h-screen w-full flex flex-col justify-between snap-start bg-white border-t border-slate-100">
+                <div className="flex-1 flex flex-col justify-center px-[5%] text-center pt-24">
+                    <Reveal>
+                        <div className="max-w-3xl mx-auto">
+                            <h2 className="text-3xl md:text-5xl font-extrabold mb-6 tracking-tight text-slate-900">Ready to secure your spot?</h2>
+                            <p className="text-slate-500 text-lg mb-10 font-medium">Join thousands of drivers who trust our facilities to manage and protect their vehicles every single day.</p>
+                            <Link to="/find-parking" className="inline-block bg-blue-600 text-white px-10 py-4 font-bold rounded-xl hover:bg-blue-700 transition-colors shadow-lg hover:shadow-blue-500/30 tracking-wide no-underline">
+                                Get Started Now
+                            </Link>
+                        </div>
+                    </Reveal>
+                </div>
+                <Footer />
             </section>
-
-            <Footer />
         </div>
     );
 };
