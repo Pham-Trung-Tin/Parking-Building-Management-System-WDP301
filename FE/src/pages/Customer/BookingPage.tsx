@@ -2180,7 +2180,7 @@ const BookingPage = () => {
                                                 }}>
                                                     <VehicleSvgIcon code={vt.code} size={38} />
                                                 </div>
-                                                <div className="vt-name">{vt.name}</div>
+                                                <div className="vt-name">{vt.code}</div>
                                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', alignItems: 'center' }}>
                                                     <div className="vt-price" style={{ fontSize: '12px' }}>
                                                         <span style={{ color: '#64748b', marginRight: '4px' }}>Day:</span>
