@@ -1061,7 +1061,7 @@ const SessionPage = () => {
                                     {/* Pricing Summary */}
                                     <div className="pricing-details">
                                         <div className="pricing-row">
-                                            <span className="pricing-label">Surcharge (4-hour block)</span>
+                                            <span className="pricing-label">Day Surcharge (4-hour block)</span>
                                             <span className="pricing-value" style={{ color: '#2563eb' }}>{fmtVND(blockRate)} / block</span>
                                         </div>
                                         <div className="pricing-row">
