@@ -128,29 +128,26 @@ const CheckoutPage = () => {
             const slotObj = typeof b.assignedSlot === 'object' ? b.assignedSlot : null;
             const vtObj = typeof b.vehicleType === 'object' ? b.vehicleType : null;
 
-            // Build an absolute UTC ISO string from a scheduledDate + "HH:mm" ICT time string.
-            // We extract the ICT calendar date from scheduledDate, then combine with HH:mm ICT time.
-            const parseDateTime = (dStr: string, tStr: string) => {
-                if (!dStr || !tStr) return null;
-                // Get the ICT date components by shifting UTC timestamp +7h
+            // Build a display string directly from scheduledDate (ICT date) + startTime/endTime.
+            // We NEVER convert through Date objects to avoid timezone conversion bugs.
+            // startTime/endTime are already correct ICT "HH:mm" strings.
+            const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+            const getICTDateParts = (dStr: string, extraDays = 0) => {
+                if (!dStr) return null;
                 const TZ_OFFSET_MS = 7 * 60 * 60 * 1000;
-                const ictMs = new Date(dStr).getTime() + TZ_OFFSET_MS;
-                const ict = new Date(ictMs);
-                const year  = ict.getUTCFullYear();
-                const month = String(ict.getUTCMonth() + 1).padStart(2, '0');
-                const day   = String(ict.getUTCDate()).padStart(2, '0');
-                // Build ISO string with explicit +07:00 so browser parses it correctly
-                return `${year}-${month}-${day}T${tStr}:00+07:00`;
+                const ictMs = new Date(dStr).getTime() + TZ_OFFSET_MS + extraDays * 86400000;
+                const d = new Date(ictMs);
+                return `${String(d.getUTCDate()).padStart(2, '0')} ${MONTHS_SHORT[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+            };
+            const formatBookingDisplay = (dStr: string, tStr: string, extraDays = 0) => {
+                if (!dStr || !tStr) return null;
+                return `${getICTDateParts(dStr, extraDays)}, ${tStr}`;
             };
 
-            const parsedEntry = parseDateTime(b.scheduledDate, b.startTime);
-            let parsedExit = parseDateTime(b.scheduledDate, b.endTime || b.startTime);
-
-            if (parsedEntry && parsedExit && new Date(parsedExit) < new Date(parsedEntry)) {
-                const exitD = new Date(parsedExit);
-                exitD.setDate(exitD.getDate() + 1);
-                parsedExit = exitD.toISOString();
-            }
+            const parsedEntry = formatBookingDisplay(b.scheduledDate, b.startTime);
+            // Detect cross-midnight: endTime < startTime as string comparison (e.g. "01:00" < "22:00")
+            const isCrossMidnight = b.endTime && b.startTime && b.endTime < b.startTime;
+            const parsedExit = formatBookingDisplay(b.scheduledDate, b.endTime || b.startTime, isCrossMidnight ? 1 : 0);
 
 
             setBookingDetail({
@@ -1127,13 +1124,17 @@ const CheckoutPage = () => {
                                     <div className="co-row">
                                         <span className="co-row-label">Entry</span>
                                         <span className="co-row-value" style={{ fontSize: 12 }}>
-                                            {mergedData.entryDate ? formatTime(new Date(mergedData.entryDate)) : '—'}
+                                            {bookingDetail?.entryDate
+                                                ? bookingDetail.entryDate
+                                                : mergedData.entryDate ? formatTime(new Date(mergedData.entryDate)) : '—'}
                                         </span>
                                     </div>
                                     <div className="co-row">
                                         <span className="co-row-label">Est. Exit</span>
                                         <span className="co-row-value" style={{ fontSize: 12 }}>
-                                            {mergedData.exitDate ? formatTime(new Date(mergedData.exitDate)) : '—'}
+                                            {bookingDetail?.exitDate
+                                                ? bookingDetail.exitDate
+                                                : mergedData.exitDate ? formatTime(new Date(mergedData.exitDate)) : '—'}
                                         </span>
                                     </div>
                                 </>
