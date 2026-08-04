@@ -150,7 +150,7 @@ const CheckoutPage = () => {
                 parkingLotName: typeof b.parkingLot === 'object' ? b.parkingLot?.name : data.parkingLotName,
                 floorName: floorObj ? (floorObj.name || `Floor ${floorObj.floorNumber}`) : '—',
                 slotCode: slotObj?.slotCode || '—',
-                vehicleTypeName: vtObj?.name || '—',
+                vehicleTypeName: vtObj?.code || data.vehicleTypeName || '—',
                 entryDate: parsedEntry,
                 exitDate: parsedExit,
                 totalAmount: b.estimatedFee ?? data.totalAmount ?? 0,

@@ -917,7 +917,7 @@ const BookingPage = () => {
                     bookingCode: bookingObj?.bookingCode,
                     parkingLotName: parkingSpot?.title || parkingSpot?.name,
                     licensePlate: formatPlate(licensePlate),
-                    vehicleTypeName: vehicleType?.name,
+                    vehicleTypeName: vehicleType?.code,
                     floorName: selectedFloor?.name || `Floor ${selectedFloor?.floorNumber}`,
                     slotCode: selectedSlot?.slotCode,
                     entryDate,
