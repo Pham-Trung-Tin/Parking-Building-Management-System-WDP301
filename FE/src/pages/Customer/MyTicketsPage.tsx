@@ -277,22 +277,23 @@ const MyTicketsPage = () => {
                     ? (b.vehicleType?.code || 'Unknown')
                     : (b.vehicleType || 'Unknown');
 
-                const parseDateTime = (dStr: string, tStr: string) => {
+                // Build display string directly from ICT date + time to avoid timezone bugs
+                const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                const buildICTDisplay = (dStr: string, tStr: string, extraDays = 0) => {
                     if (!dStr || !tStr) return new Date().toISOString();
-                    const d = new Date(dStr);
-                    const [hh, mm] = tStr.split(':').map(Number);
-                    if (!isNaN(hh)) d.setHours(hh, mm || 0, 0, 0);
-                    return d.toISOString();
+                    const TZ_OFFSET_MS = 7 * 60 * 60 * 1000;
+                    const ictMs = new Date(dStr).getTime() + TZ_OFFSET_MS + extraDays * 86400000;
+                    const dt = new Date(ictMs);
+                    const dd = String(dt.getUTCDate()).padStart(2, '0');
+                    const mm = String(dt.getUTCMonth() + 1).padStart(2, '0');
+                    const yyyy = dt.getUTCFullYear();
+                    return `${dd}/${mm}/${yyyy} ${tStr}`;
                 };
 
-                const entryDt = parseDateTime(b.scheduledDate, b.startTime);
+                const entryDt = buildICTDisplay(b.scheduledDate, b.startTime);
                 const exitTimeStr = b.endTime || b.startTime;
-                let exitDt = parseDateTime(b.scheduledDate, exitTimeStr);
-                if (b.endTime && b.endTime < b.startTime) {
-                    const nextDay = new Date(exitDt);
-                    nextDay.setDate(nextDay.getDate() + 1);
-                    exitDt = nextDay.toISOString();
-                }
+                const isCrossMidnight = b.endTime && b.startTime && b.endTime < b.startTime;
+                const exitDt = buildICTDisplay(b.scheduledDate, exitTimeStr, isCrossMidnight ? 1 : 0);
 
                 return {
                     receiptId: b.bookingCode || b._id,
@@ -420,9 +421,16 @@ const MyTicketsPage = () => {
 
     const fmtVND = (n: number) => new Intl.NumberFormat('vi-VN').format(Math.round(n)) + ' ₫';
 
-    const fmtDateTime = (iso: string) => {
-        const d = new Date(iso);
-        return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    const fmtDateTime = (val: string) => {
+        // If it's already a pre-formatted string like "05/08/2026 02:10", return as-is
+        if (val && /^\d{2}\/\d{2}\/\d{4}/.test(val)) return val;
+        // Otherwise parse as ISO date and display in Vietnam timezone
+        const d = new Date(val);
+        return d.toLocaleString('en-GB', {
+            day: '2-digit', month: '2-digit', year: 'numeric',
+            hour: '2-digit', minute: '2-digit', hour12: false,
+            timeZone: 'Asia/Ho_Chi_Minh'
+        });
     };
 
 
