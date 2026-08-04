@@ -116,8 +116,15 @@ const HomePage = () => {
         }
     };
 
+    const scrollToTop = () => {
+        const el = document.getElementById('main-scroll-container');
+        if (el) {
+            el.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+    };
+
     return (
-        <div className="font-sans overflow-x-hidden bg-white h-screen overflow-y-scroll snap-y snap-mandatory scroll-smooth" onScroll={handleContainerScroll}>
+        <div id="main-scroll-container" className="font-sans overflow-x-hidden bg-white h-screen overflow-y-scroll snap-y snap-mandatory scroll-smooth [&_h1]:[text-wrap:pretty] [&_h2]:[text-wrap:balance] [&_h3]:[text-wrap:balance] [&_h4]:[text-wrap:balance] [&_p]:[text-wrap:pretty]" onScroll={handleContainerScroll}>
             {/* HERO SECTION */}
             <section className="relative min-h-[100svh] w-full bg-[#0a0f1c] snap-start flex flex-col justify-center pt-24 pb-12">
                 {/* Background Video */}
@@ -188,7 +195,7 @@ const HomePage = () => {
                         </div>
                         <h1 className="text-[54px] md:text-[72px] lg:text-[86px] font-extrabold leading-[1.05] text-white tracking-tight drop-shadow-xl mb-6">
                             Smart Parking<br />
-                            <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-300">Management System</span>
+                            <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-300">Management&nbsp;System</span>
                         </h1>
                         <p className="text-slate-300 text-[18px] md:text-[22px] leading-relaxed mb-10 font-medium max-w-2xl drop-shadow-md">
                             Experience the future of parking. Real-time availability, instant digital bookings, and automated payments—all in one seamless platform.
@@ -407,6 +414,17 @@ const HomePage = () => {
                 </div>
                 <Footer />
             </section>
+
+            {/* Back to Top Button */}
+            <button
+                onClick={scrollToTop}
+                className={`fixed bottom-8 right-8 z-50 p-3 rounded-full bg-blue-600 text-white shadow-[0_4px_14px_0_rgba(37,99,235,0.39)] hover:bg-blue-700 hover:shadow-[0_6px_20px_rgba(37,99,235,0.23)] hover:-translate-y-1 transition-all duration-300 border-none cursor-pointer ${isScrolled ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-16 pointer-events-none'}`}
+                aria-label="Back to top"
+            >
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="18 15 12 9 6 15"></polyline>
+                </svg>
+            </button>
         </div>
     );
 };
