@@ -7,8 +7,8 @@ import { authService } from '../../services/api';
 const forgotPasswordSchema = Yup.object({
   email: Yup.string()
     .trim()
-    .email('Email không hợp lệ')
-    .required('Email là bắt buộc'),
+    .email('Invalid email address')
+    .required('Email is required'),
 });
 
 const ForgotPasswordPage = () => {
@@ -24,10 +24,10 @@ const ForgotPasswordPage = () => {
       try {
         await authService.forgotPassword(values.email);
         setSuccessMessage(
-          'Nếu email của bạn đã được đăng ký, chúng tôi đã gửi hướng dẫn đặt lại mật khẩu. Vui lòng kiểm tra hộp thư.'
+          'If your email is registered, we have sent instructions to reset your password. Please check your inbox.'
         );
       } catch (err: any) {
-        setServerError(err.message || 'Đã xảy ra lỗi, vui lòng thử lại.');
+        setServerError(err.message || 'An error occurred, please try again.');
       } finally {
         setSubmitting(false);
       }
@@ -57,9 +57,9 @@ const ForgotPasswordPage = () => {
         </div>
 
         {/* Title */}
-        <h1 className="text-2xl font-bold text-slate-900 mb-2">Quên mật khẩu?</h1>
+        <h1 className="text-2xl font-bold text-slate-900 mb-2">Forgot Password?</h1>
         <p className="text-sm text-slate-500 mb-8 leading-relaxed">
-          Nhập email đăng ký của bạn. Chúng tôi sẽ gửi link đặt lại mật khẩu nếu email tồn tại trong hệ thống.
+          Enter your registered email address. We will send you a password reset link if the email exists in our system.
         </p>
 
         {/* Form */}
@@ -121,7 +121,7 @@ const ForgotPasswordPage = () => {
                 disabled={formik.isSubmitting}
                 className="bg-primary-500 text-white border-none py-4 text-base font-bold rounded-md cursor-pointer transition-colors duration-200 hover:bg-primary-600 mt-2 disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                {formik.isSubmitting ? 'Đang gửi...' : 'Gửi link đặt lại mật khẩu'}
+                {formik.isSubmitting ? 'Sending...' : 'Send password reset link'}
               </button>
             </>
           )}
@@ -133,7 +133,7 @@ const ForgotPasswordPage = () => {
                 fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="m15 18-6-6 6-6"/>
               </svg>
-              Quay lại đăng nhập
+              Back to login
             </Link>
           </div>
         </form>

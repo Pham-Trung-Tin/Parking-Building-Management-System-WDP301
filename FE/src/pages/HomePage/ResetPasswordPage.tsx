@@ -6,15 +6,15 @@ import { authService } from '../../services/api';
 
 const resetPasswordSchema = Yup.object({
   password: Yup.string()
-    .min(8, 'Mật khẩu phải có ít nhất 8 ký tự')
+    .min(8, 'Password must be at least 8 characters')
     .matches(
       /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/,
-      'Mật khẩu phải có ít nhất 1 chữ hoa, 1 chữ thường và 1 số'
+      'Password must contain at least 1 uppercase, 1 lowercase, and 1 number'
     )
-    .required('Mật khẩu mới là bắt buộc'),
+    .required('New password is required'),
   confirmPassword: Yup.string()
-    .oneOf([Yup.ref('password')], 'Mật khẩu xác nhận không khớp')
-    .required('Xác nhận mật khẩu là bắt buộc'),
+    .oneOf([Yup.ref('password')], 'Passwords do not match')
+    .required('Confirm password is required'),
 });
 
 const EyeIcon = () => (
@@ -53,7 +53,7 @@ const ResetPasswordPage = () => {
       setServerError('');
 
       if (!token) {
-        setServerError('Link đặt lại mật khẩu không hợp lệ hoặc đã hết hạn.');
+        setServerError('Password reset link is invalid or has expired.');
         setSubmitting(false);
         return;
       }
@@ -61,14 +61,14 @@ const ResetPasswordPage = () => {
       try {
         await authService.resetPassword(token, values.password, values.confirmPassword);
         navigate('/login', {
-          state: { message: 'Đặt lại mật khẩu thành công! Vui lòng đăng nhập bằng mật khẩu mới.' },
+          state: { message: 'Password reset successful! Please log in with your new password.' },
         });
       } catch (err: any) {
         const msg = err.message || '';
         if (err.status === 400) {
-          setServerError('Link đặt lại mật khẩu không hợp lệ hoặc đã hết hạn. Vui lòng thử lại.');
+          setServerError('Password reset link is invalid or has expired. Please try again.');
         } else {
-          setServerError(msg || 'Đã xảy ra lỗi, vui lòng thử lại.');
+          setServerError(msg || 'An error occurred, please try again.');
         }
       } finally {
         setSubmitting(false);
@@ -115,15 +115,15 @@ const ResetPasswordPage = () => {
             </div>
           </div>
 
-          <h1 className="text-2xl font-bold text-slate-900 mb-2">Link không hợp lệ</h1>
+          <h1 className="text-2xl font-bold text-slate-900 mb-2">Invalid Link</h1>
           <p className="text-sm text-slate-500 mb-8 leading-relaxed">
-            Link đặt lại mật khẩu không hợp lệ hoặc đã hết hạn. Vui lòng yêu cầu gửi lại email.
+            The password reset link is invalid or has expired. Please request a new email.
           </p>
           <Link
             to="/forgot-password"
             className="block bg-primary-500 text-white py-4 text-base font-bold rounded-md text-center transition-colors duration-200 hover:bg-primary-600"
           >
-            Gửi lại email đặt lại mật khẩu
+            Send reset email again
           </Link>
           <div className="mt-4">
             <Link to="/login" className="text-sm text-primary-500 font-semibold hover:underline inline-flex items-center gap-1">
@@ -131,7 +131,7 @@ const ResetPasswordPage = () => {
                 fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="m15 18-6-6 6-6"/>
               </svg>
-              Quay lại đăng nhập
+              Back to login
             </Link>
           </div>
         </div>
@@ -160,9 +160,9 @@ const ResetPasswordPage = () => {
         </div>
 
         {/* Title */}
-        <h1 className="text-2xl font-bold text-slate-900 mb-2">Đặt lại mật khẩu</h1>
+        <h1 className="text-2xl font-bold text-slate-900 mb-2">Reset Password</h1>
         <p className="text-sm text-slate-500 mb-8 leading-relaxed">
-          Nhập mật khẩu mới cho tài khoản của bạn.
+          Enter a new password for your account.
         </p>
 
         {/* Form */}
@@ -172,10 +172,10 @@ const ResetPasswordPage = () => {
           {serverError && (
             <div className="bg-red-50 border border-red-300 text-red-600 text-sm rounded-md px-4 py-3 text-left">
               {serverError}
-              {serverError.includes('hết hạn') && (
+              {serverError.includes('expired') && (
                 <div className="mt-2">
                   <Link to="/forgot-password" className="text-red-700 font-semibold underline">
-                    Gửi lại email đặt lại mật khẩu →
+                    Send reset email again →
                   </Link>
                 </div>
               )}
@@ -193,18 +193,18 @@ const ResetPasswordPage = () => {
                 onChange={formik.handleChange}
                 onBlur={formik.handleBlur}
                 className={inputClass('password')}
-                placeholder="Mật khẩu mới"
+                placeholder="New password"
                 autoComplete="new-password"
               />
               <label htmlFor="reset-password" className={labelClass('password')}>
-                Mật khẩu mới *
+                New password *
               </label>
               <button
                 type="button"
                 onClick={() => setShowPassword((p) => !p)}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
                 tabIndex={-1}
-                aria-label={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
               >
                 {showPassword ? <EyeOffIcon /> : <EyeIcon />}
               </button>
@@ -225,18 +225,18 @@ const ResetPasswordPage = () => {
                 onChange={formik.handleChange}
                 onBlur={formik.handleBlur}
                 className={inputClass('confirmPassword')}
-                placeholder="Xác nhận mật khẩu"
+                placeholder="Confirm password"
                 autoComplete="new-password"
               />
               <label htmlFor="reset-confirm-password" className={labelClass('confirmPassword')}>
-                Xác nhận mật khẩu *
+                Confirm password *
               </label>
               <button
                 type="button"
                 onClick={() => setShowConfirmPassword((p) => !p)}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
                 tabIndex={-1}
-                aria-label={showConfirmPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+                aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
               >
                 {showConfirmPassword ? <EyeOffIcon /> : <EyeIcon />}
               </button>
@@ -253,7 +253,7 @@ const ResetPasswordPage = () => {
             disabled={formik.isSubmitting}
             className="bg-primary-500 text-white border-none py-4 text-base font-bold rounded-md cursor-pointer transition-colors duration-200 hover:bg-primary-600 mt-2 disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            {formik.isSubmitting ? 'Đang xử lý...' : 'Đặt lại mật khẩu'}
+            {formik.isSubmitting ? 'Processing...' : 'Reset Password'}
           </button>
 
           {/* Back to login */}
@@ -263,7 +263,7 @@ const ResetPasswordPage = () => {
                 fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="m15 18-6-6 6-6"/>
               </svg>
-              Quay lại đăng nhập
+              Back to login
             </Link>
           </div>
         </form>
