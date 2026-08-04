@@ -51,6 +51,41 @@ const getVehicleEmoji = (code: string) => {
     return '🚗';
 };
 
+// ── Live payment countdown component ─────────────────────────────────────────
+const PaymentCountdown = ({ createdAt }: { createdAt: string }) => {
+    const calcRemaining = () => {
+        const expiryTime = new Date(createdAt).getTime() + 10 * 60 * 1000;
+        return Math.max(0, Math.floor((expiryTime - Date.now()) / 1000));
+    };
+    const [remaining, setRemaining] = useState(calcRemaining);
+
+    useEffect(() => {
+        if (remaining <= 0) return;
+        const id = setInterval(() => {
+            const r = calcRemaining();
+            setRemaining(r);
+            if (r <= 0) clearInterval(id);
+        }, 1000);
+        return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [createdAt]);
+
+    if (remaining <= 0) return null;
+
+    const mm = String(Math.floor(remaining / 60)).padStart(2, '0');
+    const ss = String(remaining % 60).padStart(2, '0');
+
+    return (
+        <>
+            <span style={{ color: '#cbd5e1' }}>|</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700 }}>
+                <span className="ls-pulse-dot" style={{ width: 6, height: 6, background: '#ef4444', boxShadow: '0 0 0 0 rgba(239,68,68,0.6)' }} />
+                <span style={{ color: '#ef4444' }}>{mm}:{ss} (Awaiting QR payment)</span>
+            </span>
+        </>
+    );
+};
+
 // ── A single session card with its own live clock ───────────────────────────
 const LiveSessionCard = ({ session, onClick }: { session: ParkingSession; onClick: () => void }) => {
     const isCompleted = session.status === 'completed';
@@ -58,10 +93,10 @@ const LiveSessionCard = ({ session, onClick }: { session: ParkingSession; onClic
     if (isCompleted && session.exitTime && session.entryTime) {
         fixedElapsed = Math.floor((new Date(session.exitTime).getTime() - new Date(session.entryTime).getTime()) / 1000);
     }
-    
+
     const liveElapsed = useLiveElapsed(session.entryTime);
     const elapsed = isCompleted ? fixedElapsed : liveElapsed;
-    
+
     const h = Math.floor(elapsed / 3600);
     const m = Math.floor((elapsed % 3600) / 60);
     const s = elapsed % 60;
@@ -119,8 +154,8 @@ const LiveSessionCard = ({ session, onClick }: { session: ParkingSession; onClic
                     )}
                     <strong style={{ fontSize: 14, color: isCompleted ? '#64748b' : '#10b981' }}>{new Intl.NumberFormat('vi-VN').format(Math.round(currentFee))} ₫</strong>
                 </div>
-                <button 
-                    className="t-list-item-btn" 
+                <button
+                    className="t-list-item-btn"
                     onClick={(e) => { e.stopPropagation(); onClick(); }}
                     style={isCompleted ? { background: '#e2e8f0', color: '#475569' } : undefined}
                 >
@@ -142,15 +177,15 @@ const MyTicketsPage = () => {
     const [historyBookings, setHistoryBookings] = useState<Ticket[]>([]);
     const [historySessions, setHistorySessions] = useState<ParkingSession[]>([]);
     const [historyFilter, setHistoryFilter] = useState<'completed' | 'cancelled'>('completed');
-    
+
     // Pagination states
     const [completedPage, setCompletedPage] = useState(1);
     const [cancelledPage, setCancelledPage] = useState(1);
     const ITEMS_PER_PAGE = 5;
 
     // Custom Modal & Notification
-    const [cancelModalData, setCancelModalData] = useState<{receiptId: string, bookingId: string} | null>(null);
-    const [notification, setNotification] = useState<{message: string, type: 'success' | 'error'} | null>(null);
+    const [cancelModalData, setCancelModalData] = useState<{ receiptId: string, bookingId: string } | null>(null);
+    const [notification, setNotification] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
 
     const showNotification = useCallback((message: string, type: 'success' | 'error') => {
         setNotification({ message, type });
@@ -207,10 +242,10 @@ const MyTicketsPage = () => {
             let list: ParkingSession[] = Array.isArray(res)
                 ? res
                 : (res?.data ?? res?.docs ?? []);
-            
+
             // Lọc bỏ các xe vé tháng khỏi danh sách Live Sessions (hiển thị gọn bên MyVehiclesPage)
             list = list.filter((s: any) => !s.monthlyPass);
-            
+
             setActiveSessions(list);
             setSessionsError(null);
         } catch (err: any) {
@@ -230,7 +265,7 @@ const MyTicketsPage = () => {
 
             // Show active bookings that are either paid (online) OR pending payment (pay-at-counter)
             const activeList = list.filter((b: any) => ['pending', 'approved', 'no_show'].includes(b.status) && ['paid', 'pending'].includes(b.paymentStatus));
-            
+
             // Show history bookings (cancelled, rejected, etc)
             const histList = list.filter((b: any) => ['cancelled', 'rejected', 'abandoned'].includes(b.status) || (b.status === 'no_show' && !['paid', 'pending'].includes(b.paymentStatus)));
 
@@ -238,7 +273,9 @@ const MyTicketsPage = () => {
                 const lotName = typeof b.parkingLot === 'object' ? b.parkingLot?.name : 'Parking Lot';
                 const floorName = typeof b.floor === 'object' ? (b.floor?.name ?? `Floor ${b.floor?.floorNumber}`) : '—';
                 const slotCode = typeof b.assignedSlot === 'object' ? b.assignedSlot?.slotCode : '—';
-                const vTypeName = typeof b.vehicleType === 'object' ? b.vehicleType?.name : 'Vehicle';
+                const vTypeName = typeof b.vehicleType === 'object'
+                    ? (b.vehicleType?.code || 'Unknown')
+                    : (b.vehicleType || 'Unknown');
 
                 const parseDateTime = (dStr: string, tStr: string) => {
                     if (!dStr || !tStr) return new Date().toISOString();
@@ -269,7 +306,7 @@ const MyTicketsPage = () => {
                     exitTime: exitDt,
                     elapsed: 0,
                     totalAmount: b.estimatedFee || 0,
-                    payMethod: b.paymentStatus === 'paid' ? (b.payment?.method || 'bank_transfer') : 'cash',
+                    payMethod: b.payment?.method || 'bank_transfer',
                     status: b.status,
                     paymentStatus: b.paymentStatus,
                     createdAt: b.createdAt,
@@ -993,7 +1030,7 @@ const MyTicketsPage = () => {
                     {activeTab === 'history' && (
                         <>
                             <div style={{ display: 'flex', gap: '12px', marginBottom: '24px' }}>
-                                <button 
+                                <button
                                     onClick={() => setHistoryFilter('completed')}
                                     style={{
                                         flex: 1, padding: '12px', borderRadius: '10px', border: 'none', fontWeight: 600, fontSize: 14, cursor: 'pointer', transition: 'all 0.2s',
@@ -1004,7 +1041,7 @@ const MyTicketsPage = () => {
                                 >
                                     Completed Sessions {historySessions.length > 0 && `(${historySessions.length})`}
                                 </button>
-                                <button 
+                                <button
                                     onClick={() => setHistoryFilter('cancelled')}
                                     style={{
                                         flex: 1, padding: '12px', borderRadius: '10px', border: 'none', fontWeight: 600, fontSize: 14, cursor: 'pointer', transition: 'all 0.2s',
@@ -1022,7 +1059,7 @@ const MyTicketsPage = () => {
                                     <div className="t-section-heading">
                                         <span className="t-section-title"> Completed Sessions</span>
                                     </div>
-                                    
+
                                     {historySessions.length === 0 ? (
                                         <div style={{
                                             background: 'white', borderRadius: 14, border: '1.5px dashed #e2e8f0',
@@ -1044,8 +1081,8 @@ const MyTicketsPage = () => {
                                             ))}
                                             {totalCompletedPages > 1 && (
                                                 <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 16, marginTop: 20 }}>
-                                                    <button 
-                                                        disabled={completedPage === 1} 
+                                                    <button
+                                                        disabled={completedPage === 1}
                                                         onClick={() => setCompletedPage(p => p - 1)}
                                                         style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid #cbd5e1', background: completedPage === 1 ? '#f8fafc' : '#fff', color: completedPage === 1 ? '#94a3b8' : '#334155', cursor: completedPage === 1 ? 'not-allowed' : 'pointer', fontWeight: 600, transition: 'all 0.2s' }}
                                                     >
@@ -1054,8 +1091,8 @@ const MyTicketsPage = () => {
                                                     <span style={{ fontSize: 14, fontWeight: 600, color: '#64748b' }}>
                                                         Page {completedPage} of {totalCompletedPages}
                                                     </span>
-                                                    <button 
-                                                        disabled={completedPage === totalCompletedPages} 
+                                                    <button
+                                                        disabled={completedPage === totalCompletedPages}
                                                         onClick={() => setCompletedPage(p => p + 1)}
                                                         style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid #cbd5e1', background: completedPage === totalCompletedPages ? '#f8fafc' : '#fff', color: completedPage === totalCompletedPages ? '#94a3b8' : '#334155', cursor: completedPage === totalCompletedPages ? 'not-allowed' : 'pointer', fontWeight: 600, transition: 'all 0.2s' }}
                                                     >
@@ -1088,8 +1125,8 @@ const MyTicketsPage = () => {
                                         <>
                                             <div className="t-list">
                                                 {paginatedCancelled.map(ticket => (
-                                                    <div 
-                                                        key={ticket.receiptId} 
+                                                    <div
+                                                        key={ticket.receiptId}
                                                         className="t-list-item"
                                                     >
                                                         <div className="t-list-item-left">
@@ -1114,8 +1151,8 @@ const MyTicketsPage = () => {
                                             </div>
                                             {totalCancelledPages > 1 && (
                                                 <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 16, marginTop: 20 }}>
-                                                    <button 
-                                                        disabled={cancelledPage === 1} 
+                                                    <button
+                                                        disabled={cancelledPage === 1}
                                                         onClick={() => setCancelledPage(p => p - 1)}
                                                         style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid #cbd5e1', background: cancelledPage === 1 ? '#f8fafc' : '#fff', color: cancelledPage === 1 ? '#94a3b8' : '#334155', cursor: cancelledPage === 1 ? 'not-allowed' : 'pointer', fontWeight: 600, transition: 'all 0.2s' }}
                                                     >
@@ -1124,8 +1161,8 @@ const MyTicketsPage = () => {
                                                     <span style={{ fontSize: 14, fontWeight: 600, color: '#64748b' }}>
                                                         Page {cancelledPage} of {totalCancelledPages}
                                                     </span>
-                                                    <button 
-                                                        disabled={cancelledPage === totalCancelledPages} 
+                                                    <button
+                                                        disabled={cancelledPage === totalCancelledPages}
                                                         onClick={() => setCancelledPage(p => p + 1)}
                                                         style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid #cbd5e1', background: cancelledPage === totalCancelledPages ? '#f8fafc' : '#fff', color: cancelledPage === totalCancelledPages ? '#94a3b8' : '#334155', cursor: cancelledPage === totalCancelledPages ? 'not-allowed' : 'pointer', fontWeight: 600, transition: 'all 0.2s' }}
                                                     >
@@ -1143,256 +1180,292 @@ const MyTicketsPage = () => {
                     {activeTab === 'upcoming' && (
                         <>
 
-                    {/* ── SECTION 2: Upcoming Bookings (localStorage tickets) ── */}
-                    <div className="t-section-heading">
-                        <span className="t-section-title"> Upcoming Bookings</span>
-                        {bookingsLoading && (
-                            <div className="ls-loading" style={{ marginTop: 10 }}>
-                                <div className="ls-spinner" />
-                                Loading tickets...
-                            </div>
-                        )}
-
-                        {!bookingsLoading && hasTickets && (
-                            <span className="t-section-count">{visibleTickets.length} ticket{visibleTickets.length !== 1 ? 's' : ''}</span>
-                        )}
-                    </div>
-
-                    {!hasTickets ? (
-                        isEmpty ? (
-                            <div className="t-empty-card">
-                                <span className="t-empty-icon">🎫</span>
-                                <h2 className="t-empty-title">No Active Tickets</h2>
-                                <p className="t-empty-desc">You don't have any booked slots yet. Book a parking slot at one of our locations to get started.</p>
-                                <button className="t-empty-btn" onClick={() => navigate('/booking')}>
-                                    Book a Slot Now
-                                </button>
-                            </div>
-                        ) : (
-                            <div style={{
-                                background: 'white', borderRadius: 14, border: '1.5px dashed #e2e8f0',
-                                padding: '20px 24px',
-                                display: 'flex', alignItems: 'center', gap: 14,
-                                color: '#94a3b8', fontSize: 14, fontWeight: 600,
-                            }}>
-                                <span style={{ fontSize: 24 }}>📭</span>
-                                <span>No upcoming bookings.{' '}
-                                    <span
-                                        style={{ color: '#2563eb', cursor: 'pointer', textDecoration: 'underline' }}
-                                        onClick={() => navigate('/booking')}
-                                    >Book now</span>
-                                </span>
-                            </div>
-                        )
-                    ) : (
-                        <>
-                            <div className="t-list">
-                                {visibleTickets.map(ticket => {
-                                    const isPaid = ticket.paymentStatus === 'paid';
-                                    const isUnpaid = !isPaid;
-                                    let remainingSeconds = 0;
-                                    if (isUnpaid && ticket.createdAt) {
-                                        const expiryTime = new Date(ticket.createdAt).getTime() + 10 * 60 * 1000;
-                                        remainingSeconds = Math.max(0, Math.floor((expiryTime - Date.now()) / 1000));
-                                    }
-                                    const mm = String(Math.floor(remainingSeconds / 60)).padStart(2, '0');
-                                    const ss = String(remainingSeconds % 60).padStart(2, '0');
-                                    const isNoShow = ticket.status === 'no_show';
-                                    
-                                    return (
-                                        <div 
-                                            key={ticket.receiptId} 
-                                            className={`t-list-item ${isNoShow ? 'no-show' : ''}`}
-                                            onClick={() => !isNoShow && setSelectedTicket(ticket)}
-                                        >
-                                            <div className="t-list-item-left">
-                                                <div className="t-list-item-icon">
-                                                    {getVehicleEmoji(ticket.vehicleType)}
-                                                </div>
-                                                <div className="t-list-item-info">
-                                                    <h3 className="t-list-item-title">{ticket.spot.title}</h3>
-                                                    <div className="t-list-item-subtitle">
-                                                        <span>Plate: <strong style={{ color: '#334155' }}>{ticket.licensePlate}</strong></span>
-                                                        <span className="t-list-item-meta">{ticket.floorName} — {ticket.slotCode}</span>
-                                                        <span style={{ color: '#cbd5e1' }}>|</span>
-                                                        <span>In: {fmtDateTime(ticket.entryDate)}</span>
-                                                        {isUnpaid && remainingSeconds > 0 && ticket.payMethod !== 'cash' && (
-                                                            <>
-                                                                <span style={{ color: '#cbd5e1' }}>|</span>
-                                                                <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700 }}>
-                                                                    <span className="ls-pulse-dot" style={{ width: 6, height: 6, background: '#ef4444', boxShadow: '0 0 0 0 rgba(239,68,68,0.6)', animation: 'none' }} />
-                                                                    <span style={{ color: '#ef4444' }}>{mm}:{ss} (Chờ thanh toán QR)</span>
-                                                                </span>
-                                                            </>
-                                                        )}
-                                                        {isUnpaid && ticket.payMethod === 'cash' && (
-                                                            <>
-                                                                <span style={{ color: '#cbd5e1' }}>|</span>
-                                                                <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, color: '#d97706', fontSize: 12 }}>
-                                                                    🎫 Pay at exit
-                                                                </span>
-                                                            </>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div className="t-list-item-right">
-                                                <span
-                                                    className={`t-badge ${isUnpaid ? 'unpaid' : ''}`}
-                                                    style={
-                                                        isNoShow
-                                                            ? { background: '#f1f5f9', color: '#64748b', border: '1px solid #cbd5e1' }
-                                                            : (isUnpaid && ticket.payMethod === 'cash')
-                                                                ? { background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a' }
-                                                                : {}
-                                                    }
-                                                >
-                                                    {isNoShow ? 'VÉ QUÁ GIỜ' : (isUnpaid && ticket.payMethod === 'cash' ? 'PAY AT COUNTER' : (isUnpaid ? 'PENDING' : 'PAID'))}
-                                                </span>
-                                                {!isNoShow && (
-                                                    <button className="t-list-item-btn" onClick={(e) => { e.stopPropagation(); setSelectedTicket(ticket); }}>View Ticket</button>
-                                                )}
-                                                {isNoShow && (
-                                                    <>
-                                                        <span style={{ fontSize: '12px', fontWeight: 600, color: '#ef4444' }}>Đã huỷ</span>
-                                                        <button 
-                                                            className="t-delete-btn" 
-                                                            onClick={(e) => { e.stopPropagation(); handleHideTicket(ticket.receiptId); }}
-                                                            title="Ẩn vé quá hạn"
-                                                        >
-                                                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                                                <line x1="18" y1="6" x2="6" y2="18"></line>
-                                                                <line x1="6" y1="6" x2="18" y2="18"></line>
-                                                            </svg>
-                                                        </button>
-                                                    </>
-                                                )}
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-
-                            {/* ── Ticket Detail Modal ── */}
-                            {selectedTicket && (() => {
-                                const ticket = selectedTicket;
-                                return (
-                                    <div className="t-modal-overlay" onClick={() => setSelectedTicket(null)}>
-                                        <div className="t-modal-content" onClick={e => e.stopPropagation()}>
-                                            <button className="t-modal-close-btn" onClick={() => setSelectedTicket(null)}>×</button>
-                                            <div className="t-card">
-                                                <div className="t-card-top">
-                                                    <div className="t-card-header">
-                                                        <h3 className="t-spot-title">{ticket.spot.title}</h3>
-                                                        <span className={`t-badge ${ticket.paymentStatus !== 'paid' ? 'unpaid' : ''}`}>
-                                                            {ticket.paymentStatus !== 'paid' ? 'PENDING' : 'PAID'}
-                                                        </span>
-                                                    </div>
-
-                                                    <div className="t-info-grid">
-                                                        <div className="t-info-item">
-                                                            <span className="t-info-label">License Plate</span>
-                                                            <span className="t-info-value" style={{ fontFamily: 'monospace' }}>{ticket.licensePlate}</span>
-                                                        </div>
-                                                        <div className="t-info-item">
-                                                            <span className="t-info-label">Vehicle Type</span>
-                                                            <span className="t-info-value">
-                                                                {getVehicleEmoji(ticket.vehicleType)} {ticket.vehicleType}
-                                                            </span>
-                                                        </div>
-                                                        <div className="t-info-item">
-                                                            <span className="t-info-label">Floor / Slot</span>
-                                                            <span className="t-info-value highlight">
-                                                                {ticket.floorName} — {ticket.slotCode}
-                                                            </span>
-                                                        </div>
-                                                        <div className="t-info-item">
-                                                            <span className="t-info-label">Payment Method</span>
-                                                            <span className="t-info-value">
-                                                                {getPayMethodLabel(ticket.payMethod)}
-                                                            </span>
-                                                        </div>
-                                                        <div className="t-info-item">
-                                                            <span className="t-info-label">Entry Time</span>
-                                                            <span className="t-info-value" style={{ fontSize: '11px' }}>
-                                                                {fmtDateTime(ticket.entryDate)}
-                                                            </span>
-                                                        </div>
-                                                        <div className="t-info-item">
-                                                            <span className="t-info-label">Exit Time</span>
-                                                            <span className="t-info-value" style={{ fontSize: '11px' }}>
-                                                                {fmtDateTime(ticket.exitTime)}
-                                                            </span>
-                                                        </div>
-                                                    </div>
-
-                                                    <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #f1f5f9', paddingTop: '12px', fontSize: '12px' }}>
-                                                        <span style={{ color: '#64748b', fontWeight: 600 }}>Total Amount {ticket.payMethod === 'cash' ? 'Due' : 'Paid'}:</span>
-                                                        <span style={{ color: ticket.payMethod === 'cash' ? '#d97706' : '#10b981', fontWeight: 800 }}>{fmtVND(ticket.totalAmount)}</span>
-                                                    </div>
-                                                </div>
-
-                                                <div className="t-card-bottom">
-                                                    <p className="t-qr-label"> Scan to Enter</p>
-                                                    <div 
-                                                        className="t-qr-container" 
-                                                        id={`qr-svg-${ticket.receiptId}`}
-                                                        onClick={() => qrTokens[ticket.receiptId] && setZoomedQr(qrTokens[ticket.receiptId])}
-                                                        title="Click to enlarge"
-                                                    >
-                                                        {qrTokens[ticket.receiptId] ? (
-                                                            <QRCodeSVG
-                                                                value={qrTokens[ticket.receiptId]}
-                                                                size={160}
-                                                                level="L"
-                                                                includeMargin={false}
-                                                                style={{ display: 'block', margin: 'auto' }}
-                                                            />
-                                                        ) : (
-                                                            <div style={{
-                                                                width: 148, height: 148,
-                                                                background: 'linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%)',
-                                                                backgroundSize: '200% 100%',
-                                                                animation: 'shimmer 1.4s infinite',
-                                                                borderRadius: 8
-                                                            }} />
-                                                        )}
-                                                    </div>
-
-                                                    {qrTokens[ticket.receiptId] && (
-                                                        <button
-                                                            className="t-download-btn"
-                                                            onClick={() => downloadQR(ticket.receiptId, ticket.licensePlate)}
-                                                            title="Download QR as PNG"
-                                                        >
-                                                            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                                                                <polyline points="7 10 12 15 17 10" />
-                                                                <line x1="12" y1="15" x2="12" y2="3" />
-                                                            </svg>
-                                                            Download QR
-                                                        </button>
-                                                    )}
-
-                                                    <p className="t-qr-expiry">
-                                                        ⏱ Valid for 24h &nbsp;·&nbsp; Show to staff at gate
-                                                    </p>
-                                                    <div className="t-receipt-id">ID: {ticket.receiptId}</div>
-
-                                                    <button
-                                                        className="t-action-btn"
-                                                        onClick={() => handleRemoveTicket(ticket.receiptId, ticket.bookingId)}
-                                                    >
-                                                        Cancel Booking
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </div>
+                            {/* ── SECTION 2: Upcoming Bookings (localStorage tickets) ── */}
+                            <div className="t-section-heading">
+                                <span className="t-section-title"> Upcoming Bookings</span>
+                                {bookingsLoading && (
+                                    <div className="ls-loading" style={{ marginTop: 10 }}>
+                                        <div className="ls-spinner" />
+                                        Loading tickets...
                                     </div>
-                                );
-                            })()}
-                        </>
-                    )}
+                                )}
+
+                                {!bookingsLoading && hasTickets && (
+                                    <span className="t-section-count">{visibleTickets.length} ticket{visibleTickets.length !== 1 ? 's' : ''}</span>
+                                )}
+                            </div>
+
+                            {!hasTickets ? (
+                                isEmpty ? (
+                                    <div className="t-empty-card">
+                                        <span className="t-empty-icon">🎫</span>
+                                        <h2 className="t-empty-title">No Active Tickets</h2>
+                                        <p className="t-empty-desc">You don't have any booked slots yet. Book a parking slot at one of our locations to get started.</p>
+                                        <button className="t-empty-btn" onClick={() => navigate('/booking')}>
+                                            Book a Slot Now
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div style={{
+                                        background: 'white', borderRadius: 14, border: '1.5px dashed #e2e8f0',
+                                        padding: '20px 24px',
+                                        display: 'flex', alignItems: 'center', gap: 14,
+                                        color: '#94a3b8', fontSize: 14, fontWeight: 600,
+                                    }}>
+                                        <span style={{ fontSize: 24 }}>📭</span>
+                                        <span>No upcoming bookings.{' '}
+                                            <span
+                                                style={{ color: '#2563eb', cursor: 'pointer', textDecoration: 'underline' }}
+                                                onClick={() => navigate('/booking')}
+                                            >Book now</span>
+                                        </span>
+                                    </div>
+                                )
+                            ) : (
+                                <>
+                                    <div className="t-list">
+                                        {visibleTickets.map(ticket => {
+                                            const isPaid = ticket.paymentStatus === 'paid';
+                                            const isUnpaid = !isPaid;
+                                            let remainingSeconds = 0;
+                                            if (isUnpaid && ticket.createdAt) {
+                                                const expiryTime = new Date(ticket.createdAt).getTime() + 10 * 60 * 1000;
+                                                remainingSeconds = Math.max(0, Math.floor((expiryTime - Date.now()) / 1000));
+                                            }
+                                            const mm = String(Math.floor(remainingSeconds / 60)).padStart(2, '0');
+                                            const ss = String(remainingSeconds % 60).padStart(2, '0');
+                                            const isNoShow = ticket.status === 'no_show';
+
+                                            return (
+                                                <div
+                                                    key={ticket.receiptId}
+                                                    className={`t-list-item ${isNoShow ? 'no-show' : ''}`}
+                                                    onClick={() => !isNoShow && setSelectedTicket(ticket)}
+                                                >
+                                                    <div className="t-list-item-left">
+                                                        <div className="t-list-item-icon">
+                                                            {getVehicleEmoji(ticket.vehicleType)}
+                                                        </div>
+                                                        <div className="t-list-item-info">
+                                                            <h3 className="t-list-item-title">{ticket.spot.title}</h3>
+                                                            <div className="t-list-item-subtitle">
+                                                                <span>Plate: <strong style={{ color: '#334155' }}>{ticket.licensePlate}</strong></span>
+                                                                <span className="t-list-item-meta">{ticket.floorName} — {ticket.slotCode}</span>
+                                                                <span style={{ color: '#cbd5e1' }}>|</span>
+                                                                <span>In: {fmtDateTime(ticket.entryDate)}</span>
+                                                                {isUnpaid && ticket.createdAt && (
+                                                                    <PaymentCountdown createdAt={ticket.createdAt} />
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div className="t-list-item-right">
+                                                        <span
+                                                            className={`t-badge ${isUnpaid ? 'unpaid' : ''}`}
+                                                            style={
+                                                                isNoShow
+                                                                    ? { background: '#f1f5f9', color: '#64748b', border: '1px solid #cbd5e1' }
+                                                                    : {}
+                                                            }
+                                                        >
+                                                            {isNoShow ? 'VÉ QUÁ GIỜ' : (isUnpaid ? 'PENDING' : 'PAID')}
+                                                        </span>
+                                                        {!isNoShow && (
+                                                            <button className="t-list-item-btn" onClick={(e) => { e.stopPropagation(); setSelectedTicket(ticket); }}>View Ticket</button>
+                                                        )}
+                                                        {isNoShow && (
+                                                            <>
+                                                                <span style={{ fontSize: '12px', fontWeight: 600, color: '#ef4444' }}>Đã huỷ</span>
+                                                                <button
+                                                                    className="t-delete-btn"
+                                                                    onClick={(e) => { e.stopPropagation(); handleHideTicket(ticket.receiptId); }}
+                                                                    title="Ẩn vé quá hạn"
+                                                                >
+                                                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                                                                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                                                                    </svg>
+                                                                </button>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+
+                                    {/* ── Ticket Detail Modal ── */}
+                                    {selectedTicket && (() => {
+                                        const ticket = selectedTicket;
+                                        return (
+                                            <div className="t-modal-overlay" onClick={() => setSelectedTicket(null)}>
+                                                <div className="t-modal-content" onClick={e => e.stopPropagation()}>
+                                                    <button className="t-modal-close-btn" onClick={() => setSelectedTicket(null)}>×</button>
+                                                    <div className="t-card">
+                                                        <div className="t-card-top">
+                                                            <div className="t-card-header">
+                                                                <h3 className="t-spot-title">{ticket.spot.title}</h3>
+                                                                <span className={`t-badge ${ticket.paymentStatus !== 'paid' ? 'unpaid' : ''}`}>
+                                                                    {ticket.paymentStatus !== 'paid' ? 'PENDING' : 'PAID'}
+                                                                </span>
+                                                            </div>
+
+                                                            <div className="t-info-grid">
+                                                                <div className="t-info-item">
+                                                                    <span className="t-info-label">License Plate</span>
+                                                                    <span className="t-info-value" style={{ fontFamily: 'monospace' }}>{ticket.licensePlate}</span>
+                                                                </div>
+                                                                <div className="t-info-item">
+                                                                    <span className="t-info-label">Vehicle Type</span>
+                                                                        <span className="t-info-value">
+                                                                            {ticket.vehicleType || '—'}
+                                                                        </span>
+                                                                </div>
+                                                                <div className="t-info-item">
+                                                                    <span className="t-info-label">Floor / Slot</span>
+                                                                    <span className="t-info-value highlight">
+                                                                        {ticket.floorName} — {ticket.slotCode}
+                                                                    </span>
+                                                                </div>
+                                                                <div className="t-info-item">
+                                                                    <span className="t-info-label">Payment Method</span>
+                                                                    <span className="t-info-value">
+                                                                        {getPayMethodLabel(ticket.payMethod)}
+                                                                    </span>
+                                                                </div>
+                                                                <div className="t-info-item">
+                                                                    <span className="t-info-label">Entry Time</span>
+                                                                    <span className="t-info-value" style={{ fontSize: '11px' }}>
+                                                                        {fmtDateTime(ticket.entryDate)}
+                                                                    </span>
+                                                                </div>
+                                                                <div className="t-info-item">
+                                                                    <span className="t-info-label">Exit Time</span>
+                                                                    <span className="t-info-value" style={{ fontSize: '11px' }}>
+                                                                        {fmtDateTime(ticket.exitTime)}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+
+                                                            <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #f1f5f9', paddingTop: '12px', fontSize: '12px' }}>
+                                                                <span style={{ color: '#64748b', fontWeight: 600 }}>Total Amount {ticket.paymentStatus === 'paid' ? 'Paid' : 'Due'}:</span>
+                                                                <span style={{ color: ticket.paymentStatus === 'paid' ? '#10b981' : '#d97706', fontWeight: 800 }}>{fmtVND(ticket.totalAmount)}</span>
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="t-card-bottom">
+                                                            {ticket.paymentStatus === 'paid' ? (
+                                                                <>
+                                                                    <p className="t-qr-label"> Scan to Enter</p>
+                                                                    <div
+                                                                        className="t-qr-container"
+                                                                        id={`qr-svg-${ticket.receiptId}`}
+                                                                        onClick={() => qrTokens[ticket.receiptId] && setZoomedQr(qrTokens[ticket.receiptId])}
+                                                                        title="Click to enlarge"
+                                                                    >
+                                                                        {qrTokens[ticket.receiptId] ? (
+                                                                            <QRCodeSVG
+                                                                                value={qrTokens[ticket.receiptId]}
+                                                                                size={160}
+                                                                                level="L"
+                                                                                includeMargin={false}
+                                                                                style={{ display: 'block', margin: 'auto' }}
+                                                                            />
+                                                                        ) : (
+                                                                            <div style={{
+                                                                                width: 148, height: 148,
+                                                                                background: 'linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%)',
+                                                                                backgroundSize: '200% 100%',
+                                                                                animation: 'shimmer 1.4s infinite',
+                                                                                borderRadius: 8
+                                                                            }} />
+                                                                        )}
+                                                                    </div>
+
+                                                                    {qrTokens[ticket.receiptId] && (
+                                                                        <button
+                                                                            className="t-download-btn"
+                                                                            onClick={() => downloadQR(ticket.receiptId, ticket.licensePlate)}
+                                                                            title="Download QR as PNG"
+                                                                        >
+                                                                            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                                                                <polyline points="7 10 12 15 17 10" />
+                                                                                <line x1="12" y1="15" x2="12" y2="3" />
+                                                                            </svg>
+                                                                            Download QR
+                                                                        </button>
+                                                                    )}
+
+                                                                    <p className="t-qr-expiry">
+                                                                        ⏱ Valid for 24h &nbsp;·&nbsp; Show to staff at gate
+                                                                    </p>
+                                                                </>
+                                                            ) : (
+                                                                <div style={{ textAlign: 'center', padding: '24px 16px', background: '#fffbeb', borderRadius: 12, border: '1.5px dashed #fcd34d', marginBottom: 12 }}>
+                                                                        <div style={{ fontSize: 32, marginBottom: 8 }}>⏳</div>
+                                                                        <div style={{ fontWeight: 700, fontSize: 14, color: '#92400e' }}>Awaiting Payment</div>
+                                                                        <div style={{ fontSize: 12, color: '#b45309', marginTop: 4, marginBottom: 14 }}>Your QR check-in code will appear after successful payment</div>
+                                                                        <button
+                                                                            onClick={() => {
+                                                                                setSelectedTicket(null);
+                                                                                navigate('/checkout', {
+                                                                                    state: {
+                                                                                        isBooking: true,
+                                                                                        bookingId: ticket.bookingId,
+                                                                                        bookingCode: ticket.receiptId,
+                                                                                        parkingLotName: ticket.spot?.title,
+                                                                                        licensePlate: ticket.licensePlate,
+                                                                                        vehicleTypeName: ticket.vehicleType,
+                                                                                        floorName: ticket.floorName,
+                                                                                        slotCode: ticket.slotCode,
+                                                                                        entryDate: ticket.entryDate,
+                                                                                        exitDate: ticket.exitTime,
+                                                                                        totalAmount: ticket.totalAmount,
+                                                                                    }
+                                                                                });
+                                                                            }}
+                                                                            style={{
+                                                                                background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
+                                                                                color: '#fff',
+                                                                                border: 'none',
+                                                                                borderRadius: 10,
+                                                                                padding: '10px 24px',
+                                                                                fontWeight: 700,
+                                                                                fontSize: 14,
+                                                                                cursor: 'pointer',
+                                                                                display: 'inline-flex',
+                                                                                alignItems: 'center',
+                                                                                gap: 8,
+                                                                                boxShadow: '0 4px 12px rgba(37,99,235,0.35)',
+                                                                                transition: 'all 0.2s',
+                                                                            }}
+                                                                        >
+                                                                            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                                                <rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect>
+                                                                                <line x1="1" y1="10" x2="23" y2="10"></line>
+                                                                            </svg>
+                                                                            Pay Now
+                                                                        </button>
+                                                                    </div>
+                                                                )}
+
+                                                            <div className="t-receipt-id">ID: {ticket.receiptId}</div>
+
+                                                            <button
+                                                                className="t-action-btn"
+                                                                onClick={() => handleRemoveTicket(ticket.receiptId, ticket.bookingId)}
+                                                            >
+                                                                Cancel Booking
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
+                                </>
+                            )}
                         </>
                     )}
                 </div>

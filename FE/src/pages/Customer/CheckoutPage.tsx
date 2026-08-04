@@ -63,12 +63,7 @@ const QrCodeIcon = ({ size = 24 }: { size?: number }) => (
         <rect width="5" height="5" x="3" y="3" rx="1" /><rect width="5" height="5" x="16" y="3" rx="1" /><rect width="5" height="5" x="3" y="16" rx="1" /><path d="M21 16h-3a2 2 0 0 0-2 2v3" /><path d="M21 21v.01" /><path d="M12 7v3a2 2 0 0 1-2 2H7" /><path d="M3 12h.01" /><path d="M12 3h.01" /><path d="M12 16v.01" /><path d="M16 12h1" /><path d="M21 12v.01" /><path d="M12 21v-1" />
     </svg>
 );
-const CashIcon = ({ size = 24 }) => (
-    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="1" y="4" width="22" height="16" rx="2" />
-        <circle cx="12" cy="12" r="3" /><path d="M5 12h.01M19 12h.01" />
-    </svg>
-);
+
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const formatCard = (v) => v.replace(/\D/g, '').slice(0, 16).replace(/(.{4})/g, '$1 ').trim();
@@ -155,7 +150,7 @@ const CheckoutPage = () => {
                 parkingLotName: typeof b.parkingLot === 'object' ? b.parkingLot?.name : data.parkingLotName,
                 floorName: floorObj ? (floorObj.name || `Floor ${floorObj.floorNumber}`) : '—',
                 slotCode: slotObj?.slotCode || '—',
-                vehicleTypeName: vtObj?.name || '—',
+                vehicleTypeName: vtObj?.code || data.vehicleTypeName || '—',
                 entryDate: parsedEntry,
                 exitDate: parsedExit,
                 totalAmount: b.estimatedFee ?? data.totalAmount ?? 0,
@@ -258,8 +253,6 @@ const CheckoutPage = () => {
 
     // ── Countdown timer ───────────────────────────────────────────────────────
     useEffect(() => {
-        // Cash payment doesn't need a countdown — customer pays at counter on arrival
-        if (payMethod === 'cash') return;
         // For isBooking flow, count down even before polling (show remaining booking window)
         const shouldCount = polling || (data.isBooking && countdown > 0 && !countdownExpired);
         if (!shouldCount) {
@@ -292,11 +285,9 @@ const CheckoutPage = () => {
     }, [countdown, data.isBooking]);
 
     // Auto-cancel booking when countdown expires (only if it was counting down while on this page)
-    // NOTE: Don't cancel if payMethod is 'cash' — customer will pay at counter on arrival
     useEffect(() => {
         if (!data.isBooking || !bookingId || !countdownExpired) return;
         if (!countdownStartedPositiveRef.current) return; // was already expired on arrival — BookingPage handled it
-        if (payMethod === 'cash') return; // cash: no timeout cancel, booking stays alive
         bookingService.cancel(bookingId, 'Payment timeout').catch(() => { });
         navigate('/booking', { replace: true });
     }, [countdownExpired, data.isBooking, bookingId, navigate, payMethod]);
@@ -426,7 +417,7 @@ const CheckoutPage = () => {
         setProcessing(true);
         setTimeout(() => {
             setProcessing(false);
-            // For booking with cash: merge bookingDetail so success page has all fields
+            // Merge bookingDetail so success page has all fields
             const stateToPass = data.isBooking && bookingDetail
                 ? {
                     ...data,
@@ -443,7 +434,7 @@ const CheckoutPage = () => {
         }, 1800);
     };
 
-    const formatTime = (d: any) => d.toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true });
+    const formatTime = (d: any) => d.toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
     const formatHMS = (s) => {
         const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
         return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
@@ -453,12 +444,8 @@ const CheckoutPage = () => {
 
     const allPayMethods = [
         { id: 'bank_transfer', label: 'Bank Transfer (VietQR)', icon: <QrCodeIcon size={22} />, color: '#0ea5e9' },
-        { id: 'cash', label: 'Pay at Counter', icon: <CashIcon size={22} />, color: '#10b981' },
     ];
-    // Monthly pass can only be paid via bank transfer (no physical counter)
-    const payMethods = data.isMonthlyPass
-        ? allPayMethods.filter(m => m.id === 'bank_transfer')
-        : allPayMethods;
+    const payMethods = allPayMethods;
 
     return (
         <>

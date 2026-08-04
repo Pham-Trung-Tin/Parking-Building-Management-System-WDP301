@@ -86,7 +86,7 @@ const fmtVND = (amount: number) =>
     new Intl.NumberFormat('vi-VN').format(Math.round(amount)) + ' ₫';
 
 const fmtDateTime = (d: Date) =>
-    `${d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })} ${d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}`;
+    `${d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })} ${d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false })}`;
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 const SessionPage = () => {
@@ -117,7 +117,7 @@ const SessionPage = () => {
     // ── Surcharge payment modal states ────────────────────────────────────────
     const [showSurchargeModal, setShowSurchargeModal] = useState(false);
     const [surchargePhase, setSurchargePhase] = useState<'method' | 'qr'>('method');
-    const [surchargePayMethod, setSurchargePayMethod] = useState<'bank_transfer' | 'momo' | 'cash'>('bank_transfer');
+    const [surchargePayMethod, setSurchargePayMethod] = useState<'bank_transfer'>('bank_transfer');
     const [surchargeBankInfo, setSurchargeBankInfo] = useState<any>(null);
     const [surchargePolling, setSurchargePolling] = useState(false);
     const [surchargeProcessing, setSurchargeProcessing] = useState(false);
@@ -469,24 +469,11 @@ const SessionPage = () => {
         if (!session?._id) return;
         setSurchargeProcessing(true);
         try {
-            if (surchargePayMethod === 'bank_transfer') {
-                const paymentRes = await paymentService.initiateBankTransfer(session._id);
-                const paymentInfo = (paymentRes as any).data || paymentRes;
-                setSurchargeBankInfo(paymentInfo);
-                setSurchargePhase('qr');
-                setSurchargePolling(true);
-            } else {
-                // Cash / MoMo: fallback to old checkout page
-                setShowSurchargeModal(false);
-                navigate('/checkout', {
-                    state: {
-                        spot, vehicleType: vehicleTypeData, floor: floorData, zone: zoneData,
-                        slot: slotData, session, sessionId,
-                        entryDate: entryTime.toISOString(), elapsed,
-                        totalAmount: amountDue, currentFee, advancePayment, hourlyRate, licensePlate,
-                    }
-                });
-            }
+            const paymentRes = await paymentService.initiateBankTransfer(session._id);
+            const paymentInfo = (paymentRes as any).data || paymentRes;
+            setSurchargeBankInfo(paymentInfo);
+            setSurchargePhase('qr');
+            setSurchargePolling(true);
         } catch (err) {
             console.error('Failed to initiate surcharge payment', err);
         } finally {
@@ -1074,7 +1061,7 @@ const SessionPage = () => {
                                     {/* Pricing Summary */}
                                     <div className="pricing-details">
                                         <div className="pricing-row">
-                                            <span className="pricing-label">Surcharge (4-hour block)</span>
+                                            <span className="pricing-label">Day Surcharge (4-hour block)</span>
                                             <span className="pricing-value" style={{ color: '#2563eb' }}>{fmtVND(blockRate)} / block</span>
                                         </div>
                                         <div className="pricing-row">
@@ -1274,8 +1261,6 @@ const SessionPage = () => {
                                 <div style={{ padding: '20px 28px' }}>
                                     {[
                                         { id: 'bank_transfer', icon: '🏦', label: 'Bank Transfer (VietQR)', sub: 'Scan VietQR code to pay via Banking App' },
-                                        { id: 'momo', icon: '🟣', label: 'MoMo Wallet', sub: 'Pay at parking booth before exit' },
-                                        { id: 'cash', icon: '💵', label: 'Pay at Counter', sub: 'Pay cash at parking booth before exit' },
                                     ].map(m => (
                                         <div
                                             key={m.id}

@@ -263,11 +263,8 @@ const LoginPage = () => {
             <GoogleIcon />
             Continue with Google
           </button>
-          <button className="flex items-center justify-center gap-2.5 bg-white border border-slate-300 py-3.5 rounded-md text-[15px] font-semibold text-slate-900 cursor-pointer transition-all duration-200 hover:bg-slate-50 hover:border-slate-400">
-            <AppleIcon />
-            Continue with Apple
-          </button>
         </div>
+
 
         {/* Terms */}
         <div className="text-xs text-slate-500 leading-[1.6]">

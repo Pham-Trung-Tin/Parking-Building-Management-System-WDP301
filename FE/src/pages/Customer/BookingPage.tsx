@@ -133,12 +133,7 @@ const ZaloPayIcon = () => (
         <text x="12" y="15" textAnchor="middle" fill="white" fontSize="6" fontWeight="900" fontFamily="sans-serif">ZaloPay</text>
     </svg>
 );
-const CashIcon = ({ size = 24 }: { size?: number }) => (
-    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="1" y="4" width="22" height="16" rx="2" />
-        <circle cx="12" cy="12" r="3" /><path d="M5 12h.01M19 12h.01" />
-    </svg>
-);
+
 const QrCodeIcon = ({ size = 24 }: { size?: number }) => (
     <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <rect width="5" height="5" x="3" y="3" rx="1" /><rect width="5" height="5" x="16" y="3" rx="1" /><rect width="5" height="5" x="3" y="16" rx="1" /><path d="M21 16h-3a2 2 0 0 0-2 2v3" /><path d="M21 21v.01" /><path d="M12 7v3a2 2 0 0 1-2 2H7" /><path d="M3 12h.01" /><path d="M12 3h.01" /><path d="M12 16v.01" /><path d="M16 12h1" /><path d="M21 12v.01" /><path d="M12 21v-1" />
@@ -582,7 +577,7 @@ const BookingPage = () => {
     });
     const [exitDate, setExitDate] = useState(() => {
         const d = new Date();
-        d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+        d.setMinutes(d.getMinutes() + 5 - d.getTimezoneOffset());
         d.setHours(d.getHours() + 4);
         return d.toISOString().slice(0, 16);
     });
@@ -620,20 +615,18 @@ const BookingPage = () => {
     };
 
     const handleSetExitDate = (h: number, m: number) => {
-        const dateStr = exitDate.slice(0, 10);
+        let dateStr = exitDate.slice(0, 10); // Đổi thành let để có thể gán lại
         let finalH = h;
         let finalM = m;
-        const proposed = new Date(`${dateStr}T${String(finalH).padStart(2, '0')}:${String(finalM).padStart(2, '0')}`);
+        let proposed = new Date(`${dateStr}T${String(finalH).padStart(2, '0')}:${String(finalM).padStart(2, '0')}`);
         const entry = new Date(entryDate);
         if (proposed <= entry) {
-            finalH = entry.getHours() + 4;
-            finalM = entry.getMinutes();
-            if (finalH >= 24) {
-                const next = new Date(entry.getTime() + 4 * 3600000);
-                const iso = next.toISOString();
-                setExitDate(`${iso.slice(0, 10)}T${String(next.getHours()).padStart(2, '0')}:${String(next.getMinutes()).padStart(2, '0')}`);
-                return;
-            }
+            // Tự động đẩy sang ngày hôm sau
+            proposed.setDate(proposed.getDate() + 1);
+            const y = proposed.getFullYear();
+            const mo = String(proposed.getMonth() + 1).padStart(2, '0');
+            const d = String(proposed.getDate()).padStart(2, '0');
+            dateStr = `${y}-${mo}-${d}`;
         }
         setExitDate(`${dateStr}T${String(finalH).padStart(2, '0')}:${String(finalM).padStart(2, '0')}`);
     };
@@ -644,7 +637,7 @@ const BookingPage = () => {
         const proposedEntry = new Date(`${entryDate.slice(0, 10)}T${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
         const currentExit = new Date(exitDate);
         if (proposedEntry >= currentExit) {
-            const nextExit = new Date(proposedEntry.getTime() + 4 * 3600000);
+            const nextExit = new Date(proposedEntry.getTime() + 1 * 3600000); // Tự động đẩy lên 1 tiếng thay vì 4 tiếng
             const iso = nextExit.toISOString();
             setExitDate(`${iso.slice(0, 10)}T${String(nextExit.getHours()).padStart(2, '0')}:${String(nextExit.getMinutes()).padStart(2, '0')}`);
         }
@@ -793,7 +786,7 @@ const BookingPage = () => {
 
     // ── Integrated Checkout States ──
     const [checkoutPhase, setCheckoutPhase] = useState<'review' | 'payment' | 'qr'>('review');
-    const [payMethod, setPayMethod] = useState<'bank_transfer' | 'cash'>('bank_transfer');
+    const [payMethod, setPayMethod] = useState<'bank_transfer'>('bank_transfer');
     const [checkoutProcessing, setCheckoutProcessing] = useState(false);
     const [checkoutErrors, setCheckoutErrors] = useState<Record<string, string>>({});
 
@@ -924,7 +917,7 @@ const BookingPage = () => {
                     bookingCode: bookingObj?.bookingCode,
                     parkingLotName: parkingSpot?.title || parkingSpot?.name,
                     licensePlate: formatPlate(licensePlate),
-                    vehicleTypeName: vehicleType?.name,
+                    vehicleTypeName: vehicleType?.code,
                     floorName: selectedFloor?.name || `Floor ${selectedFloor?.floorNumber}`,
                     slotCode: selectedSlot?.slotCode,
                     entryDate,
@@ -3103,7 +3096,6 @@ const BookingPage = () => {
                 const grandTotal = Math.round(estimatedPrice);
                 const payMethods = [
                     { id: 'bank_transfer', label: 'Bank Transfer (VietQR)', icon: <QrCodeIcon size={22} />, color: '#2563eb' },
-                    { id: 'cash', label: 'Pay at Counter', icon: <CashIcon size={22} />, color: '#10b981' },
                 ];
                 return (
                     <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget && !checkoutProcessing) setShowConfirmModal(false); }}>
@@ -3218,7 +3210,6 @@ const BookingPage = () => {
                                                     <div className="pay-method-name">{m.label}</div>
                                                     <div className="pay-method-sub">
                                                         {m.id === 'bank_transfer' && 'Scan VietQR code to pay via Banking App'}
-                                                        {m.id === 'cash' && 'Pay at parking booth before exit'}
                                                     </div>
                                                 </div>
                                                 <div className="pay-method-radio">
@@ -3230,23 +3221,6 @@ const BookingPage = () => {
 
 
 
-                                    {/* Cash instructions */}
-                                    {payMethod === 'cash' && (
-                                        <div style={{
-                                            marginTop: 20, padding: '16px',
-                                            background: 'linear-gradient(135deg,#f0fdf4,#dcfce7)',
-                                            borderRadius: 14,
-                                            border: '1px solid #86efac',
-                                            textAlign: 'left'
-                                        }}>
-                                            <div style={{ fontSize: 13, fontWeight: 600, color: '#166534', lineHeight: 1.6 }}>
-                                                <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 6 }}>📋 Cash Payment Guidelines</div>
-                                                <div>1. Attendant will verify your entry ticket on Floor G.</div>
-                                                <div>2. Show booking confirmation details upon arrival.</div>
-                                                <div>3. Pay Attendant <strong>{fmtVND(grandTotal)}</strong> in cash.</div>
-                                            </div>
-                                        </div>
-                                    )}
 
                                     <div className="modal-total" style={{ marginTop: '20px' }}>
                                         <div>
@@ -3522,12 +3496,18 @@ const BookingPage = () => {
                                 {calDays.map((cell, idx) => {
                                     const cellDate = new Date(cell.year, cell.month, cell.day);
                                     const isPast = isBeforeDay(cellDate, todayOnly);
+                                    
+                                    const maxAdvanceDate = new Date(todayOnly);
+                                    maxAdvanceDate.setDate(maxAdvanceDate.getDate() + 7);
+                                    const isTooFar = cellDate > maxAdvanceDate;
+                                    
+                                    const isDisabled = isPast || isTooFar;
 
                                     const isSelected = isSameDay(cellDate, activeInput === 'from' ? tempFromDate : tempToDate);
 
                                     let cellClass = 'cal-day-cell';
                                     if (!cell.isCurrentMonth) cellClass += ' other-month';
-                                    if (isPast) cellClass += ' disabled';
+                                    if (isDisabled) cellClass += ' disabled';
                                     else if (isSelected) cellClass += ' range-start-end-same';
 
                                     return (
@@ -3535,7 +3515,7 @@ const BookingPage = () => {
                                             key={idx}
                                             className={cellClass}
                                             onClick={() => {
-                                                if (isPast) return;
+                                                if (isDisabled) return;
                                                 const dateStr = `${cellDate.getFullYear()}-${String(cellDate.getMonth() + 1).padStart(2, '0')}-${String(cellDate.getDate()).padStart(2, '0')}`;
 
                                                 if (activeInput === 'from') {
@@ -3548,7 +3528,7 @@ const BookingPage = () => {
                                                     const proposedEntry = new Date(`${dateStr}T${String(selHour).padStart(2, '0')}:${String(selMin).padStart(2, '0')}`);
                                                     const currentExit = new Date(exitDate);
                                                     if (proposedEntry >= currentExit) {
-                                                        const nextExit = new Date(proposedEntry.getTime() + 4 * 3600000);
+                                                        const nextExit = new Date(proposedEntry.getTime() + 1 * 3600000); // Tự động đẩy lên 1 tiếng thay vì 4 tiếng
                                                         const iso = nextExit.toISOString();
                                                         setExitDate(`${iso.slice(0, 10)}T${String(nextExit.getHours()).padStart(2, '0')}:${String(nextExit.getMinutes()).padStart(2, '0')}`);
                                                         setTempToDate(nextExit);
@@ -3697,7 +3677,7 @@ const BookingPage = () => {
                                         <div style={{ flex: 1, overflowY: 'auto', borderRight: '1.5px solid #e2e8f0' }} className="custom-scrollbar">
                                             <div style={{ padding: '10px 0', textAlign: 'center', fontSize: 12, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em', borderBottom: '1.5px solid #f1f5f9', position: 'sticky', top: 0, background: '#f8fafc', zIndex: 2 }}>Hour</div>
                                             {Array.from({ length: 24 }).map((_, i) => {
-                                                const isPastHour = isSameDayAsEntry && i < minHour;
+                                                const isPastHour = false; // Không block giờ nào cả
                                                 return (
                                                     <div key={i}
                                                         id={`exit-picker-hour-${i}`}
@@ -3706,12 +3686,12 @@ const BookingPage = () => {
                                                         }}
                                                         style={{
                                                             padding: '14px 0', textAlign: 'center',
-                                                            cursor: isPastHour ? 'not-allowed' : 'pointer',
+                                                            cursor: 'pointer',
                                                             background: exitSelHour === i ? '#2563eb' : 'white',
                                                             color: exitSelHour === i ? 'white' : '#334155',
                                                             fontWeight: exitSelHour === i ? 800 : 500,
                                                             fontSize: 18,
-                                                            opacity: isPastHour ? 0.3 : 1,
+                                                            opacity: 1,
                                                             transition: 'background 0.2s'
                                                         }}
                                                     >
@@ -3723,7 +3703,7 @@ const BookingPage = () => {
                                         <div style={{ flex: 1, overflowY: 'auto' }} className="custom-scrollbar">
                                             <div style={{ padding: '10px 0', textAlign: 'center', fontSize: 12, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em', borderBottom: '1.5px solid #f1f5f9', position: 'sticky', top: 0, background: '#f8fafc', zIndex: 2 }}>Minute</div>
                                             {Array.from({ length: 60 }).map((_, m) => {
-                                                const isPastMin = isSameDayAsEntry && exitSelHour === minHour && m < minMin;
+                                                const isPastMin = false; // Không block phút nào cả
                                                 return (
                                                     <div key={m}
                                                         id={`exit-picker-min-${m}`}
@@ -3735,12 +3715,12 @@ const BookingPage = () => {
                                                         }}
                                                         style={{
                                                             padding: '14px 0', textAlign: 'center',
-                                                            cursor: isPastMin ? 'not-allowed' : 'pointer',
+                                                            cursor: 'pointer',
                                                             background: exitSelMin === m ? '#2563eb' : 'white',
                                                             color: exitSelMin === m ? 'white' : '#334155',
                                                             fontWeight: exitSelMin === m ? 800 : 500,
                                                             fontSize: 18,
-                                                            opacity: isPastMin ? 0.3 : 1,
+                                                            opacity: 1,
                                                             transition: 'background 0.2s'
                                                         }}
                                                     >
