@@ -577,7 +577,7 @@ const BookingPage = () => {
     });
     const [exitDate, setExitDate] = useState(() => {
         const d = new Date();
-        d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+        d.setMinutes(d.getMinutes() + 5 - d.getTimezoneOffset());
         d.setHours(d.getHours() + 4);
         return d.toISOString().slice(0, 16);
     });
@@ -615,20 +615,18 @@ const BookingPage = () => {
     };
 
     const handleSetExitDate = (h: number, m: number) => {
-        const dateStr = exitDate.slice(0, 10);
+        let dateStr = exitDate.slice(0, 10); // Đổi thành let để có thể gán lại
         let finalH = h;
         let finalM = m;
-        const proposed = new Date(`${dateStr}T${String(finalH).padStart(2, '0')}:${String(finalM).padStart(2, '0')}`);
+        let proposed = new Date(`${dateStr}T${String(finalH).padStart(2, '0')}:${String(finalM).padStart(2, '0')}`);
         const entry = new Date(entryDate);
         if (proposed <= entry) {
-            finalH = entry.getHours() + 4;
-            finalM = entry.getMinutes();
-            if (finalH >= 24) {
-                const next = new Date(entry.getTime() + 4 * 3600000);
-                const iso = next.toISOString();
-                setExitDate(`${iso.slice(0, 10)}T${String(next.getHours()).padStart(2, '0')}:${String(next.getMinutes()).padStart(2, '0')}`);
-                return;
-            }
+            // Tự động đẩy sang ngày hôm sau
+            proposed.setDate(proposed.getDate() + 1);
+            const y = proposed.getFullYear();
+            const mo = String(proposed.getMonth() + 1).padStart(2, '0');
+            const d = String(proposed.getDate()).padStart(2, '0');
+            dateStr = `${y}-${mo}-${d}`;
         }
         setExitDate(`${dateStr}T${String(finalH).padStart(2, '0')}:${String(finalM).padStart(2, '0')}`);
     };
@@ -639,7 +637,7 @@ const BookingPage = () => {
         const proposedEntry = new Date(`${entryDate.slice(0, 10)}T${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
         const currentExit = new Date(exitDate);
         if (proposedEntry >= currentExit) {
-            const nextExit = new Date(proposedEntry.getTime() + 4 * 3600000);
+            const nextExit = new Date(proposedEntry.getTime() + 1 * 3600000); // Tự động đẩy lên 1 tiếng thay vì 4 tiếng
             const iso = nextExit.toISOString();
             setExitDate(`${iso.slice(0, 10)}T${String(nextExit.getHours()).padStart(2, '0')}:${String(nextExit.getMinutes()).padStart(2, '0')}`);
         }
@@ -3530,7 +3528,7 @@ const BookingPage = () => {
                                                     const proposedEntry = new Date(`${dateStr}T${String(selHour).padStart(2, '0')}:${String(selMin).padStart(2, '0')}`);
                                                     const currentExit = new Date(exitDate);
                                                     if (proposedEntry >= currentExit) {
-                                                        const nextExit = new Date(proposedEntry.getTime() + 4 * 3600000);
+                                                        const nextExit = new Date(proposedEntry.getTime() + 1 * 3600000); // Tự động đẩy lên 1 tiếng thay vì 4 tiếng
                                                         const iso = nextExit.toISOString();
                                                         setExitDate(`${iso.slice(0, 10)}T${String(nextExit.getHours()).padStart(2, '0')}:${String(nextExit.getMinutes()).padStart(2, '0')}`);
                                                         setTempToDate(nextExit);
@@ -3679,7 +3677,7 @@ const BookingPage = () => {
                                         <div style={{ flex: 1, overflowY: 'auto', borderRight: '1.5px solid #e2e8f0' }} className="custom-scrollbar">
                                             <div style={{ padding: '10px 0', textAlign: 'center', fontSize: 12, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em', borderBottom: '1.5px solid #f1f5f9', position: 'sticky', top: 0, background: '#f8fafc', zIndex: 2 }}>Hour</div>
                                             {Array.from({ length: 24 }).map((_, i) => {
-                                                const isPastHour = isSameDayAsEntry && i < minHour;
+                                                const isPastHour = false; // Không block giờ nào cả
                                                 return (
                                                     <div key={i}
                                                         id={`exit-picker-hour-${i}`}
@@ -3688,12 +3686,12 @@ const BookingPage = () => {
                                                         }}
                                                         style={{
                                                             padding: '14px 0', textAlign: 'center',
-                                                            cursor: isPastHour ? 'not-allowed' : 'pointer',
+                                                            cursor: 'pointer',
                                                             background: exitSelHour === i ? '#2563eb' : 'white',
                                                             color: exitSelHour === i ? 'white' : '#334155',
                                                             fontWeight: exitSelHour === i ? 800 : 500,
                                                             fontSize: 18,
-                                                            opacity: isPastHour ? 0.3 : 1,
+                                                            opacity: 1,
                                                             transition: 'background 0.2s'
                                                         }}
                                                     >
@@ -3705,7 +3703,7 @@ const BookingPage = () => {
                                         <div style={{ flex: 1, overflowY: 'auto' }} className="custom-scrollbar">
                                             <div style={{ padding: '10px 0', textAlign: 'center', fontSize: 12, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em', borderBottom: '1.5px solid #f1f5f9', position: 'sticky', top: 0, background: '#f8fafc', zIndex: 2 }}>Minute</div>
                                             {Array.from({ length: 60 }).map((_, m) => {
-                                                const isPastMin = isSameDayAsEntry && exitSelHour === minHour && m < minMin;
+                                                const isPastMin = false; // Không block phút nào cả
                                                 return (
                                                     <div key={m}
                                                         id={`exit-picker-min-${m}`}
@@ -3717,12 +3715,12 @@ const BookingPage = () => {
                                                         }}
                                                         style={{
                                                             padding: '14px 0', textAlign: 'center',
-                                                            cursor: isPastMin ? 'not-allowed' : 'pointer',
+                                                            cursor: 'pointer',
                                                             background: exitSelMin === m ? '#2563eb' : 'white',
                                                             color: exitSelMin === m ? 'white' : '#334155',
                                                             fontWeight: exitSelMin === m ? 800 : 500,
                                                             fontSize: 18,
-                                                            opacity: isPastMin ? 0.3 : 1,
+                                                            opacity: 1,
                                                             transition: 'background 0.2s'
                                                         }}
                                                     >
