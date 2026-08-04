@@ -40,6 +40,7 @@ import floorService from '../../services/api/floorService';
 import parkingSlotService from '../../services/api/parkingSlotService';
 import bookingService from '../../services/api/bookingService';
 import monthlyPassService from '../../services/api/monthlyPassService';
+import zoneService from '../../services/api/zoneService';
 
 interface BookingData {
   id: string;
@@ -51,6 +52,11 @@ interface BookingData {
   monthlyPassCode?: string;
   isMonthlyPass?: boolean;
   vehicleTypeName?: string;
+  startTime?: string;
+  endTime?: string;
+  isEarlyArrival?: boolean;
+  isSlotOccupied?: boolean;
+  assignedSlotId?: string;
 }
 
 const StaffPage = () => {
@@ -181,6 +187,16 @@ const StaffPage = () => {
   const [modalData, setModalData] = useState<BookingData | null>(null);
   const [showModal, setShowModal] = useState<boolean>(false);
   const [toastMessageQR, setToastMessageQR] = useState<string | null>(null);
+
+  // --- REASSIGN MAP MODAL STATES ---
+  const [showReassignModal, setShowReassignModal] = useState<boolean>(false);
+  const [reassignFloors, setReassignFloors] = useState<any[]>([]);
+  const [reassignZones, setReassignZones] = useState<any[]>([]);
+  const [reassignSlots, setReassignSlots] = useState<any[]>([]);
+  const [selectedReassignFloor, setSelectedReassignFloor] = useState<any | null>(null);
+  const [selectedReassignZone, setSelectedReassignZone] = useState<any | null>(null);
+  const [selectedReassignSlot, setSelectedReassignSlot] = useState<any | null>(null);
+  const [isReassigning, setIsReassigning] = useState(false);
 
   // --- COMMON LOGIC ---
   const handleLogout = () => {
@@ -558,6 +574,12 @@ const StaffPage = () => {
         const bookingRes = await bookingService.getById(safeBookingId);
         const booking = bookingRes.data || bookingRes;
 
+        const bookingLotId = typeof booking.parkingLot === 'object' ? booking.parkingLot._id : booking.parkingLot;
+        if (bookingLotId && defaultLotId && bookingLotId.toString() !== defaultLotId.toString()) {
+          const lotName = typeof booking.parkingLot === 'object' ? booking.parkingLot.name : 'another location';
+          throw new Error(`This booking is valid for ${lotName}, not this building.`);
+        }
+
         // --- Prevent duplicate check-in at scan time ---
         const plate = booking.vehicleInfo?.licensePlate || payload.licensePlate;
         if (plate) {
@@ -576,18 +598,49 @@ const StaffPage = () => {
         // -----------------------------------------------
 
         setIsLoadingQR(false);
+
+        // --- Check Early Arrival ---
+        let isEarlyArrival = false;
+        if (booking.startTime && booking.scheduledDate) {
+          const now = new Date();
+          const scheduledDate = new Date(booking.scheduledDate);
+          
+          const [startHour, startMinute] = booking.startTime.split(':').map(Number);
+          
+          const bookingStartDateTime = new Date(
+            scheduledDate.getFullYear(),
+            scheduledDate.getMonth(),
+            scheduledDate.getDate(),
+            startHour,
+            startMinute
+          );
+          
+          if (now < bookingStartDateTime) {
+            isEarlyArrival = true;
+          }
+        }
+        // ---------------------------
+
         const mockResult: BookingData = {
           id: booking.bookingCode || safeBookingId.substring(0, 8).toUpperCase(),
           plate: booking.vehicleInfo?.licensePlate || payload.licensePlate || 'N/A',
           customerName: booking.user?.fullName || payload.customerName || 'Customer',
           spot: booking.assignedSlot?.slotCode || payload.slotCode || 'Unassigned',
           status: 'VALID',
-          bookingId: safeBookingId
+          bookingId: safeBookingId,
+          startTime: booking.startTime,
+          endTime: booking.endTime,
+          isEarlyArrival: isEarlyArrival,
+          isSlotOccupied: booking.assignedSlot?.status === 'occupied' || booking.assignedSlot?.status === 'maintenance',
+          assignedSlotId: booking.assignedSlot?._id,
         };
         setModalData(mockResult);
         setShowModal(true);
       } catch (fetchErr: any) {
-        if (fetchErr.message && fetchErr.message.includes('already checked in')) {
+        if (fetchErr.message && (
+          fetchErr.message.includes('already checked in') || 
+          fetchErr.message.includes('not this building')
+        )) {
           throw fetchErr;
         }
         throw new Error('❌ Could not find valid Booking info for this QR code. Please double check.');
@@ -647,13 +700,15 @@ const StaffPage = () => {
         await parkingSessionService.checkIn({
           monthlyPassCode: modalData.monthlyPassCode,
           licensePlate: modalData.plate,
-          parkingLotId: lotId
+          parkingLotId: lotId,
+          slotId: modalData.assignedSlotId
         });
       } else {
         await parkingSessionService.checkIn({
           bookingId: modalData.bookingId,
           licensePlate: modalData.plate,
-          parkingLotId: lotId
+          parkingLotId: lotId,
+          slotId: modalData.assignedSlotId
         });
       }
 
@@ -676,6 +731,75 @@ const StaffPage = () => {
     setShowModal(false);
     setModalData(null);
     setIsProcessingQR(false);
+  };
+
+  // --- REASSIGN LOGIC ---
+  const openReassignModal = async () => {
+    setShowReassignModal(true);
+    setIsReassigning(true);
+    setSelectedReassignSlot(null);
+    try {
+      const floorsRes = await floorService.getFloors({ status: 'active', parkingLot: defaultLotId });
+      const floorsList = Array.isArray(floorsRes) ? floorsRes : (floorsRes as any)?.data ?? [];
+      setReassignFloors(floorsList);
+
+      if (floorsList.length > 0) {
+        const firstFloor = floorsList[0];
+        setSelectedReassignFloor(firstFloor);
+
+        const zonesRes = await zoneService.getZones({ floor: firstFloor._id, parkingLot: defaultLotId });
+        const zonesList = Array.isArray(zonesRes) ? zonesRes : (zonesRes as any)?.data ?? [];
+        const activeZones = zonesList.filter((z: any) => !z.isDeleted && z.status === 'active');
+        setReassignZones(activeZones);
+
+        if (activeZones.length > 0) {
+          setSelectedReassignZone(activeZones[0]);
+        }
+
+        const slotsRes = await parkingSlotService.getFloorMap(firstFloor._id);
+        setReassignSlots((Array.isArray(slotsRes) ? slotsRes : (slotsRes as any)?.data ?? []).filter((s: any) => !s.isDeleted));
+      }
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setIsReassigning(false);
+    }
+  };
+
+  const handleReassignFloorSelect = async (floor: any) => {
+    setSelectedReassignFloor(floor);
+    setSelectedReassignZone(null);
+    setSelectedReassignSlot(null);
+    setIsReassigning(true);
+    try {
+      const zonesRes = await zoneService.getZones({ floor: floor._id, parkingLot: defaultLotId });
+      const zonesList = Array.isArray(zonesRes) ? zonesRes : (zonesRes as any)?.data ?? [];
+      const activeZones = zonesList.filter((z: any) => !z.isDeleted && z.status === 'active');
+      setReassignZones(activeZones);
+
+      if (activeZones.length > 0) {
+        setSelectedReassignZone(activeZones[0]);
+      }
+
+      const slotsRes = await parkingSlotService.getFloorMap(floor._id);
+      setReassignSlots((Array.isArray(slotsRes) ? slotsRes : (slotsRes as any)?.data ?? []).filter((s: any) => !s.isDeleted));
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setIsReassigning(false);
+    }
+  };
+
+  const confirmReassignSlot = () => {
+    if (selectedReassignSlot && modalData) {
+      setModalData({
+        ...modalData,
+        assignedSlotId: selectedReassignSlot._id,
+        spot: selectedReassignSlot.slotCode,
+        isSlotOccupied: false,
+      });
+      setShowReassignModal(false);
+    }
   };
 
 
@@ -1205,22 +1329,51 @@ const StaffPage = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 lg:p-0">
           <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-md" onClick={handleCancelCheckInQR}></div>
 
-          <div className="bg-white rounded-[2rem] w-full max-w-lg overflow-hidden shadow-2xl relative z-10 animate-in zoom-in-[0.97] fade-in duration-200">
-            <div className="bg-emerald-50/50 p-8 border-b border-emerald-100 flex flex-col items-center text-center">
-              <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mb-5 shadow-inner">
-                <CheckCircle className="w-11 h-11 text-emerald-600" />
+          <div className="bg-white rounded-[2rem] w-full max-w-lg shadow-2xl relative z-10 animate-in zoom-in-[0.97] fade-in duration-200 max-h-[95vh] flex flex-col">
+            <div className="overflow-y-auto flex-1 custom-scrollbar [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+              <div className={`p-5 pb-4 border-b flex flex-col items-center text-center ${modalData.isEarlyArrival ? 'bg-amber-50/50 border-amber-100' : 'bg-emerald-50/50 border-emerald-100'}`}>
+              <div className={`w-12 h-12 rounded-full flex items-center justify-center mb-3 shadow-inner ${modalData.isEarlyArrival ? 'bg-amber-100' : 'bg-emerald-100'}`}>
+                {modalData.isEarlyArrival ? (
+                  <AlertTriangle className="w-6 h-6 text-amber-600" />
+                ) : (
+                  <CheckCircle className="w-6 h-6 text-emerald-600" />
+                )}
               </div>
-              <div className="bg-emerald-100 text-emerald-700 px-5 py-2 rounded-full text-sm font-extrabold tracking-widest flex items-center gap-2 mb-3">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-[pulse_1.5s_ease-in-out_infinite]"></span>
-                [VALID TICKET - ON TIME]
+              <div className={`px-3 py-1 rounded-full text-xs font-extrabold tracking-widest flex items-center gap-2 mb-2 ${modalData.isEarlyArrival ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                <span className={`w-2 h-2 rounded-full animate-[pulse_1.5s_ease-in-out_infinite] ${modalData.isEarlyArrival ? 'bg-amber-500' : 'bg-emerald-500'}`}></span>
+                {modalData.isEarlyArrival ? '[WARNING - EARLY ARRIVAL]' : '[VALID TICKET - ON TIME]'}
               </div>
-              <p className="text-slate-500 font-medium">Booking ID: <span className="font-mono text-slate-800 font-bold">{modalData.id}</span></p>
+              {modalData.startTime && modalData.endTime && (
+                <div className={`mb-2 px-3 py-1.5 rounded-lg border font-medium text-sm ${modalData.isEarlyArrival ? 'bg-amber-50 border-amber-200 text-amber-800' : 'bg-emerald-50 border-emerald-200 text-emerald-800'}`}>
+                  Booked Slot: <span className="font-bold text-base ml-1">{modalData.startTime} - {modalData.endTime}</span>
+                </div>
+              )}
+              <p className="text-slate-500 text-sm font-medium">Booking ID: <span className="font-mono text-slate-800 font-bold">{modalData.id}</span></p>
             </div>
 
-            <div className="p-8">
-              <div className="bg-slate-100 rounded-2xl p-5 text-center mb-7 border border-slate-200 shadow-sm">
-                <p className="text-slate-500 text-sm mb-2 uppercase tracking-widest font-bold">Recognized License Plate</p>
-                <h3 className="text-[2.5rem] font-black text-slate-800 tracking-wider">{modalData.plate}</h3>
+            <div className="p-6 pb-2">
+              {modalData.isSlotOccupied && (
+                <div className="mb-4 bg-red-50 border border-red-200 rounded-xl p-4 text-left shadow-sm">
+                  <div className="flex items-center gap-2 text-red-700 font-bold mb-1.5 text-base">
+                    <AlertTriangle className="w-5 h-5" />
+                    Slot is Currently Occupied!
+                  </div>
+                  <p className="text-red-600 text-sm mb-3 font-medium">
+                    The assigned slot ({modalData.spot}) is not empty. Please assign a new slot for the customer.
+                  </p>
+                  <button
+                    onClick={openReassignModal}
+                    className="w-full py-2 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg transition-colors text-sm shadow flex items-center justify-center gap-2"
+                  >
+                    <LayoutGrid className="w-4 h-4" />
+                    Open Map to Re-assign Slot
+                  </button>
+                </div>
+              )}
+
+              <div className="bg-slate-100 rounded-xl p-4 text-center mb-5 border border-slate-200 shadow-sm">
+                <p className="text-slate-500 text-xs mb-1 uppercase tracking-widest font-bold">Recognized License Plate</p>
+                <h3 className="text-3xl font-black text-slate-800 tracking-wider">{modalData.plate}</h3>
               </div>
 
               {modalData.isMonthlyPass ? (
@@ -1250,18 +1403,124 @@ const StaffPage = () => {
               )}
             </div>
 
-            <div className="p-8 pt-0 flex gap-4">
+            </div>
+            
+            <div className="p-5 flex gap-3 shrink-0 bg-white border-t border-slate-100 rounded-b-[2rem]">
               <button
                 onClick={handleCancelCheckInQR}
-                className="flex-1 py-4 px-4 bg-white hover:bg-red-50 text-red-600 font-bold rounded-2xl transition-colors border-2 border-red-200 hover:border-red-300 text-sm tracking-wide uppercase"
+                className="flex-1 py-3 px-4 bg-white hover:bg-red-50 text-red-600 font-bold rounded-xl transition-colors border-2 border-red-200 hover:border-red-300 text-sm tracking-wide uppercase"
               >
                 CANCEL / INVALID
               </button>
               <button
                 onClick={handleConfirmCheckInQR}
-                className="flex-[1.5] py-4 px-4 bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 text-white font-extrabold rounded-2xl shadow-lg shadow-emerald-500/30 transition-all active:scale-[0.98] text-base tracking-wide uppercase"
+                disabled={modalData.isSlotOccupied}
+                className={`flex-[1.5] py-3 px-4 font-extrabold rounded-xl shadow-lg transition-all text-sm tracking-wide uppercase ${
+                  modalData.isSlotOccupied
+                    ? 'bg-slate-300 text-slate-500 cursor-not-allowed shadow-none'
+                    : 'bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 text-white shadow-emerald-500/30 active:scale-[0.98]'
+                }`}
               >
                 CONFIRM ENTRY
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* --- REASSIGN SLOT MAP MODAL --- */}
+      {showReassignModal && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-md" onClick={() => setShowReassignModal(false)}></div>
+          <div className="bg-white rounded-2xl w-full max-w-4xl overflow-hidden shadow-2xl relative z-10 flex flex-col max-h-[85vh]">
+            <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+              <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                <LayoutGrid className="w-5 h-5 text-blue-600" />
+                Select New Slot for {modalData?.plate}
+              </h2>
+              <button onClick={() => setShowReassignModal(false)} className="text-gray-400 hover:text-gray-600">
+                <LogOut className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-hidden flex flex-col bg-white">
+              {/* Floor Tabs */}
+              <div className="flex border-b border-gray-200 overflow-x-auto">
+                {reassignFloors.map(floor => (
+                  <button
+                    key={floor._id}
+                    onClick={() => handleReassignFloorSelect(floor)}
+                    className={`px-6 py-3 text-sm font-bold whitespace-nowrap transition-colors ${selectedReassignFloor?._id === floor._id ? 'bg-blue-50 text-blue-700 border-b-2 border-blue-700' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'}`}
+                  >
+                    {floor.name || `Floor ${floor.floorNumber}`}
+                  </button>
+                ))}
+              </div>
+
+              {/* Zone Tabs */}
+              {reassignZones.length > 0 && (
+                <div className="flex border-b border-gray-100 bg-gray-50 overflow-x-auto px-4 py-2">
+                  {reassignZones.map(zone => (
+                    <button
+                      key={zone._id}
+                      onClick={() => setSelectedReassignZone(zone)}
+                      className={`px-4 py-1.5 text-xs font-bold rounded-full mr-2 transition-colors ${selectedReassignZone?._id === zone._id ? 'bg-white shadow-sm text-blue-700 ring-1 ring-gray-200' : 'text-gray-500 hover:bg-gray-100'}`}
+                    >
+                      {zone.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Grid */}
+              <div className="flex-1 overflow-auto p-6 bg-[#fafafa]">
+                {isReassigning ? (
+                  <div className="flex justify-center items-center h-40 text-gray-400">
+                    <RefreshCw className="w-6 h-6 animate-spin" />
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-6 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-12 gap-3">
+                    {reassignSlots
+                      .filter(s => selectedReassignZone ? (typeof s.zone === 'string' ? s.zone === selectedReassignZone._id : s.zone?._id === selectedReassignZone._id) : true)
+                      .map(slot => {
+                        const isSelected = selectedReassignSlot?._id === slot._id;
+                        const isAvailable = slot.status === 'available';
+                        return (
+                          <button
+                            key={slot._id}
+                            disabled={!isAvailable}
+                            onClick={() => setSelectedReassignSlot(slot)}
+                            className={`flex flex-col items-center justify-center p-2 rounded-lg border-2 transition-all ${
+                              isSelected 
+                                ? 'bg-blue-100 border-blue-600 text-blue-700 transform scale-110 shadow-md z-10' 
+                                : isAvailable 
+                                  ? 'bg-green-50 border-green-200 text-green-700 hover:bg-green-100 hover:border-green-300' 
+                                  : 'bg-red-50 border-red-200 text-red-400 cursor-not-allowed opacity-60'
+                            }`}
+                          >
+                            <span className="text-xs font-black">{slot.slotCode}</span>
+                            <span className="text-[9px] uppercase mt-0.5">{isAvailable ? 'Free' : slot.status}</span>
+                          </button>
+                        );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="p-5 border-t border-gray-100 flex justify-end gap-3 bg-gray-50">
+              <button
+                onClick={() => setShowReassignModal(false)}
+                className="px-5 py-2.5 rounded-xl font-bold text-gray-600 bg-white border border-gray-200 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmReassignSlot}
+                disabled={!selectedReassignSlot}
+                className="px-5 py-2.5 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed"
+              >
+                Confirm New Slot
               </button>
             </div>
           </div>
