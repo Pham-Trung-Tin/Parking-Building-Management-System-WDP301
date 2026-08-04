@@ -86,7 +86,7 @@ const fmtVND = (amount: number) =>
     new Intl.NumberFormat('vi-VN').format(Math.round(amount)) + ' ₫';
 
 const fmtDateTime = (d: Date) =>
-    `${d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })} ${d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}`;
+    `${d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })} ${d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false })}`;
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 const SessionPage = () => {
