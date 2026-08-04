@@ -753,7 +753,7 @@ const BookingPage = () => {
             }, until.getTime() - Date.now());
         } catch (err: any) {
             const msg = err?.response?.data?.message || 'This slot is being selected by another user.';
-            alert(`⚠️ ${msg}`);
+            setErrorToastMsg(msg);
         }
     }, [selectedSlot, entryDate]);
 
@@ -796,6 +796,8 @@ const BookingPage = () => {
     const [bankInfo, setBankInfo] = useState<any>(null);
     const [polling, setPolling] = useState(false);
 
+    const [errorToastMsg, setErrorToastMsg] = useState('');
+
     useEffect(() => {
         if (showSuccessToast) {
             const timer = setTimeout(() => {
@@ -804,6 +806,15 @@ const BookingPage = () => {
             return () => clearTimeout(timer);
         }
     }, [showSuccessToast]);
+
+    useEffect(() => {
+        if (errorToastMsg) {
+            const timer = setTimeout(() => {
+                setErrorToastMsg('');
+            }, 3500);
+            return () => clearTimeout(timer);
+        }
+    }, [errorToastMsg]);
 
     useEffect(() => {
         if (!showConfirmModal) {
@@ -3379,6 +3390,39 @@ const BookingPage = () => {
                 </div>
             )}
 
+            {/* ── Error Toast Notice ── */}
+            {errorToastMsg && (
+                <div style={{
+                    position: 'fixed',
+                    top: '24px',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    background: 'rgba(255, 255, 255, 0.98)',
+                    backdropFilter: 'blur(10px)',
+                    border: '1.5px solid #fecaca',
+                    borderRadius: '16px',
+                    padding: '12px 20px',
+                    boxShadow: '0 10px 30px -5px rgba(220, 38, 38, 0.2), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
+                    zIndex: 100000,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    animation: 'slideUpToast 0.35s cubic-bezier(0.16, 1, 0.3, 1) both',
+                    fontFamily: "'Inter', sans-serif",
+                }}>
+                    <div style={{ color: '#dc2626', display: 'flex', alignItems: 'center' }}>
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="12" y1="8" x2="12" y2="12"></line>
+                            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                        </svg>
+                    </div>
+                    <div style={{ fontSize: '14px', fontWeight: 600, color: '#991b1b' }}>
+                        {errorToastMsg}
+                    </div>
+                </div>
+            )}
+
             {/* ── Success Payment Toast Notice ── */}
             {showSuccessToast && successBooking && (
                 <div style={{
@@ -3554,7 +3598,7 @@ const BookingPage = () => {
                                                     const newExitDate = `${dateStr}T${String(exitSelHour).padStart(2, '0')}:${String(exitSelMin).padStart(2, '0')}`;
 
                                                     if (new Date(newExitDate) <= new Date(entryDate)) {
-                                                        alert("Exit date/time must be after arrival date/time.");
+                                                        setErrorToastMsg("Exit date/time must be after arrival date/time.");
                                                         return;
                                                     }
                                                     setExitDate(newExitDate);
