@@ -3498,12 +3498,18 @@ const BookingPage = () => {
                                 {calDays.map((cell, idx) => {
                                     const cellDate = new Date(cell.year, cell.month, cell.day);
                                     const isPast = isBeforeDay(cellDate, todayOnly);
+                                    
+                                    const maxAdvanceDate = new Date(todayOnly);
+                                    maxAdvanceDate.setDate(maxAdvanceDate.getDate() + 7);
+                                    const isTooFar = cellDate > maxAdvanceDate;
+                                    
+                                    const isDisabled = isPast || isTooFar;
 
                                     const isSelected = isSameDay(cellDate, activeInput === 'from' ? tempFromDate : tempToDate);
 
                                     let cellClass = 'cal-day-cell';
                                     if (!cell.isCurrentMonth) cellClass += ' other-month';
-                                    if (isPast) cellClass += ' disabled';
+                                    if (isDisabled) cellClass += ' disabled';
                                     else if (isSelected) cellClass += ' range-start-end-same';
 
                                     return (
@@ -3511,7 +3517,7 @@ const BookingPage = () => {
                                             key={idx}
                                             className={cellClass}
                                             onClick={() => {
-                                                if (isPast) return;
+                                                if (isDisabled) return;
                                                 const dateStr = `${cellDate.getFullYear()}-${String(cellDate.getMonth() + 1).padStart(2, '0')}-${String(cellDate.getDate()).padStart(2, '0')}`;
 
                                                 if (activeInput === 'from') {

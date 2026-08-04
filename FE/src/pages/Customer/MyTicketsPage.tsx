@@ -51,6 +51,41 @@ const getVehicleEmoji = (code: string) => {
     return '🚗';
 };
 
+// ── Live payment countdown component ─────────────────────────────────────────
+const PaymentCountdown = ({ createdAt }: { createdAt: string }) => {
+    const calcRemaining = () => {
+        const expiryTime = new Date(createdAt).getTime() + 10 * 60 * 1000;
+        return Math.max(0, Math.floor((expiryTime - Date.now()) / 1000));
+    };
+    const [remaining, setRemaining] = useState(calcRemaining);
+
+    useEffect(() => {
+        if (remaining <= 0) return;
+        const id = setInterval(() => {
+            const r = calcRemaining();
+            setRemaining(r);
+            if (r <= 0) clearInterval(id);
+        }, 1000);
+        return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [createdAt]);
+
+    if (remaining <= 0) return null;
+
+    const mm = String(Math.floor(remaining / 60)).padStart(2, '0');
+    const ss = String(remaining % 60).padStart(2, '0');
+
+    return (
+        <>
+            <span style={{ color: '#cbd5e1' }}>|</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700 }}>
+                <span className="ls-pulse-dot" style={{ width: 6, height: 6, background: '#ef4444', boxShadow: '0 0 0 0 rgba(239,68,68,0.6)' }} />
+                <span style={{ color: '#ef4444' }}>{mm}:{ss} (Awaiting QR payment)</span>
+            </span>
+        </>
+    );
+};
+
 // ── A single session card with its own live clock ───────────────────────────
 const LiveSessionCard = ({ session, onClick }: { session: ParkingSession; onClick: () => void }) => {
     const isCompleted = session.status === 'completed';
@@ -1218,14 +1253,8 @@ const MyTicketsPage = () => {
                                                                 <span className="t-list-item-meta">{ticket.floorName} — {ticket.slotCode}</span>
                                                                 <span style={{ color: '#cbd5e1' }}>|</span>
                                                                 <span>In: {fmtDateTime(ticket.entryDate)}</span>
-                                                                {isUnpaid && remainingSeconds > 0 && ticket.payMethod !== 'cash' && (
-                                                                    <>
-                                                                        <span style={{ color: '#cbd5e1' }}>|</span>
-                                                                        <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700 }}>
-                                                                            <span className="ls-pulse-dot" style={{ width: 6, height: 6, background: '#ef4444', boxShadow: '0 0 0 0 rgba(239,68,68,0.6)', animation: 'none' }} />
-                                                                            <span style={{ color: '#ef4444' }}>{mm}:{ss} (Awaiting QR payment)</span>
-                                                                        </span>
-                                                                    </>
+                                                                {isUnpaid && ticket.createdAt && (
+                                                                    <PaymentCountdown createdAt={ticket.createdAt} />
                                                                 )}
                                                             </div>
                                                         </div>
