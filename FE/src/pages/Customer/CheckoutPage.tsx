@@ -128,12 +128,19 @@ const CheckoutPage = () => {
             const slotObj = typeof b.assignedSlot === 'object' ? b.assignedSlot : null;
             const vtObj = typeof b.vehicleType === 'object' ? b.vehicleType : null;
 
+            // Build an absolute UTC ISO string from a scheduledDate + "HH:mm" ICT time string.
+            // We extract the ICT calendar date from scheduledDate, then combine with HH:mm ICT time.
             const parseDateTime = (dStr: string, tStr: string) => {
                 if (!dStr || !tStr) return null;
-                const d = new Date(dStr);
-                const [hh, mm] = tStr.split(':').map(Number);
-                if (!isNaN(hh)) d.setHours(hh, mm || 0, 0, 0);
-                return d.toISOString();
+                // Get the ICT date components by shifting UTC timestamp +7h
+                const TZ_OFFSET_MS = 7 * 60 * 60 * 1000;
+                const ictMs = new Date(dStr).getTime() + TZ_OFFSET_MS;
+                const ict = new Date(ictMs);
+                const year  = ict.getUTCFullYear();
+                const month = String(ict.getUTCMonth() + 1).padStart(2, '0');
+                const day   = String(ict.getUTCDate()).padStart(2, '0');
+                // Build ISO string with explicit +07:00 so browser parses it correctly
+                return `${year}-${month}-${day}T${tStr}:00+07:00`;
             };
 
             const parsedEntry = parseDateTime(b.scheduledDate, b.startTime);
@@ -144,6 +151,7 @@ const CheckoutPage = () => {
                 exitD.setDate(exitD.getDate() + 1);
                 parsedExit = exitD.toISOString();
             }
+
 
             setBookingDetail({
                 bookingCode: b.bookingCode || b._id,
