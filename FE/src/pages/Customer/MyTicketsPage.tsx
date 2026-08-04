@@ -1225,14 +1225,6 @@ const MyTicketsPage = () => {
                                                                 </span>
                                                             </>
                                                         )}
-                                                        {isUnpaid && ticket.payMethod === 'cash' && (
-                                                            <>
-                                                                <span style={{ color: '#cbd5e1' }}>|</span>
-                                                                <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, color: '#d97706', fontSize: 12 }}>
-                                                                    🎫 Pay at exit
-                                                                </span>
-                                                            </>
-                                                        )}
                                                     </div>
                                                 </div>
                                             </div>
@@ -1242,12 +1234,10 @@ const MyTicketsPage = () => {
                                                     style={
                                                         isNoShow
                                                             ? { background: '#f1f5f9', color: '#64748b', border: '1px solid #cbd5e1' }
-                                                            : (isUnpaid && ticket.payMethod === 'cash')
-                                                                ? { background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a' }
-                                                                : {}
+                                                            : {}
                                                     }
                                                 >
-                                                    {isNoShow ? 'VÉ QUÁ GIỜ' : (isUnpaid && ticket.payMethod === 'cash' ? 'PAY AT COUNTER' : (isUnpaid ? 'PENDING' : 'PAID'))}
+                                                    {isNoShow ? 'VÉ QUÁ GIỜ' : (isUnpaid ? 'PENDING' : 'PAID')}
                                                 </span>
                                                 {!isNoShow && (
                                                     <button className="t-list-item-btn" onClick={(e) => { e.stopPropagation(); setSelectedTicket(ticket); }}>View Ticket</button>

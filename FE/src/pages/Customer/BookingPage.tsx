@@ -133,12 +133,7 @@ const ZaloPayIcon = () => (
         <text x="12" y="15" textAnchor="middle" fill="white" fontSize="6" fontWeight="900" fontFamily="sans-serif">ZaloPay</text>
     </svg>
 );
-const CashIcon = ({ size = 24 }: { size?: number }) => (
-    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="1" y="4" width="22" height="16" rx="2" />
-        <circle cx="12" cy="12" r="3" /><path d="M5 12h.01M19 12h.01" />
-    </svg>
-);
+
 const QrCodeIcon = ({ size = 24 }: { size?: number }) => (
     <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <rect width="5" height="5" x="3" y="3" rx="1" /><rect width="5" height="5" x="16" y="3" rx="1" /><rect width="5" height="5" x="3" y="16" rx="1" /><path d="M21 16h-3a2 2 0 0 0-2 2v3" /><path d="M21 21v.01" /><path d="M12 7v3a2 2 0 0 1-2 2H7" /><path d="M3 12h.01" /><path d="M12 3h.01" /><path d="M12 16v.01" /><path d="M16 12h1" /><path d="M21 12v.01" /><path d="M12 21v-1" />
@@ -793,7 +788,7 @@ const BookingPage = () => {
 
     // ── Integrated Checkout States ──
     const [checkoutPhase, setCheckoutPhase] = useState<'review' | 'payment' | 'qr'>('review');
-    const [payMethod, setPayMethod] = useState<'bank_transfer' | 'cash'>('bank_transfer');
+    const [payMethod, setPayMethod] = useState<'bank_transfer'>('bank_transfer');
     const [checkoutProcessing, setCheckoutProcessing] = useState(false);
     const [checkoutErrors, setCheckoutErrors] = useState<Record<string, string>>({});
 
@@ -3103,7 +3098,6 @@ const BookingPage = () => {
                 const grandTotal = Math.round(estimatedPrice);
                 const payMethods = [
                     { id: 'bank_transfer', label: 'Bank Transfer (VietQR)', icon: <QrCodeIcon size={22} />, color: '#2563eb' },
-                    { id: 'cash', label: 'Pay at Counter', icon: <CashIcon size={22} />, color: '#10b981' },
                 ];
                 return (
                     <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget && !checkoutProcessing) setShowConfirmModal(false); }}>
@@ -3218,7 +3212,6 @@ const BookingPage = () => {
                                                     <div className="pay-method-name">{m.label}</div>
                                                     <div className="pay-method-sub">
                                                         {m.id === 'bank_transfer' && 'Scan VietQR code to pay via Banking App'}
-                                                        {m.id === 'cash' && 'Pay at parking booth before exit'}
                                                     </div>
                                                 </div>
                                                 <div className="pay-method-radio">
@@ -3230,23 +3223,6 @@ const BookingPage = () => {
 
 
 
-                                    {/* Cash instructions */}
-                                    {payMethod === 'cash' && (
-                                        <div style={{
-                                            marginTop: 20, padding: '16px',
-                                            background: 'linear-gradient(135deg,#f0fdf4,#dcfce7)',
-                                            borderRadius: 14,
-                                            border: '1px solid #86efac',
-                                            textAlign: 'left'
-                                        }}>
-                                            <div style={{ fontSize: 13, fontWeight: 600, color: '#166534', lineHeight: 1.6 }}>
-                                                <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 6 }}>📋 Cash Payment Guidelines</div>
-                                                <div>1. Attendant will verify your entry ticket on Floor G.</div>
-                                                <div>2. Show booking confirmation details upon arrival.</div>
-                                                <div>3. Pay Attendant <strong>{fmtVND(grandTotal)}</strong> in cash.</div>
-                                            </div>
-                                        </div>
-                                    )}
 
                                     <div className="modal-total" style={{ marginTop: '20px' }}>
                                         <div>
