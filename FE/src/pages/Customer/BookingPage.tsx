@@ -2565,9 +2565,13 @@ const BookingPage = () => {
                                 handleSetEntryDate(dateStr, selHour, selMin);
                             };
 
-                            const exitDt = new Date(new Date(entryDate).getTime() + duration * 3600000);
+                            const exitDt = new Date(exitDate);
                             const fmtT = (d: Date) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
                             const fmtD = (d: Date) => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+                            const realDurMs = exitDt.getTime() - new Date(entryDate).getTime();
+                            const durH = Math.floor(realDurMs / 3600000);
+                            const durM = Math.round((realDurMs % 3600000) / 60000);
+                            const durDisplay = durH > 0 && durM > 0 ? `${durH}h ${durM}m` : durH === 0 ? `${durM}m` : `${durH}h`;
 
                             const bs = 4;
                             const DURATION_OPTIONS = [
@@ -2864,7 +2868,7 @@ const BookingPage = () => {
                                                     <div style={{ fontSize: 10, color: '#64748b', marginTop: 1 }}>{fmtD(new Date(entryDate))}</div>
                                                 </div>
                                                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, flex: 1 }}>
-                                                    <div style={{ fontSize: 11, color: '#475569', fontWeight: 700 }}>{duration}h</div>
+                                                    <div style={{ fontSize: 11, color: '#475569', fontWeight: 700 }}>{durDisplay}</div>
                                                     <div style={{ height: 2, background: 'linear-gradient(90deg,#3b82f6,#2563eb)', borderRadius: 1, width: '100%' }} />
                                                 </div>
                                                 <div style={{ textAlign: 'center' }}>
