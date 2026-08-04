@@ -910,6 +910,15 @@ const BookingPage = () => {
             setShowConfirmModal(false);
 
             // Navigate to /checkout page — CheckoutPage handles payment method selection
+            // Build ICT display strings directly from the local datetime strings
+            const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+            const buildDisplay = (dtStr: string) => {
+                // dtStr = "YYYY-MM-DDTHH:mm"
+                const [datePart, timePart] = dtStr.split('T');
+                const [y, m, d] = datePart.split('-').map(Number);
+                return `${String(d).padStart(2, '0')} ${MONTHS_SHORT[m - 1]} ${y}, ${timePart}`;
+            };
+
             navigate('/checkout', {
                 state: {
                     isBooking: true,
@@ -922,6 +931,8 @@ const BookingPage = () => {
                     slotCode: selectedSlot?.slotCode,
                     entryDate,
                     exitDate,
+                    entryDisplay: buildDisplay(entryDate),
+                    exitDisplay: buildDisplay(exitDate),
                     totalAmount: estimatedPrice,
                 }
             });

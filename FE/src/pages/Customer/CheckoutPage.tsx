@@ -1124,17 +1124,13 @@ const CheckoutPage = () => {
                                     <div className="co-row">
                                         <span className="co-row-label">Entry</span>
                                         <span className="co-row-value" style={{ fontSize: 12 }}>
-                                            {bookingDetail?.entryDate
-                                                ? bookingDetail.entryDate
-                                                : mergedData.entryDate ? formatTime(new Date(mergedData.entryDate)) : '—'}
+                                            {data.entryDisplay || bookingDetail?.entryDate || '—'}
                                         </span>
                                     </div>
                                     <div className="co-row">
                                         <span className="co-row-label">Est. Exit</span>
                                         <span className="co-row-value" style={{ fontSize: 12 }}>
-                                            {bookingDetail?.exitDate
-                                                ? bookingDetail.exitDate
-                                                : mergedData.exitDate ? formatTime(new Date(mergedData.exitDate)) : '—'}
+                                            {data.exitDisplay || bookingDetail?.exitDate || '—'}
                                         </span>
                                     </div>
                                 </>
