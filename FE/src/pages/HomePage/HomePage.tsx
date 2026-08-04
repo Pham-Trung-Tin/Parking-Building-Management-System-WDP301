@@ -19,14 +19,14 @@ const Reveal = ({ children, delay = 0, className = "", direction = "up" }: { chi
         return () => observer.disconnect();
     }, []);
 
-    let transformInit = "translate-y-12";
-    if (direction === "left") transformInit = "-translate-x-12";
-    if (direction === "right") transformInit = "translate-x-12";
+    let transformInit = "translate-y-8";
+    if (direction === "left") transformInit = "-translate-x-8";
+    if (direction === "right") transformInit = "translate-x-8";
 
     return (
         <div
             ref={ref}
-            className={`transition-all duration-1000 ease-out ${isVisible ? 'opacity-100 translate-x-0 translate-y-0' : `opacity-0 ${transformInit}`} ${className}`}
+            className={`transition-all duration-[800ms] ease-[cubic-bezier(0.25,1,0.5,1)] ${isVisible ? 'opacity-100 translate-x-0 translate-y-0 scale-100' : `opacity-0 ${transformInit} scale-[0.98]`} ${className}`}
             style={{ transitionDelay: `${delay}ms` }}
         >
             {children}
@@ -119,7 +119,7 @@ const HomePage = () => {
     return (
         <div className="font-sans overflow-x-hidden bg-white h-screen overflow-y-scroll snap-y snap-mandatory scroll-smooth" onScroll={handleContainerScroll}>
             {/* HERO SECTION */}
-            <section className="relative h-screen w-full bg-[#0a0f1c] snap-start flex flex-col justify-center">
+            <section className="relative min-h-[100svh] w-full bg-[#0a0f1c] snap-start flex flex-col justify-center pt-24 pb-12">
                 {/* Background Video */}
                 <div className="absolute inset-0 z-0 overflow-hidden">
                     <video autoPlay loop muted playsInline className="absolute inset-0 w-full h-full object-cover">
@@ -206,7 +206,7 @@ const HomePage = () => {
             </section>
 
             {/* CORE FEATURES SECTION */}
-            <section className="h-screen w-full px-[5%] md:px-[7%] bg-slate-50 relative overflow-hidden flex flex-col justify-center snap-start" id="features">
+            <section className="min-h-[100svh] py-24 w-full px-[5%] md:px-[7%] bg-slate-50 relative flex flex-col justify-center snap-start" id="features">
                 <div className="max-w-7xl mx-auto">
                     <div className="text-center mb-16">
                         <h2 className="text-blue-600 font-bold tracking-widest text-sm uppercase mb-3">Core Features</h2>
@@ -270,7 +270,7 @@ const HomePage = () => {
             </section>
 
             {/* HOW IT WORKS SECTION */}
-            <section className="h-screen w-full px-[5%] md:px-[7%] bg-white flex flex-col justify-center snap-start">
+            <section className="min-h-[100svh] py-24 w-full px-[5%] md:px-[7%] bg-white flex flex-col justify-center snap-start">
                 <div className="max-w-7xl mx-auto">
                     <Reveal direction="up">
                         <div className="text-center mb-16">
@@ -318,7 +318,7 @@ const HomePage = () => {
             </section>
 
             {/* PRICING SECTION */}
-            <section className="h-screen w-full px-[5%] md:px-[7%] bg-slate-50 flex flex-col justify-center snap-start" id="pricing">
+            <section className="min-h-[100svh] py-24 w-full px-[5%] md:px-[7%] bg-slate-50 flex flex-col justify-center snap-start" id="pricing">
                 <div className="max-w-7xl mx-auto">
                     <Reveal>
                         <div className="text-center mb-16">
@@ -384,7 +384,7 @@ const HomePage = () => {
                                 <ul className="space-y-4 mb-8 flex-grow">
                                     <li className="flex items-center gap-3 text-slate-700 font-medium text-sm"><CheckIcon /> Overtime is charged per extra 4-hour block</li>
                                     <li className="flex items-center gap-3 text-slate-700 font-medium text-sm"><CheckIcon /> Crossing 18:00 triggers the Night rate</li>
-                                    <li className="flex items-center gap-3 text-slate-700 font-medium text-sm"><CheckIcon /> Pay smoothly via ZaloPay before exiting</li>
+                                    <li className="flex items-center gap-3 text-slate-700 font-medium text-sm"><CheckIcon /> Pay smoothly via VNPAY before exiting</li>
                                 </ul>
                             </div>
                         </Reveal>
@@ -393,7 +393,7 @@ const HomePage = () => {
             </section>
 
             {/* CALL TO ACTION & FOOTER SECTION */}
-            <section className="h-screen w-full flex flex-col justify-between snap-start bg-white border-t border-slate-100">
+            <section className="min-h-[100svh] pt-24 w-full flex flex-col justify-between snap-start bg-white border-t border-slate-100">
                 <div className="flex-1 flex flex-col justify-center px-[5%] text-center pt-24">
                     <Reveal>
                         <div className="max-w-3xl mx-auto">

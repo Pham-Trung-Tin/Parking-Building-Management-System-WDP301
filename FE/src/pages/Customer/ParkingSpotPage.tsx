@@ -96,7 +96,7 @@ const ParkingSpotPage = () => {
     // Apply filters and search
     const filteredLots = mapParkings.filter(p => {
         const tags = p.tags || {};
-        const name = (tags.name || 'Building / Sidewalk Parking').toLowerCase();
+        const name = (tags.name || 'Bãi đỗ xe').toLowerCase();
         
         if (searchText && !name.includes(searchText.toLowerCase())) {
             return false;
@@ -240,7 +240,7 @@ const ParkingSpotPage = () => {
                         {/* Parking lot cards */}
                         {!loading && !error && filteredLots.map((p, idx) => {
                             const tags = p.tags || {};
-                            const name = tags.name || 'Building / Sidewalk Parking';
+                            const name = tags.name || 'Bãi đỗ xe';
                             let accessInfo = "Public";
                             if (tags.access === 'private' || tags.parking === 'private' || tags.access === 'customers') {
                                 accessInfo = "Private / Customers";

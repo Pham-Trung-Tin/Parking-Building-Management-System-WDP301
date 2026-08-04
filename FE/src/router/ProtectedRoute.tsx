@@ -42,10 +42,10 @@ export const CustomerRoute: React.FC = () => {
   if (userJson) {
     try {
       const user = JSON.parse(userJson);
-      
+
       // Allow viewing public map without redirection
       if (location.pathname.startsWith('/public-map') || location.pathname.startsWith('/find-parking')) {
-          return <Outlet />;
+        return <Outlet />;
       }
 
       if (user.role === 'system_admin') {
@@ -104,7 +104,7 @@ export const AdminRoute: React.FC = () => {
       if (user.role === 'parking_staff' && location.pathname === '/admin') {
         return <Navigate to="/staff" replace />;
       }
-      
+
       // If staff is unassigned, restrict access to profile page only
       if (user.role === 'parking_staff' && !user.assignedParkingLot && location.pathname !== '/staff/profile') {
         return <Navigate to="/staff/profile" replace />;

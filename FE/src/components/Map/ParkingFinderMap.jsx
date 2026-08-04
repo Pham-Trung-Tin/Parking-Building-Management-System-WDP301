@@ -390,7 +390,7 @@ const ParkingFinderMap = ({ onDataLoad, selectedParkingId, onSelectParking }) =>
           if (!lat || !lon) return null;
 
           const tags = p.tags || {};
-          const name = tags.name || 'Building / Sidewalk Parking';
+          const name = tags.name || 'Bãi đỗ xe';
 
           // Xử lý xác định loại hình truy cập Public/Private
           let accessInfo = "Public";

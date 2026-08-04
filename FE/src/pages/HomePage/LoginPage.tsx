@@ -84,7 +84,7 @@ const LoginPage = () => {
       setServerError('');
       try {
         const res = await authService.googleLogin(tokenResponse.access_token);
-        
+
         if (res?.data?.accessToken) {
           localStorage.setItem('accessToken', res.data.accessToken);
         }
@@ -115,16 +115,16 @@ const LoginPage = () => {
   const inputClass = (fieldName) => {
     const hasError = formik.touched[fieldName] && formik.errors[fieldName];
     return `peer w-full px-4 pt-4 pb-3 text-base border rounded-md outline-none transition-all duration-200 bg-white text-slate-900 placeholder-transparent ${hasError
-        ? 'border-red-400 focus:border-red-400 focus:ring-1 focus:ring-red-400'
-        : 'border-slate-300 focus:border-primary-500 focus:ring-1 focus:ring-primary-500'
+      ? 'border-red-400 focus:border-red-400 focus:ring-1 focus:ring-red-400'
+      : 'border-slate-300 focus:border-primary-500 focus:ring-1 focus:ring-primary-500'
       }`;
   };
 
   const labelClass = (fieldName) => {
     const hasError = formik.touched[fieldName] && formik.errors[fieldName];
     return `absolute left-4 top-1/2 -translate-y-1/2 text-base transition-all duration-200 pointer-events-none bg-white px-1 peer-focus:top-0 peer-focus:text-xs peer-valid:top-0 peer-valid:text-xs ${hasError
-        ? 'text-red-400 peer-focus:text-red-400 peer-valid:text-red-400'
-        : 'text-slate-500 peer-focus:top-0 peer-focus:text-xs peer-focus:text-primary-500 peer-valid:text-primary-500'
+      ? 'text-red-400 peer-focus:text-red-400 peer-valid:text-red-400'
+      : 'text-slate-500 peer-focus:top-0 peer-focus:text-xs peer-focus:text-primary-500 peer-valid:text-primary-500'
       }`;
   };
 
@@ -255,7 +255,7 @@ const LoginPage = () => {
 
         {/* Social Login */}
         <div className="flex flex-col gap-[15px] mb-[30px]">
-          <button 
+          <button
             type="button"
             onClick={() => loginWithGoogle()}
             className="flex items-center justify-center gap-2.5 bg-white border border-slate-300 py-3.5 rounded-md text-[15px] font-semibold text-slate-900 cursor-pointer transition-all duration-200 hover:bg-slate-50 hover:border-slate-400"
