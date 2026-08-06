@@ -944,7 +944,7 @@ const BookingPage = () => {
                     exitDate,
                     entryDisplay: buildDisplay(entryDate),
                     exitDisplay: buildDisplay(exitDate),
-                    totalAmount: estimatedPrice,
+                    totalAmount: bookingObj?.estimatedFee ?? estimatedPrice,
                 }
             });
         } catch (error: any) {
@@ -1094,10 +1094,10 @@ const BookingPage = () => {
         if (!licensePlate || !parkingSpot._id) return null;
         const cleaned = formatPlate(licensePlate, vehicleType?.code);
         return myMonthlyPasses.find(p => {
-            const pLotId = typeof p.parkingLot === 'object' ? p.parkingLot._id : p.parkingLot;
+            const pLotId = typeof p.parkingLot === 'object' ? p.parkingLot?._id : p.parkingLot;
             return p.licensePlate === cleaned &&
                 ['active', 'pending'].includes(p.status) &&
-                pLotId === parkingSpot._id;
+                String(pLotId) === String(parkingSpot._id);
         }) || null;
     }, [licensePlate, vehicleType, myMonthlyPasses, parkingSpot._id]);
 
@@ -1126,10 +1126,10 @@ const BookingPage = () => {
 
             // Check if entered plate has active pass for this lot
             const activePass = myMonthlyPasses.find(p => {
-                const pLotId = typeof p.parkingLot === 'object' ? p.parkingLot._id : p.parkingLot;
+                const pLotId = typeof p.parkingLot === 'object' ? p.parkingLot?._id : p.parkingLot;
                 return p.licensePlate === cleaned &&
                     ['active', 'pending'].includes(p.status) &&
-                    pLotId === parkingSpot._id;
+                    String(pLotId) === String(parkingSpot._id);
             });
             if (activePass) {
                 setPlateError('This vehicle already has a Monthly Pass for this location. You can park without booking.');
