@@ -161,7 +161,7 @@ export default function ManagerWorkScheduleTab({ globalLotId, setGlobalLotId }: 
   const getStaffForShift = (dateStr: string, shiftId: string) => {
     const assignedStaff: any[] = [];
     currentMonthSchedules.forEach(schedule => {
-      const shift = schedule.shifts.find((s: any) => s.date.startsWith(dateStr) && s.shiftType === shiftId && (s.status === 'approved' || s.status === 'published' || s.status === 'leave_pending'));
+      const shift = schedule.shifts.find((s: any) => s.date.startsWith(dateStr) && s.shiftType === shiftId && (s.status === 'approved' || s.status === 'published' || s.status === 'leave_pending' || s.status === 'assignment_pending'));
       if (shift) {
         assignedStaff.push({ ...schedule.staff, shiftStatus: shift.status });
       }
@@ -414,16 +414,18 @@ export default function ManagerWorkScheduleTab({ globalLotId, setGlobalLotId }: 
                               <div className="flex flex-col gap-1 mt-1">
                                 {staffList.map((staff, idx) => (
                                   <div key={idx} className={`text-[11px] font-bold p-1.5 rounded border-l-2 shadow-sm bg-white flex items-center gap-2 ${staff.shiftStatus === 'leave_pending' ? 'border-orange-400 text-orange-900 bg-orange-50 opacity-60' :
+                                      staff.shiftStatus === 'assignment_pending' ? 'border-purple-400 text-purple-900 bg-purple-50' :
                                       isMorning ? 'border-sky-400 text-sky-900' :
                                         isAfternoon ? 'border-amber-400 text-amber-900' :
                                           'border-indigo-400 text-indigo-900'
                                     } truncate`} title={staff?.fullName}>
                                     <div className={`w-4 h-4 rounded-full flex-shrink-0 flex items-center justify-center text-[8px] font-bold text-white ${staff.shiftStatus === 'leave_pending' ? 'bg-orange-500' :
+                                        staff.shiftStatus === 'assignment_pending' ? 'bg-purple-500' :
                                         isMorning ? 'bg-sky-500' : isAfternoon ? 'bg-amber-500' : 'bg-indigo-500'
                                       }`}>
                                       {(staff?.fullName || 'S')[0]}
                                     </div>
-                                    <span className="truncate">{staff?.fullName || 'Unknown'} {staff.shiftStatus === 'leave_pending' && '(Leave Req)'}</span>
+                                    <span className="truncate">{staff?.fullName || 'Unknown'} {staff.shiftStatus === 'leave_pending' ? '(Leave Req)' : staff.shiftStatus === 'assignment_pending' ? '(Pending)' : ''}</span>
                                   </div>
                                 ))}
                               </div>
@@ -747,6 +749,12 @@ export default function ManagerWorkScheduleTab({ globalLotId, setGlobalLotId }: 
                 const staffList = getStaffForShift(dayDetailsModal.dateStr, shiftInfo.id);
                 const isMorning = shiftInfo.id === 'morning';
                 const isAfternoon = shiftInfo.id === 'afternoon';
+                
+                let shiftTime = '00:00';
+                if (shiftInfo.id === 'morning') shiftTime = '06:00';
+                if (shiftInfo.id === 'afternoon') shiftTime = '14:00';
+                if (shiftInfo.id === 'night') shiftTime = '22:00';
+                const isPastShift = dayjs(`${dayDetailsModal.dateStr} ${shiftTime}`).isBefore(dayjs());
 
                 return (
                   <div key={shiftInfo.id} className="bg-gray-50 border border-gray-100 rounded-xl p-4">
@@ -768,16 +776,18 @@ export default function ManagerWorkScheduleTab({ globalLotId, setGlobalLotId }: 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         {staffList.map((staff, idx) => (
                           <div key={idx} className={`text-xs font-bold p-2.5 rounded-lg border-l-4 shadow-sm bg-white flex items-center gap-3 ${staff.shiftStatus === 'leave_pending' ? 'border-orange-400 text-orange-900 bg-orange-50 opacity-60' :
+                              staff.shiftStatus === 'assignment_pending' ? 'border-purple-400 text-purple-900 bg-purple-50' :
                               isMorning ? 'border-sky-400 text-sky-900' :
                                 isAfternoon ? 'border-amber-400 text-amber-900' :
                                   'border-indigo-400 text-indigo-900'
                             }`}>
                             <div className={`w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center text-[10px] font-black text-white ${staff.shiftStatus === 'leave_pending' ? 'bg-orange-500' :
+                                staff.shiftStatus === 'assignment_pending' ? 'bg-purple-500' :
                                 isMorning ? 'bg-sky-500' : isAfternoon ? 'bg-amber-500' : 'bg-indigo-500'
                               }`}>
                               {(staff?.fullName || 'S')[0]}
                             </div>
-                            <span className="truncate" title={staff?.fullName}>{staff?.fullName || 'Unknown'} {staff.shiftStatus === 'leave_pending' && '(Leave)'}</span>
+                            <span className="truncate" title={staff?.fullName}>{staff?.fullName || 'Unknown'} {staff.shiftStatus === 'leave_pending' ? '(Leave)' : staff.shiftStatus === 'assignment_pending' ? '(Pending)' : ''}</span>
                           </div>
                         ))}
                       </div>
@@ -785,8 +795,18 @@ export default function ManagerWorkScheduleTab({ globalLotId, setGlobalLotId }: 
 
                     {staffList.length < (quotas[shiftInfo.id as keyof typeof quotas] || 2) && (
                       <button
-                        onClick={() => setAssignModal({ date: dayDetailsModal.dateStr, shiftType: shiftInfo.id, label: shiftInfo.label })}
-                        className="mt-3 w-full py-2 border-2 border-dashed border-gray-300 text-gray-500 rounded-lg text-xs font-bold hover:bg-gray-100 hover:text-gray-800 transition-colors flex items-center justify-center gap-2"
+                        onClick={() => {
+                          if (!isPastShift) {
+                            setAssignModal({ date: dayDetailsModal.dateStr, shiftType: shiftInfo.id, label: shiftInfo.label });
+                          }
+                        }}
+                        disabled={isPastShift}
+                        className={`mt-3 w-full py-2 border-2 border-dashed rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-colors ${
+                          isPastShift 
+                            ? 'cursor-not-allowed opacity-50 border-gray-200 text-gray-400 bg-gray-50' 
+                            : 'border-gray-300 text-gray-500 hover:bg-gray-100 hover:text-gray-800'
+                        }`}
+                        title={isPastShift ? 'Cannot assign staff to past shifts' : 'Assign Staff'}
                       >
                         + Assign Staff
                       </button>

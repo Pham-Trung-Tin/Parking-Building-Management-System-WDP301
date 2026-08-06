@@ -28,6 +28,10 @@ class WorkScheduleService {
   assignStaffToShift(data: { parkingLotId: string, staffId: string, date: string, shiftType: string }) {
     return axiosClient.post('/work-schedules/assign', data);
   }
+
+  respondAssignment(id: string, shiftId: string, action: 'approved' | 'rejected') {
+    return axiosClient.put(`/work-schedules/${id}/respond-assignment`, { shiftId, action });
+  }
 }
 
 const workScheduleService = new WorkScheduleService();

@@ -29,6 +29,24 @@ export default function StaffWorkSchedulePage() {
   const [leaveReason, setLeaveReason] = useState('');
   const [submittingLeave, setSubmittingLeave] = useState(false);
 
+  const [assignmentModalOpen, setAssignmentModalOpen] = useState(false);
+  const [assignmentTarget, setAssignmentTarget] = useState<{ scheduleId: string, shiftId: string, date: string, shiftType: string, label: string } | null>(null);
+  const [respondingAssignment, setRespondingAssignment] = useState(false);
+
+  const handleRespondAssignment = async (action: 'approved' | 'rejected') => {
+    if (!assignmentTarget) return;
+    setRespondingAssignment(true);
+    try {
+      await workScheduleService.respondAssignment(assignmentTarget.scheduleId, assignmentTarget.shiftId, action);
+      setAssignmentModalOpen(false);
+      loadMySchedules();
+    } catch (e: any) {
+      setError(e.message || 'Failed to respond to assignment');
+    } finally {
+      setRespondingAssignment(false);
+    }
+  };
+
   const [activeTab, setActiveTab] = useState<'view' | 'register'>('view');
   const [viewMode, setViewMode] = useState<'week' | 'month'>('week');
   const [dateOffset, setDateOffset] = useState(0);
@@ -477,7 +495,14 @@ export default function StaffWorkSchedulePage() {
                             dayShifts.map((shiftType: string) => {
                               const shiftInfo = SHIFTS.find(s => s.id === shiftType);
                               const shiftData = getShiftData(d.dateStr, shiftType);
-                              const canRequestLeave = shiftData?.status === 'approved' || shiftData?.status === 'published';
+                              
+                              let shiftTime = '00:00';
+                              if (shiftType === 'morning') shiftTime = '06:00';
+                              if (shiftType === 'afternoon') shiftTime = '14:00';
+                              if (shiftType === 'night') shiftTime = '22:00';
+                              const isPastShift = dayjs(`${d.dateStr} ${shiftTime}`).isBefore(dayjs());
+                              
+                              const canRequestLeave = (shiftData?.status === 'approved' || shiftData?.status === 'published') && !isPastShift;
 
                               return (
                                 <div key={shiftType}
@@ -486,14 +511,19 @@ export default function StaffWorkSchedulePage() {
                                       setLeaveTarget({ date: d.dateStr, shiftType, label: shiftInfo?.label || '' });
                                       setLeaveReason('');
                                       setLeaveModalOpen(true);
+                                    } else if (shiftData?.status === 'assignment_pending' && !isPastShift) {
+                                      setAssignmentTarget({ scheduleId: scheduleData._id, shiftId: shiftData._id, date: d.dateStr, shiftType, label: shiftInfo?.label || '' });
+                                      setAssignmentModalOpen(true);
                                     }
                                   }}
-                                  className={`px-2 py-1 rounded border shadow-sm flex flex-col relative ${canRequestLeave ? 'cursor-pointer hover:opacity-80' : ''} ${shiftData?.status === 'approved' ? 'bg-green-50 border-green-100 text-green-800' :
+                                  title={isPastShift ? 'Shift has passed' : ''}
+                                  className={`px-2 py-1 rounded border shadow-sm flex flex-col relative ${canRequestLeave || (shiftData?.status === 'assignment_pending' && !isPastShift) ? 'cursor-pointer hover:opacity-80' : isPastShift ? 'cursor-not-allowed opacity-60' : 'cursor-default'} ${shiftData?.status === 'approved' ? 'bg-green-50 border-green-100 text-green-800' :
                                       shiftData?.status === 'published' ? 'bg-indigo-100 border-indigo-200 text-indigo-900' :
                                         shiftData?.status === 'rejected' ? 'bg-red-50 border-red-100 text-red-800' :
                                           shiftData?.status === 'leave_pending' ? 'bg-orange-50 border-orange-200 text-orange-800' :
                                             shiftData?.status === 'leave_approved' ? 'bg-gray-100 border-gray-300 text-gray-500 opacity-60' :
-                                              'bg-sky-50 border-sky-100 text-sky-800'
+                                              shiftData?.status === 'assignment_pending' ? 'bg-purple-50 border-purple-200 text-purple-800' :
+                                                'bg-sky-50 border-sky-100 text-sky-800'
                                     }`}>
                                   <span className={`font-black uppercase truncate ${viewMode === 'week' ? 'text-xs' : 'text-[10px]'}`}>
                                     {shiftInfo?.label.split(' ')[0]}
@@ -506,6 +536,9 @@ export default function StaffWorkSchedulePage() {
                                   )}
                                   {shiftData?.status === 'leave_approved' && (
                                     <span className="text-[8px] font-bold bg-gray-300 text-gray-700 px-1 py-0.5 mt-1 rounded text-center">LEAVE APPROVED</span>
+                                  )}
+                                  {shiftData?.status === 'assignment_pending' && (
+                                    <span className="text-[8px] font-bold bg-purple-200 text-purple-900 px-1 py-0.5 mt-1 rounded text-center">ASSIGNED (NEEDS REVIEW)</span>
                                   )}
                                 </div>
                               );
@@ -627,6 +660,51 @@ export default function StaffWorkSchedulePage() {
                 >
                   {submittingLeave && <Loader2 className="w-4 h-4 animate-spin" />}
                   Submit Request
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Assignment Modal */}
+      {assignmentModalOpen && assignmentTarget && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setAssignmentModalOpen(false)} />
+          <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-md p-6 animate-fade-in-up m-4">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-xl font-black text-gray-900">Shift Assignment</h2>
+                <p className="text-sm text-gray-500">Your manager assigned you to this shift</p>
+              </div>
+              <button onClick={() => setAssignmentModalOpen(false)} className="p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-900 rounded-lg transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="bg-purple-50 p-4 rounded-xl border border-purple-100">
+                <p className="text-sm font-bold text-purple-900 mb-1">Shift Details</p>
+                <p className="text-sm text-purple-700 font-medium">{assignmentTarget.date} - {assignmentTarget.label}</p>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4">
+                <button
+                  onClick={() => handleRespondAssignment('rejected')}
+                  disabled={respondingAssignment}
+                  className="px-5 py-2.5 bg-red-100 text-red-700 font-bold hover:bg-red-200 rounded-lg transition-colors flex items-center gap-2"
+                >
+                  {respondingAssignment && <Loader2 className="w-4 h-4 animate-spin" />}
+                  Reject
+                </button>
+                <button
+                  onClick={() => handleRespondAssignment('approved')}
+                  disabled={respondingAssignment}
+                  className="px-6 py-2.5 bg-purple-600 text-white rounded-lg text-sm font-bold transition-colors shadow-sm flex items-center gap-2 hover:bg-purple-700 disabled:opacity-50"
+                >
+                  {respondingAssignment && <Loader2 className="w-4 h-4 animate-spin" />}
+                  Accept Shift
                 </button>
               </div>
             </div>
