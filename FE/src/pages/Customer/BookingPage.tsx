@@ -3681,7 +3681,6 @@ const BookingPage = () => {
                                                         onClick={() => {
                                                             if (!isPastMin) {
                                                                 setSlot(selHour, m);
-                                                                setShowTimePicker(false);
                                                             }
                                                         }}
                                                         style={{
@@ -3769,7 +3768,6 @@ const BookingPage = () => {
                                                         onClick={() => {
                                                             if (!isPastMin) {
                                                                 setExitSlot(exitSelHour, m);
-                                                                setShowExitTimePicker(false);
                                                             }
                                                         }}
                                                         style={{

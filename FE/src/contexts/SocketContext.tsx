@@ -43,6 +43,8 @@ const SocketContext = createContext<SocketContextValue>({
 export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const socketRef = useRef<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
+  // Expose socket instance as state so consumers re-render when it becomes available
+  const [socketInstance, setSocketInstance] = useState<Socket | null>(null);
 
   useEffect(() => {
     const token = localStorage.getItem('accessToken');
@@ -56,6 +58,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     });
 
     socketRef.current = socket;
+    setSocketInstance(socket); // ← expose to context consumers immediately
 
     // Periodically check if token changed (e.g. after login/logout without page reload)
     const tokenInterval = setInterval(() => {
@@ -86,6 +89,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       clearInterval(tokenInterval);
       socket.disconnect();
       socketRef.current = null;
+      setSocketInstance(null);
     };
   }, []);
 
@@ -105,7 +109,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, []);
 
   return (
-    <SocketContext.Provider value={{ socket: socketRef.current, isConnected, joinParkingLot, leaveParkingLot, onSlotUpdate }}>
+    <SocketContext.Provider value={{ socket: socketInstance, isConnected, joinParkingLot, leaveParkingLot, onSlotUpdate }}>
       {children}
     </SocketContext.Provider>
   );
