@@ -122,6 +122,7 @@ const SessionPage = () => {
     const [surchargePolling, setSurchargePolling] = useState(false);
     const [surchargeProcessing, setSurchargeProcessing] = useState(false);
     const [showPaySuccessToast, setShowPaySuccessToast] = useState(false);
+    const [dismissExpiringSoon, setDismissExpiringSoon] = useState(false);
 
     // ── Booking data từ API (nếu có bookingId) ────────────────────────────────
     const [fullBooking, setFullBooking] = useState<any>(null);
@@ -1010,7 +1011,7 @@ const SessionPage = () => {
                             <div className="dashboard-panel">
 
                                 {/* Expiring Soon Alert (Floating Toast) */}
-                                {isExpiringSoon && (
+                                {isExpiringSoon && !dismissExpiringSoon && (
                                     <div style={{
                                         position: 'fixed', top: '32px', left: '50%', transform: 'translateX(-50%)',
                                         zIndex: 9999, background: '#fffbeb', border: '1px solid #fde68a',
@@ -1028,12 +1029,28 @@ const SessionPage = () => {
                                         <div style={{ color: '#d97706', marginTop: '2px' }}>
                                             <WarningIcon />
                                         </div>
-                                        <div>
+                                        <div style={{ flex: 1, paddingRight: '20px' }}>
                                             <div style={{ color: '#b45309', fontWeight: 800, fontSize: '14px', marginBottom: '4px' }}>Session Expiring Soon</div>
                                             <div style={{ color: '#b45309', fontSize: '12px', lineHeight: 1.5, fontWeight: 500, maxWidth: '280px' }}>
                                                 Your parking time is almost up. Please exit before the booked time to avoid late departure surcharges.
                                             </div>
                                         </div>
+                                        <button 
+                                            onClick={() => setDismissExpiringSoon(true)}
+                                            style={{ 
+                                                background: 'transparent', border: 'none', cursor: 'pointer',
+                                                padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                color: '#b45309', opacity: 0.6, position: 'absolute', top: '12px', right: '12px',
+                                                transition: 'opacity 0.2s'
+                                            }}
+                                            onMouseOver={(e) => e.currentTarget.style.opacity = '1'}
+                                            onMouseOut={(e) => e.currentTarget.style.opacity = '0.6'}
+                                        >
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                <line x1="18" y1="6" x2="6" y2="18"></line>
+                                                <line x1="6" y1="6" x2="18" y2="18"></line>
+                                            </svg>
+                                        </button>
                                     </div>
                                 )}
 
