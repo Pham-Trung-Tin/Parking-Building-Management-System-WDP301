@@ -313,22 +313,25 @@ const SessionPage = () => {
         }
 
         if (now > scheduledEnd) {
-            let tempStart = new Date(scheduledEnd.getTime());
-            while (tempStart < now) {
-                const blockEnd = new Date(tempStart.getTime() + 4 * 60 * 60 * 1000);
-                const effectiveEnd = new Date(blockEnd.getTime() - 1);
-                const startHour = tempStart.getHours();
-                const endHour = effectiveEnd.getHours();
-                const isNightBlock = startHour >= 18 || startHour < 6 || endHour >= 18 || endHour < 6;
-                const fee = isNightBlock ? resolvedNightBlockRate : blockRate;
-                lateOtFee += fee;
-                feeLogs.push({
-                    type: 'late',
-                    timestamp: new Date(tempStart.getTime()),
-                    amount: fee,
-                    label: 'Late Departure Surcharge'
-                });
-                tempStart = new Date(tempStart.getTime() + 4 * 60 * 60 * 1000);
+            const otHours = (now.getTime() - scheduledEnd.getTime()) / (1000 * 60 * 60);
+            if (otHours > 15 / 60) {
+                let tempStart = new Date(scheduledEnd.getTime());
+                while (tempStart < now) {
+                    const blockEnd = new Date(tempStart.getTime() + 4 * 60 * 60 * 1000);
+                    const effectiveEnd = new Date(blockEnd.getTime() - 1);
+                    const startHour = tempStart.getHours();
+                    const endHour = effectiveEnd.getHours();
+                    const isNightBlock = startHour >= 18 || startHour < 6 || endHour >= 18 || endHour < 6;
+                    const fee = isNightBlock ? resolvedNightBlockRate : blockRate;
+                    lateOtFee += fee;
+                    feeLogs.push({
+                        type: 'late',
+                        timestamp: new Date(tempStart.getTime()),
+                        amount: fee,
+                        label: 'Late Departure Surcharge'
+                    });
+                    tempStart = new Date(tempStart.getTime() + 4 * 60 * 60 * 1000);
+                }
             }
         }
         overtimeFee = earlyOtFee + lateOtFee;

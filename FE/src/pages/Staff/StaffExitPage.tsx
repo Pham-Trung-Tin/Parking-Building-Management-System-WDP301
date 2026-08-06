@@ -190,15 +190,19 @@ const StaffExitPage = () => {
       let cur = new Date(start);
       let blockCount = 1;
       while (cur < end) {
-        const h = cur.getHours();
-        // 06:00–17:59 daytime, 18:00–05:59 nighttime
-        const isDaytime = h >= 6 && h < 18;
-        const blockFee = isDaytime ? dayBlockRate : nightBlockRate;
+        const blockEnd = new Date(Math.min(end.getTime(), cur.getTime() + BLOCK_MS));
+        const effectiveEnd = new Date(blockEnd.getTime() - 1);
+        
+        const startHour = cur.getHours();
+        const endHour = effectiveEnd.getHours();
+        const isNightBlock = startHour >= 18 || startHour < 6 || endHour >= 18 || endHour < 6;
+
+        const blockFee = isNightBlock ? nightBlockRate : dayBlockRate;
         fee += blockFee;
         
         logs.push({
           time: new Date(cur),
-          message: `${labelPrefix} - Block ${blockCount} (${isDaytime ? 'Day' : 'Night'})`,
+          message: `${labelPrefix} - Block ${blockCount} (${isNightBlock ? 'Night' : 'Day'})`,
           amount: blockFee
         });
         
