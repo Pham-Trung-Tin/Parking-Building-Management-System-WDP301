@@ -902,6 +902,35 @@ const SessionPage = () => {
                                 </div>
                             </div>
 
+                            {/* ── Vehicle Relocated Banner ── */}
+                            {session?.isRelocated && (
+                                <div style={{
+                                    margin: '16px 0',
+                                    padding: '12px 16px',
+                                    background: 'rgba(234, 179, 8, 0.15)',
+                                    border: '1.5px solid rgba(234, 179, 8, 0.5)',
+                                    borderRadius: '12px',
+                                    display: 'flex',
+                                    alignItems: 'flex-start',
+                                    gap: '10px',
+                                }}>
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#eab308" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 1 }}>
+                                        <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+                                        <line x1="12" y1="9" x2="12" y2="13" />
+                                        <line x1="12" y1="17" x2="12.01" y2="17" />
+                                    </svg>
+                                    <div>
+                                        <div style={{ fontSize: 13, fontWeight: 700, color: '#eab308', marginBottom: 2 }}>
+                                            🚗 Vehicle Relocated
+                                        </div>
+                                        <div style={{ fontSize: 12, color: '#fde68a', lineHeight: 1.5 }}>
+                                            Your vehicle was moved due to exceeding the booked time.
+                                            Please proceed to slot <strong style={{ color: '#fef08a' }}>{slotCode}</strong> immediately.
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
                             {bookingInfo && (
                                 <div className="dt-info-row" style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 16, marginTop: 16 }}>
                                     <div className="dt-info-col">

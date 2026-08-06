@@ -43,6 +43,7 @@ export interface ParkingSession {
     notes?: string;
     ticketNumber?: string;
     currentDurationHours?: number; // virtual
+    isRelocated?: boolean; // set by overdue worker after auto-relocation
     createdAt?: string;
     updatedAt?: string;
 }
