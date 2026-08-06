@@ -922,7 +922,7 @@ const BookingPage = () => {
 
             // Navigate to /checkout page — CheckoutPage handles payment method selection
             // Build ICT display strings directly from the local datetime strings
-            const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+            const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
             const buildDisplay = (dtStr: string) => {
                 // dtStr = "YYYY-MM-DDTHH:mm"
                 const [datePart, timePart] = dtStr.split('T');
@@ -1141,8 +1141,9 @@ const BookingPage = () => {
                 // 1. Check if the vehicle is currently parked
                 try {
                     const activeRes = await parkingSessionService.findActive({ licensePlate: cleaned });
-                    if (activeRes && activeRes._id) {
-                        setPlateError('This vehicle is currently parked (has an active session).');
+                    const activeSessionId = activeRes?.data?._id || activeRes?._id;
+                    if (activeSessionId) {
+                        setPlateError('This vehicle is currently parked.');
                         setIsCheckingPlate(false);
                         return;
                     }
@@ -1165,7 +1166,7 @@ const BookingPage = () => {
                     if (b.paymentStatus !== 'paid' && b.createdAt) {
                         const elapsed = Date.now() - new Date(b.createdAt).getTime();
                         if (elapsed > EXPIRY_MS) {
-                            bookingService.cancel(b._id || b.id, 'Payment timeout').catch(() => {});
+                            bookingService.cancel(b._id || b.id, 'Payment timeout').catch(() => { });
                             return false;
                         }
                     }
@@ -2488,7 +2489,7 @@ const BookingPage = () => {
                                                             onClick={async () => {
                                                                 try {
                                                                     await bookingService.cancel(bookingId, 'Cancelled by user');
-                                                                } catch (_) {}
+                                                                } catch (_) { }
                                                                 setPlateError('');
                                                             }}
                                                             style={{
@@ -3555,11 +3556,11 @@ const BookingPage = () => {
                                 {calDays.map((cell, idx) => {
                                     const cellDate = new Date(cell.year, cell.month, cell.day);
                                     const isPast = isBeforeDay(cellDate, todayOnly);
-                                    
+
                                     const maxAdvanceDate = new Date(todayOnly);
                                     maxAdvanceDate.setDate(maxAdvanceDate.getDate() + 7);
                                     const isTooFar = cellDate > maxAdvanceDate;
-                                    
+
                                     const isDisabled = isPast || isTooFar;
 
                                     const isSelected = isSameDay(cellDate, activeInput === 'from' ? tempFromDate : tempToDate);
