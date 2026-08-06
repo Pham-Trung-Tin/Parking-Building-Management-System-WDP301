@@ -126,10 +126,19 @@ const FloatingSessionWidget: React.FC = () => {
 
     useEffect(() => {
         const handleAuthChange = () => {
-            setIsCustomer(checkIsCustomer());
+            const customer = checkIsCustomer();
+            setIsCustomer(customer);
+            if (customer) {
+                // Call fetch directly to avoid missing state changes
+                fetchActiveSession();
+            } else {
+                setActiveSessions([]);
+                setIsListExpanded(false);
+            }
         };
         window.addEventListener('authChange', handleAuthChange);
         return () => window.removeEventListener('authChange', handleAuthChange);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const fetchActiveSession = async () => {
