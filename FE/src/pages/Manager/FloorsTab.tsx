@@ -8,8 +8,26 @@ import { Toast, useToast, useConfirm } from './shared';
 
 // ─── Floor Modal ───────────────────────────────────────────────────────────────
 function FloorModal({ initial, lotId, onSave, onClose, loading }: any) {
-  const [form, setForm] = useState({ name: '', floorNumber: 1, floorType: 'above_ground', status: 'active', ...initial });
-  const set = (k: string, v: any) => setForm(f => ({ ...f, [k]: v }));
+  // Basement floors are stored as negative in DB (B1=-1, B2=-2).
+  // Always display the absolute value to the user; backend re-negates on save.
+  const normalizedInitial = initial?._id && initial?.floorType === 'basement'
+    ? { ...initial, floorNumber: Math.abs(initial.floorNumber) }
+    : initial;
+  const [form, setForm] = useState({ name: '', floorNumber: 1, floorType: 'above_ground', status: 'active', ...normalizedInitial });
+  const set = (k: string, v: any) => setForm((f: any) => ({ ...f, [k]: v }));
+
+  // When floorType changes, snap floorNumber to a sensible default
+  const handleTypeChange = (newType: string) => {
+    setForm((f: any) => ({
+      ...f,
+      floorType: newType,
+      floorNumber: newType === 'ground' ? 0 : (f.floorNumber < 1 ? 1 : f.floorNumber),
+    }));
+  };
+
+  const isGround = form.floorType === 'ground';
+  const floorNumLabel = form.floorType === 'basement' ? `B${form.floorNumber}` : form.floorType === 'ground' ? 'G' : `${form.floorNumber}`;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
@@ -25,17 +43,35 @@ function FloorModal({ initial, lotId, onSave, onClose, loading }: any) {
               <input value={form.name} onChange={e => set('name', e.target.value)} placeholder="e.g. Floor 1" className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Floor Number *</label>
-              <input type="number" value={form.floorNumber} onChange={e => set('floorNumber', parseInt(e.target.value) || 0)} className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+              <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">
+                Floor Number * <span className="text-indigo-500 font-bold ml-1">→ {floorNumLabel}</span>
+              </label>
+              {isGround ? (
+                <input
+                  type="text" value="G (Ground)" disabled
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-gray-50 text-gray-400 cursor-not-allowed"
+                />
+              ) : (
+                <input
+                  type="number"
+                  value={form.floorNumber}
+                  min={1}
+                  onChange={e => {
+                    const v = Math.max(1, parseInt(e.target.value) || 1);
+                    set('floorNumber', v);
+                  }}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+                />
+              )}
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Type</label>
-              <select value={form.floorType} onChange={e => set('floorType', e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 bg-white">
-                <option value="above_ground">Above Ground</option>
-                <option value="ground">Ground Floor</option>
-                <option value="basement">Basement</option>
+              <select value={form.floorType} onChange={e => handleTypeChange(e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 bg-white">
+                <option value="above_ground">Above Ground (1, 2, 3…)</option>
+                <option value="ground">Ground Floor (G)</option>
+                <option value="basement">Basement (B1, B2…)</option>
               </select>
             </div>
             <div>
@@ -46,6 +82,12 @@ function FloorModal({ initial, lotId, onSave, onClose, loading }: any) {
                 <option value="maintenance">Maintenance</option>
               </select>
             </div>
+          </div>
+          {/* Preview label */}
+          <div className="bg-gray-50 rounded-xl px-3 py-2 text-xs text-gray-500">
+            Will display as: <span className="font-semibold text-gray-800">
+              {form.floorType === 'basement' ? `Basement B${form.floorNumber}` : form.floorType === 'ground' ? 'Ground Floor (G)' : `Floor ${form.floorNumber}`}
+            </span>
           </div>
         </div>
         <div className="flex gap-3 mt-6">
@@ -236,15 +278,15 @@ export default function FloorsTab({ globalLotId, setGlobalLotId }: any) {
 
   // ── Floor type helpers ──
   const floorLabel = (f: any) => {
-    if (f.floorType === 'basement') return `Basement B${Math.abs(f.floorNumber)}`;
-    if (f.floorNumber === 0) return 'Ground Floor';
+    if (f.floorType === 'basement') return `B${Math.abs(f.floorNumber)}`;
+    if (f.floorType === 'ground' || f.floorNumber === 0) return 'G';
     return `Floor ${f.floorNumber}`;
   };
 
   const floorColor = (f: any, selected: boolean) => {
     if (selected) return 'bg-gray-900 text-white border-gray-900';
     if (f.floorType === 'basement') return 'bg-slate-700/10 text-slate-700 border-slate-300 hover:bg-slate-700/20';
-    if (f.floorNumber === 0) return 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100';
+    if (f.floorType === 'ground' || f.floorNumber === 0) return 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100';
     return 'bg-blue-50 text-blue-800 border-blue-200 hover:bg-blue-100';
   };
 
