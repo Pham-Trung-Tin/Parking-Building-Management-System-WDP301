@@ -273,7 +273,7 @@ const SessionPage = () => {
 
         const scheduledStart = new Date(dStr);
         scheduledStart.setHours(startH, startM, 0, 0);
-        
+
         let scheduledEnd = new Date(dStr);
         scheduledEnd.setHours(endH, endM, 0, 0);
 
@@ -921,7 +921,7 @@ const SessionPage = () => {
                                     </svg>
                                     <div>
                                         <div style={{ fontSize: 13, fontWeight: 700, color: '#eab308', marginBottom: 2 }}>
-                                            🚗 Vehicle Relocated
+                                            Vehicle Relocated
                                         </div>
                                         <div style={{ fontSize: 12, color: '#fde68a', lineHeight: 1.5 }}>
                                             Your vehicle was moved due to exceeding the booked time.
@@ -970,7 +970,7 @@ const SessionPage = () => {
                                                 const d = new Date(b.scheduledDate);
                                                 const [h, m] = b.endTime.split(':').map(Number);
                                                 d.setHours(h, m);
-                                                
+
                                                 const [startH, startM] = b.startTime.split(':').map(Number);
                                                 const startD = new Date(b.scheduledDate);
                                                 startD.setHours(startH, startM);
