@@ -552,7 +552,6 @@ const BookingPage = () => {
     }, [onSlotUpdate, isConnected]);
 
 
-
     // ── Step state ──
     // Start at step 1 (select building) unless a building was already chosen
     const [currentStep, setCurrentStep] = useState(hasSpotFromNav ? 2 : 1);
@@ -721,6 +720,21 @@ const BookingPage = () => {
         } catch (_) { }
         return undefined;
     });
+
+    // Clear selected slot if dates change (after initial mount)
+    const isFirstRenderForDates = React.useRef(true);
+    useEffect(() => {
+        if (isFirstRenderForDates.current) {
+            isFirstRenderForDates.current = false;
+            return;
+        }
+        if (selectedSlot) {
+            parkingSlotService.unlockSlot(selectedSlot._id).catch(() => {});
+            setSelectedSlot(null);
+            setSlotLockUntil(null);
+            if (lockTimerRef.current) clearTimeout(lockTimerRef.current);
+        }
+    }, [entryDate, exitDate]);
 
     // ── Slot lock timer (counts down 3 min) ──
     const [slotLockUntil, setSlotLockUntil] = useState<Date | null>(null);
@@ -1195,6 +1209,12 @@ const BookingPage = () => {
     };
 
     const handleBack = () => {
+        if (currentStep === 7 && selectedSlot) {
+            parkingSlotService.unlockSlot(selectedSlot._id).catch(() => {});
+            setSelectedSlot(null);
+            setSlotLockUntil(null);
+            if (lockTimerRef.current) clearTimeout(lockTimerRef.current);
+        }
         if (currentStep > 1) setCurrentStep(s => s - 1);
         else navigate(-1);
     };

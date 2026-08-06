@@ -891,7 +891,7 @@ const SessionPage = () => {
                                         {spot.title || 'Parking Lot'}
                                     </div>
                                     <div style={{ fontSize: 14, color: '#cbd5e1' }}>
-                                        {floorName} {zoneName !== 'N/A' && `— Zone ${zoneName}`}
+                                        {floorName} {zoneName !== 'N/A' && `— ${zoneName.toLowerCase().includes('zone') ? zoneName : `Zone ${zoneName}`}`}
                                     </div>
                                     <div style={{ marginTop: 12, display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, background: 'rgba(16,185,129,0.15)', color: '#10b981', padding: '6px 12px', borderRadius: 8 }}>
                                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
@@ -1104,7 +1104,7 @@ const SessionPage = () => {
                                             <div className="location-label">Parking Spot</div>
                                             <div className="location-value">{floorName} — {slotCode}</div>
                                             {zoneName && zoneName !== 'N/A' && (
-                                                <div className="location-sub">Zone {zoneName}</div>
+                                                <div className="location-sub">{zoneName.toLowerCase().includes('zone') ? zoneName : `Zone ${zoneName}`}</div>
                                             )}
                                         </div>
                                     </div>
