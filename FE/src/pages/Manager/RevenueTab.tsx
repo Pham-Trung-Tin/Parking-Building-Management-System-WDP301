@@ -69,10 +69,12 @@ function TransactionDetailModal({ tx, onClose, fmt, fmtDate, activeTab }: {
               <p className="text-xs text-emerald-600 font-medium uppercase tracking-wider mb-1">Total Amount</p>
               <p className="text-2xl font-bold text-emerald-700">{fmt(tx.amount || 0)}</p>
             </div>
-            {(tx.baseFee !== undefined || tx.overtimeFee !== undefined) && (
+            {(tx.baseFee != null && tx.baseFee > 0) && (
               <div className="text-right text-xs text-gray-500 space-y-0.5">
-                {tx.baseFee !== undefined && <p>Base: <span className="font-semibold text-gray-700">{fmt(tx.baseFee)}</span></p>}
-                {tx.overtimeFee && tx.overtimeFee > 0 && <p className="text-red-500">Overtime: <span className="font-semibold">+{fmt(tx.overtimeFee)}</span></p>}
+                <p>Base Fee: <span className="font-semibold text-gray-700">{fmt(tx.baseFee)}</span></p>
+                {(tx.overtimeFee != null && tx.overtimeFee > 0) && (
+                  <p className="text-red-500">Overtime: <span className="font-semibold">+{fmt(tx.overtimeFee)}</span></p>
+                )}
               </div>
             )}
           </div>
@@ -226,7 +228,14 @@ export default function RevenueTab({ globalLotId, setGlobalLotId }: { globalLotI
     if (globalLotId) params.parkingLot = globalLotId;
     const res: any = await axiosClient.get('/payments', { params });
     let docs = res.data?.docs ?? res.docs ?? res.data ?? [];
-    return Array.isArray(docs) ? docs : [];
+    if (!Array.isArray(docs)) return [];
+    // Sort by paidAt (or createdAt) descending so display order matches the DATE column
+    docs.sort((a: TxPayment, b: TxPayment) => {
+      const da = new Date(a.paidAt ?? a.createdAt).getTime();
+      const db = new Date(b.paidAt ?? b.createdAt).getTime();
+      return db - da;
+    });
+    return docs;
   };
 
   const fetchTransactions = async () => {
@@ -276,10 +285,18 @@ export default function RevenueTab({ globalLotId, setGlobalLotId }: { globalLotI
     }
   };
 
-  // Re-fetch only when tab or building changes
+  // Re-fetch only when building changes (NOT on tab change — all tabs fetched at once)
   useEffect(() => {
     fetchTransactions();
-  }, [activeTab, globalLotId]);
+  }, [globalLotId]);
+
+  // Switch displayed data when tab changes (no API call needed)
+  useEffect(() => {
+    if (allTabDocs[activeTab].length > 0 || Object.values(allTabDocs).some(d => d.length > 0)) {
+      setAllTransactions(allTabDocs[activeTab]);
+      setPage(1);
+    }
+  }, [activeTab]);
 
   const handleTabChange = (tab: Tab) => {
     if (tab === activeTab) return;
@@ -566,14 +583,25 @@ export default function RevenueTab({ globalLotId, setGlobalLotId }: { globalLotI
                     {/* Amount */}
                     <td className="px-4 py-3 text-right whitespace-nowrap">
                       <div className="font-semibold text-gray-900">
-                        {fmt(tx.amount || tx.baseFee || 0)}
+                        {fmt(tx.amount || 0)}
                       </div>
-                      {(tx.overtimeFee && tx.overtimeFee > 0) ? (
-                        <div className="text-[10px] text-gray-400 flex flex-col items-end mt-0.5">
-                          <span>Base: {fmt(tx.baseFee || 0)}</span>
-                          <span className="text-red-400">Overtime: +{fmt(tx.overtimeFee)}</span>
+                      {/* Overtime-only badge: baseFee=0 means base was pre-paid via booking */}
+                      {activeTab === 'session_checkout' && (tx.baseFee === 0 || tx.baseFee == null) && tx.overtimeFee > 0 && (
+                        <div className="flex flex-col items-end mt-0.5 gap-0.5">
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold bg-orange-50 text-orange-500 border border-orange-200">
+                            Overtime Only
+                          </span>
+                          <span className="text-[10px] text-gray-400">Base pre-paid via booking</span>
                         </div>
-                      ) : null}
+                      )}
+                      {(tx.baseFee != null && tx.baseFee > 0) && (
+                        <div className="text-[10px] text-gray-400 flex flex-col items-end mt-0.5">
+                          <span>Base Fee: {fmt(tx.baseFee)}</span>
+                          {(tx.overtimeFee != null && tx.overtimeFee > 0) && (
+                            <span className="text-red-400">+{fmt(tx.overtimeFee)} Overtime</span>
+                          )}
+                        </div>
+                      )}
                     </td>
 
                     {/* Status */}
