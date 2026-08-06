@@ -313,33 +313,30 @@ const SessionPage = () => {
         }
 
         if (now > scheduledEnd) {
-            const otHours = (now.getTime() - scheduledEnd.getTime()) / (1000 * 60 * 60);
-            if (otHours > 15 / 60) {
-                // The booking already paid for the entire 4-hour block containing scheduledEnd.
-                // Only charge late departure from the NEXT block boundary after scheduledEnd.
-                const blockMs = 4 * 60 * 60 * 1000;
-                const elapsedIntoBlock = (scheduledEnd.getTime() - scheduledStart.getTime()) % blockMs;
-                const msToNextBoundary = elapsedIntoBlock === 0 ? 0 : (blockMs - elapsedIntoBlock);
-                const nextBlockBoundary = new Date(scheduledEnd.getTime() + msToNextBoundary);
+            // No grace period — charge as soon as user crosses into a new block.
+            // If still within the already-paid block → nextBlockBoundary check returns no charge.
+            const blockMs = 4 * 60 * 60 * 1000;
+            const elapsedIntoBlock = (scheduledEnd.getTime() - scheduledStart.getTime()) % blockMs;
+            const msToNextBoundary = elapsedIntoBlock === 0 ? 0 : (blockMs - elapsedIntoBlock);
+            const nextBlockBoundary = new Date(scheduledEnd.getTime() + msToNextBoundary);
 
-                if (now > nextBlockBoundary) {
-                    let tempStart = new Date(nextBlockBoundary.getTime());
-                    while (tempStart < now) {
-                        const blockEnd = new Date(tempStart.getTime() + 4 * 60 * 60 * 1000);
-                        const effectiveEnd = new Date(blockEnd.getTime() - 1);
-                        const startHour = tempStart.getHours();
-                        const endHour = effectiveEnd.getHours();
-                        const isNightBlock = startHour >= 18 || startHour < 6 || endHour >= 18 || endHour < 6;
-                        const fee = isNightBlock ? resolvedNightBlockRate : blockRate;
-                        lateOtFee += fee;
-                        feeLogs.push({
-                            type: 'late',
-                            timestamp: new Date(tempStart.getTime()),
-                            amount: fee,
-                            label: 'Late Departure Surcharge'
-                        });
-                        tempStart = new Date(tempStart.getTime() + 4 * 60 * 60 * 1000);
-                    }
+            if (now > nextBlockBoundary) {
+                let tempStart = new Date(nextBlockBoundary.getTime());
+                while (tempStart < now) {
+                    const blockEnd = new Date(tempStart.getTime() + 4 * 60 * 60 * 1000);
+                    const effectiveEnd = new Date(blockEnd.getTime() - 1);
+                    const startHour = tempStart.getHours();
+                    const endHour = effectiveEnd.getHours();
+                    const isNightBlock = startHour >= 18 || startHour < 6 || endHour >= 18 || endHour < 6;
+                    const fee = isNightBlock ? resolvedNightBlockRate : blockRate;
+                    lateOtFee += fee;
+                    feeLogs.push({
+                        type: 'late',
+                        timestamp: new Date(tempStart.getTime()),
+                        amount: fee,
+                        label: 'Late Departure Surcharge'
+                    });
+                    tempStart = new Date(tempStart.getTime() + 4 * 60 * 60 * 1000);
                 }
             }
         }
@@ -414,7 +411,9 @@ const SessionPage = () => {
     // Ưu tiên data từ API session, fallback về state từ BookingPage
     const licensePlate: string = session?.vehicleInfo?.licensePlate || state.licensePlate || '';
 
-    const vehicleTypeName: string = (typeof session?.vehicleType === 'object' ? (session.vehicleType as any)?.name : '') || vehicleTypeData?.name || 'N/A';
+    const vehicleTypeName: string = (typeof session?.vehicleType === 'object' 
+        ? ((session.vehicleType as any)?.description || (session.vehicleType as any)?.name || (session.vehicleType as any)?.code) 
+        : '') || vehicleTypeData?.description || vehicleTypeData?.name || vehicleTypeData?.code || 'N/A';
     const vtCode: string = (typeof session?.vehicleType === 'object' ? (session.vehicleType as any)?.code : '') || vehicleTypeData?.code || '';
     const isMotorbike = ['MOTORBIKE', 'MOTORCYCLE', 'ELECTRIC_BIKE', 'BICYCLE'].some(c => vtCode.includes(c));
 
@@ -866,9 +865,11 @@ const SessionPage = () => {
                                 <div className="dt-plate-number">
                                     {licensePlate || <span style={{ opacity: 0.5, fontSize: 18 }}>N/A</span>}
                                 </div>
-                                <div className="dt-vehicle-type">
-                                    {vehicleTypeName}
-                                </div>
+                                {vehicleTypeName !== 'N/A' && (
+                                    <div className="dt-vehicle-type">
+                                        {vehicleTypeName}
+                                    </div>
+                                )}
                             </div>
 
                             {isMonthlyPassSession && (
