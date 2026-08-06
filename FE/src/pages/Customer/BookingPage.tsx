@@ -753,7 +753,7 @@ const BookingPage = () => {
             }, until.getTime() - Date.now());
         } catch (err: any) {
             const msg = err?.response?.data?.message || 'This slot is being selected by another user.';
-            alert(`⚠️ ${msg}`);
+            setErrorToastMsg(msg);
         }
     }, [selectedSlot, entryDate]);
 
@@ -796,6 +796,8 @@ const BookingPage = () => {
     const [bankInfo, setBankInfo] = useState<any>(null);
     const [polling, setPolling] = useState(false);
 
+    const [errorToastMsg, setErrorToastMsg] = useState('');
+
     useEffect(() => {
         if (showSuccessToast) {
             const timer = setTimeout(() => {
@@ -804,6 +806,15 @@ const BookingPage = () => {
             return () => clearTimeout(timer);
         }
     }, [showSuccessToast]);
+
+    useEffect(() => {
+        if (errorToastMsg) {
+            const timer = setTimeout(() => {
+                setErrorToastMsg('');
+            }, 3500);
+            return () => clearTimeout(timer);
+        }
+    }, [errorToastMsg]);
 
     useEffect(() => {
         if (!showConfirmModal) {
@@ -910,6 +921,15 @@ const BookingPage = () => {
             setShowConfirmModal(false);
 
             // Navigate to /checkout page — CheckoutPage handles payment method selection
+            // Build ICT display strings directly from the local datetime strings
+            const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+            const buildDisplay = (dtStr: string) => {
+                // dtStr = "YYYY-MM-DDTHH:mm"
+                const [datePart, timePart] = dtStr.split('T');
+                const [y, m, d] = datePart.split('-').map(Number);
+                return `${String(d).padStart(2, '0')} ${MONTHS_SHORT[m - 1]} ${y}, ${timePart}`;
+            };
+
             navigate('/checkout', {
                 state: {
                     isBooking: true,
@@ -922,6 +942,8 @@ const BookingPage = () => {
                     slotCode: selectedSlot?.slotCode,
                     entryDate,
                     exitDate,
+                    entryDisplay: buildDisplay(entryDate),
+                    exitDisplay: buildDisplay(exitDate),
                     totalAmount: estimatedPrice,
                 }
             });
@@ -2554,9 +2576,13 @@ const BookingPage = () => {
                                 handleSetEntryDate(dateStr, selHour, selMin);
                             };
 
-                            const exitDt = new Date(new Date(entryDate).getTime() + duration * 3600000);
+                            const exitDt = new Date(exitDate);
                             const fmtT = (d: Date) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
                             const fmtD = (d: Date) => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+                            const realDurMs = exitDt.getTime() - new Date(entryDate).getTime();
+                            const durH = Math.floor(realDurMs / 3600000);
+                            const durM = Math.round((realDurMs % 3600000) / 60000);
+                            const durDisplay = durH > 0 && durM > 0 ? `${durH}h ${durM}m` : durH === 0 ? `${durM}m` : `${durH}h`;
 
                             const bs = 4;
                             const DURATION_OPTIONS = [
@@ -2853,7 +2879,7 @@ const BookingPage = () => {
                                                     <div style={{ fontSize: 10, color: '#64748b', marginTop: 1 }}>{fmtD(new Date(entryDate))}</div>
                                                 </div>
                                                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, flex: 1 }}>
-                                                    <div style={{ fontSize: 11, color: '#475569', fontWeight: 700 }}>{duration}h</div>
+                                                    <div style={{ fontSize: 11, color: '#475569', fontWeight: 700 }}>{durDisplay}</div>
                                                     <div style={{ height: 2, background: 'linear-gradient(90deg,#3b82f6,#2563eb)', borderRadius: 1, width: '100%' }} />
                                                 </div>
                                                 <div style={{ textAlign: 'center' }}>
@@ -3364,6 +3390,39 @@ const BookingPage = () => {
                 </div>
             )}
 
+            {/* ── Error Toast Notice ── */}
+            {errorToastMsg && (
+                <div style={{
+                    position: 'fixed',
+                    top: '24px',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    background: 'rgba(255, 255, 255, 0.98)',
+                    backdropFilter: 'blur(10px)',
+                    border: '1.5px solid #fecaca',
+                    borderRadius: '16px',
+                    padding: '12px 20px',
+                    boxShadow: '0 10px 30px -5px rgba(220, 38, 38, 0.2), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
+                    zIndex: 100000,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    animation: 'slideUpToast 0.35s cubic-bezier(0.16, 1, 0.3, 1) both',
+                    fontFamily: "'Inter', sans-serif",
+                }}>
+                    <div style={{ color: '#dc2626', display: 'flex', alignItems: 'center' }}>
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="12" y1="8" x2="12" y2="12"></line>
+                            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                        </svg>
+                    </div>
+                    <div style={{ fontSize: '14px', fontWeight: 600, color: '#991b1b' }}>
+                        {errorToastMsg}
+                    </div>
+                </div>
+            )}
+
             {/* ── Success Payment Toast Notice ── */}
             {showSuccessToast && successBooking && (
                 <div style={{
@@ -3539,7 +3598,7 @@ const BookingPage = () => {
                                                     const newExitDate = `${dateStr}T${String(exitSelHour).padStart(2, '0')}:${String(exitSelMin).padStart(2, '0')}`;
 
                                                     if (new Date(newExitDate) <= new Date(entryDate)) {
-                                                        alert("Exit date/time must be after arrival date/time.");
+                                                        setErrorToastMsg("Exit date/time must be after arrival date/time.");
                                                         return;
                                                     }
                                                     setExitDate(newExitDate);

@@ -128,22 +128,27 @@ const CheckoutPage = () => {
             const slotObj = typeof b.assignedSlot === 'object' ? b.assignedSlot : null;
             const vtObj = typeof b.vehicleType === 'object' ? b.vehicleType : null;
 
-            const parseDateTime = (dStr: string, tStr: string) => {
+            // Build a display string directly from scheduledDate (ICT date) + startTime/endTime.
+            // We NEVER convert through Date objects to avoid timezone conversion bugs.
+            // startTime/endTime are already correct ICT "HH:mm" strings.
+            const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+            const getICTDateParts = (dStr: string, extraDays = 0) => {
+                if (!dStr) return null;
+                const TZ_OFFSET_MS = 7 * 60 * 60 * 1000;
+                const ictMs = new Date(dStr).getTime() + TZ_OFFSET_MS + extraDays * 86400000;
+                const d = new Date(ictMs);
+                return `${String(d.getUTCDate()).padStart(2, '0')} ${MONTHS_SHORT[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+            };
+            const formatBookingDisplay = (dStr: string, tStr: string, extraDays = 0) => {
                 if (!dStr || !tStr) return null;
-                const d = new Date(dStr);
-                const [hh, mm] = tStr.split(':').map(Number);
-                if (!isNaN(hh)) d.setHours(hh, mm || 0, 0, 0);
-                return d.toISOString();
+                return `${getICTDateParts(dStr, extraDays)}, ${tStr}`;
             };
 
-            const parsedEntry = parseDateTime(b.scheduledDate, b.startTime);
-            let parsedExit = parseDateTime(b.scheduledDate, b.endTime || b.startTime);
+            const parsedEntry = formatBookingDisplay(b.scheduledDate, b.startTime);
+            // Detect cross-midnight: endTime < startTime as string comparison (e.g. "01:00" < "22:00")
+            const isCrossMidnight = b.endTime && b.startTime && b.endTime < b.startTime;
+            const parsedExit = formatBookingDisplay(b.scheduledDate, b.endTime || b.startTime, isCrossMidnight ? 1 : 0);
 
-            if (parsedEntry && parsedExit && new Date(parsedExit) < new Date(parsedEntry)) {
-                const exitD = new Date(parsedExit);
-                exitD.setDate(exitD.getDate() + 1);
-                parsedExit = exitD.toISOString();
-            }
 
             setBookingDetail({
                 bookingCode: b.bookingCode || b._id,
@@ -434,7 +439,7 @@ const CheckoutPage = () => {
         }, 1800);
     };
 
-    const formatTime = (d: any) => d.toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
+    const formatTime = (d: any) => d.toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Ho_Chi_Minh' });
     const formatHMS = (s) => {
         const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
         return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
@@ -1119,13 +1124,13 @@ const CheckoutPage = () => {
                                     <div className="co-row">
                                         <span className="co-row-label">Entry</span>
                                         <span className="co-row-value" style={{ fontSize: 12 }}>
-                                            {mergedData.entryDate ? formatTime(new Date(mergedData.entryDate)) : '—'}
+                                            {data.entryDisplay || bookingDetail?.entryDate || '—'}
                                         </span>
                                     </div>
                                     <div className="co-row">
                                         <span className="co-row-label">Est. Exit</span>
                                         <span className="co-row-value" style={{ fontSize: 12 }}>
-                                            {mergedData.exitDate ? formatTime(new Date(mergedData.exitDate)) : '—'}
+                                            {data.exitDisplay || bookingDetail?.exitDate || '—'}
                                         </span>
                                     </div>
                                 </>
