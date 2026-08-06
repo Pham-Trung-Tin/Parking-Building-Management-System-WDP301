@@ -315,22 +315,31 @@ const SessionPage = () => {
         if (now > scheduledEnd) {
             const otHours = (now.getTime() - scheduledEnd.getTime()) / (1000 * 60 * 60);
             if (otHours > 15 / 60) {
-                let tempStart = new Date(scheduledEnd.getTime());
-                while (tempStart < now) {
-                    const blockEnd = new Date(tempStart.getTime() + 4 * 60 * 60 * 1000);
-                    const effectiveEnd = new Date(blockEnd.getTime() - 1);
-                    const startHour = tempStart.getHours();
-                    const endHour = effectiveEnd.getHours();
-                    const isNightBlock = startHour >= 18 || startHour < 6 || endHour >= 18 || endHour < 6;
-                    const fee = isNightBlock ? resolvedNightBlockRate : blockRate;
-                    lateOtFee += fee;
-                    feeLogs.push({
-                        type: 'late',
-                        timestamp: new Date(tempStart.getTime()),
-                        amount: fee,
-                        label: 'Late Departure Surcharge'
-                    });
-                    tempStart = new Date(tempStart.getTime() + 4 * 60 * 60 * 1000);
+                // The booking already paid for the entire 4-hour block containing scheduledEnd.
+                // Only charge late departure from the NEXT block boundary after scheduledEnd.
+                const blockMs = 4 * 60 * 60 * 1000;
+                const elapsedIntoBlock = (scheduledEnd.getTime() - scheduledStart.getTime()) % blockMs;
+                const msToNextBoundary = elapsedIntoBlock === 0 ? 0 : (blockMs - elapsedIntoBlock);
+                const nextBlockBoundary = new Date(scheduledEnd.getTime() + msToNextBoundary);
+
+                if (now > nextBlockBoundary) {
+                    let tempStart = new Date(nextBlockBoundary.getTime());
+                    while (tempStart < now) {
+                        const blockEnd = new Date(tempStart.getTime() + 4 * 60 * 60 * 1000);
+                        const effectiveEnd = new Date(blockEnd.getTime() - 1);
+                        const startHour = tempStart.getHours();
+                        const endHour = effectiveEnd.getHours();
+                        const isNightBlock = startHour >= 18 || startHour < 6 || endHour >= 18 || endHour < 6;
+                        const fee = isNightBlock ? resolvedNightBlockRate : blockRate;
+                        lateOtFee += fee;
+                        feeLogs.push({
+                            type: 'late',
+                            timestamp: new Date(tempStart.getTime()),
+                            amount: fee,
+                            label: 'Late Departure Surcharge'
+                        });
+                        tempStart = new Date(tempStart.getTime() + 4 * 60 * 60 * 1000);
+                    }
                 }
             }
         }
