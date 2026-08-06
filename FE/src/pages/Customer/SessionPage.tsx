@@ -379,14 +379,15 @@ const SessionPage = () => {
     // ── Lắng nghe sự kiện Checkout từ Staff qua Socket ────────────────────────
     useEffect(() => {
         if (!socket) return;
-        const handleCheckout = (notif: any) => {
+        const handleCheckout = async (notif: any) => {
             if (notif.type === 'checkout_success') {
                 const notifSessionId = notif.sessionId || notif.session?._id || notif.data?.sessionId || notif.data?._id;
                 // Chỉ chuyển cảnh nếu không có session ID trong notif (fallback) hoặc đúng bằng sessionId hiện tại
                 if (!notifSessionId || String(notifSessionId) === String(sessionId)) {
                     navigate('/checkoutsuccess', {
                         state: {
-                            spot,
+                            sessionId: sessionId,
+                            spot: spot,
                             vehicleType: vehicleTypeData,
                             floor: floorData,
                             slot: slotData,
@@ -398,6 +399,16 @@ const SessionPage = () => {
                             transactionId: notif.transactionId || session?._id,
                         }
                     });
+                }
+            } else if (notif.type === 'relocation_success') {
+                const notifSessionId = notif.sessionId || notif.session?._id || notif.data?.sessionId || notif.data?._id;
+                if (String(notifSessionId) === String(sessionId)) {
+                    try {
+                        const data = await parkingSessionService.getById(sessionId);
+                        setSession((data.data || data) as ParkingSession);
+                    } catch (err) {
+                        console.error('Failed to refetch session on relocation', err);
+                    }
                 }
             }
         };
