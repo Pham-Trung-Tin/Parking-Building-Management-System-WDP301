@@ -47,7 +47,7 @@ const StaffExitPage = () => {
   const [isProcessingQR, setIsProcessingQR] = useState(false);
   const videoRefExit = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  
+
   const [checkoutQrUrl, setCheckoutQrUrl] = useState<string | null>(null);
   const [isLoadingQr, setIsLoadingQr] = useState(false);
   const [showLargeQr, setShowLargeQr] = useState(false);
@@ -80,6 +80,22 @@ const StaffExitPage = () => {
   const showNotification = (message: string, type: 'success' | 'info' | 'error' = 'info') => {
     setNotification({ show: true, message, type });
     setTimeout(() => setNotification(null), 3000);
+  };
+
+  // Validate that a retrieved session belongs to this staff's parking lot.
+  // Throws a user-friendly error if lot doesn't match — prevents cross-lot checkout.
+  const validateSessionLot = (sessionData: any) => {
+    if (!sessionData) throw new Error('Session not found.');
+    const lotId = Array.isArray(profile?.assignedParkingLot)
+      ? profile?.assignedParkingLot[0]?._id
+      : (profile?.assignedParkingLot as any)?._id || (profile?.assignedParkingLot as any);
+    if (!lotId) return; // No lot assigned → skip (admin edge case)
+    const sessionLotId = typeof sessionData.parkingLot === 'object'
+      ? sessionData.parkingLot?._id
+      : sessionData.parkingLot;
+    if (sessionLotId && String(sessionLotId) !== String(lotId)) {
+      throw new Error('This session belongs to a different parking lot. Cannot check out here.');
+    }
   };
 
   const handleLogout = () => {
@@ -159,19 +175,19 @@ const StaffExitPage = () => {
   // Estimated Fee Calculation — Block-based pricing (4h blocks)
   const estimatedFees = useMemo(() => {
     if (!activeSession) return { baseFee: 0, overtimeFee: 0, totalFee: 0, logs: [] };
-    
+
     // Vé tháng thì không tính phí checkout
     if (activeSession.monthlyPass) {
-      return { 
-        baseFee: 0, overtimeFee: 0, totalFee: 0, 
-        logs: [{ time: new Date(activeSession.entryTime), message: 'Monthly Pass - No Fee', amount: 0 }] 
+      return {
+        baseFee: 0, overtimeFee: 0, totalFee: 0,
+        logs: [{ time: new Date(activeSession.entryTime), message: 'Monthly Pass - No Fee', amount: 0 }]
       };
     }
 
     if (!activeSession.entryTime || !activeSession.vehicleType?.pricing) {
-      return { 
-        baseFee: activeSession.baseFee || 0, 
-        overtimeFee: activeSession.overtimeFee || 0, 
+      return {
+        baseFee: activeSession.baseFee || 0,
+        overtimeFee: activeSession.overtimeFee || 0,
         totalFee: activeSession.totalFee || 0,
         logs: []
       };
@@ -195,20 +211,20 @@ const StaffExitPage = () => {
       while (cur < end) {
         const blockEnd = new Date(Math.min(end.getTime(), cur.getTime() + BLOCK_MS));
         const effectiveEnd = new Date(blockEnd.getTime() - 1);
-        
+
         const startHour = cur.getHours();
         const endHour = effectiveEnd.getHours();
         const isNightBlock = startHour >= 18 || startHour < 6 || endHour >= 18 || endHour < 6;
 
         const blockFee = isNightBlock ? nightBlockRate : dayBlockRate;
         fee += blockFee;
-        
+
         logs.push({
           time: new Date(cur),
           message: `${labelPrefix} - Block ${blockCount} (${isNightBlock ? 'Night' : 'Day'})`,
           amount: blockFee
         });
-        
+
         cur = new Date(cur.getTime() + BLOCK_MS);
         blockCount++;
       }
@@ -222,7 +238,7 @@ const StaffExitPage = () => {
     // Has Booking
     if (activeSession.booking?.endTime && activeSession.booking?.scheduledDate) {
       baseFee = activeSession.booking.estimatedFee || activeSession.baseFee || activeSession.advancePayment || 0;
-      
+
       logs.push({
         time: entryTime,
         message: 'Pre-booked Base Fee',
@@ -233,12 +249,12 @@ const StaffExitPage = () => {
       const [startH, startM] = activeSession.booking.startTime.split(':').map(Number);
       const scheduledStart = new Date(dStr);
       scheduledStart.setHours(startH, startM, 0, 0);
-      
+
       const [endH, endM] = activeSession.booking.endTime.split(':').map(Number);
       const scheduledEnd = new Date(dStr);
       scheduledEnd.setHours(endH, endM, 0, 0);
       if (scheduledEnd < scheduledStart) {
-         scheduledEnd.setDate(scheduledEnd.getDate() + 1);
+        scheduledEnd.setDate(scheduledEnd.getDate() + 1);
       }
 
       // Early arrival logic: > 15 mins early gets charged extra blocks
@@ -349,6 +365,7 @@ const StaffExitPage = () => {
       if (cleanQuery.startsWith('co_')) {
         const sessionId = cleanQuery.slice(3).trim();
         const sessionRes = await parkingSessionService.getById(sessionId);
+        validateSessionLot(sessionRes.data); // ← ensure belongs to this lot
         if (sessionRes.data) {
           setActiveSession(sessionRes.data);
           setSessionFound(true);
@@ -363,7 +380,17 @@ const StaffExitPage = () => {
         try {
           const verifyRes: any = await monthlyPassService.verifyPassByCode(passCode);
           const passData = verifyRes.data || verifyRes;
+
+          // Validate the monthly pass belongs to this staff's parking lot
+          const passLotId = typeof passData.parkingLot === 'object'
+            ? passData.parkingLot?._id
+            : passData.parkingLot;
+          if (passLotId && lotId && String(passLotId) !== String(lotId)) {
+            throw new Error('This monthly pass belongs to a different parking lot.');
+          }
+
           const sessionRes = await parkingSessionService.findActive({ licensePlate: passData.licensePlate, parkingLotId: lotId });
+          validateSessionLot(sessionRes.data); // extra defense if lotId was undefined
           if (sessionRes.data) {
             setActiveSession(sessionRes.data);
             setSessionFound(true);
@@ -372,7 +399,7 @@ const StaffExitPage = () => {
             throw new Error("Vehicle not checked in (session not found).");
           }
         } catch (err: any) {
-          throw new Error('Invalid or expired Monthly Pass.');
+          throw new Error(err?.message || 'Invalid or expired Monthly Pass.');
         }
       } else if ((cleanQuery.includes('.') && cleanQuery.length > 20) || cleanQuery.startsWith('{')) {
         // ── Ưu tiên 2: HMAC token cũ (dạng <base64>.<sig>) hoặc JSON ────────
@@ -444,6 +471,7 @@ const StaffExitPage = () => {
 
           if (sessionId) {
             const sessionRes = await parkingSessionService.getById(sessionId);
+            validateSessionLot(sessionRes.data); // ← ensure belongs to this lot
             if (sessionRes.data) {
               setActiveSession(sessionRes.data);
               setSessionFound(true);
@@ -512,6 +540,7 @@ const StaffExitPage = () => {
       if (cleanQr.startsWith('co_')) {
         const sessionId = cleanQr.slice(3).trim();
         const sessionRes = await parkingSessionService.getById(sessionId);
+        validateSessionLot(sessionRes.data); // ← ensure belongs to this lot
         if (sessionRes.data) {
           setActiveSession(sessionRes.data);
           setSessionFound(true);
@@ -531,7 +560,7 @@ const StaffExitPage = () => {
         const parts = cleanQr.split(':');
         const passCode = parts[1];
         payload = { type: 'monthly_pass', passCode, licensePlate: '' };
-        
+
         try {
           const verifyRes: any = await monthlyPassService.verifyPassByCode(passCode);
           const passData = verifyRes.data || verifyRes;
@@ -545,37 +574,38 @@ const StaffExitPage = () => {
         try {
           payload = await verifyQRToken(cleanQr);
         } catch (tokenErr: any) {
-        try {
-          let cleanCode = cleanQr.replace(/\\\"/g, '"').replace(/\\'/g, "'").trim();
-          if (cleanCode.startsWith('"') && cleanCode.endsWith('"')) {
-            cleanCode = cleanCode.substring(1, cleanCode.length - 1);
-          }
-          payload = JSON.parse(cleanCode);
-          if (typeof payload === 'string') {
-            payload = JSON.parse(payload);
-          }
-        } catch (jsonErr) {
-          if (typeof cleanQr === 'string' && cleanQr.trim().length > 0) {
-            const trimmed = cleanQr.trim();
-            // Nếu là sessionCode dạng PS-XXXXX → tìm qua findActive
-            if (trimmed.toUpperCase().startsWith('PS-')) {
-              payload = { sessionCode: trimmed, type: 'checkout' };
-            } else if (trimmed.includes('.') && trimmed.length > 20) {
-              throw new Error('Invalid or expired Checkout QR Code.');
-            } else {
-              // Giả định là MongoDB _id
-              payload = { sessionId: trimmed, type: 'checkout' };
+          try {
+            let cleanCode = cleanQr.replace(/\\\"/g, '"').replace(/\\'/g, "'").trim();
+            if (cleanCode.startsWith('"') && cleanCode.endsWith('"')) {
+              cleanCode = cleanCode.substring(1, cleanCode.length - 1);
             }
-          } else {
-            throw new Error('Unsupported QR format.');
+            payload = JSON.parse(cleanCode);
+            if (typeof payload === 'string') {
+              payload = JSON.parse(payload);
+            }
+          } catch (jsonErr) {
+            if (typeof cleanQr === 'string' && cleanQr.trim().length > 0) {
+              const trimmed = cleanQr.trim();
+              // Nếu là sessionCode dạng PS-XXXXX → tìm qua findActive
+              if (trimmed.toUpperCase().startsWith('PS-')) {
+                payload = { sessionCode: trimmed, type: 'checkout' };
+              } else if (trimmed.includes('.') && trimmed.length > 20) {
+                throw new Error('Invalid or expired Checkout QR Code.');
+              } else {
+                // Giả định là MongoDB _id
+                payload = { sessionId: trimmed, type: 'checkout' };
+              }
+            } else {
+              throw new Error('Unsupported QR format.');
+            }
           }
-        }
         }
       }
 
       if (payload.type === 'monthly_pass' || payload.passCode) {
         const lotId = Array.isArray(profile?.assignedParkingLot) ? profile?.assignedParkingLot[0]?._id : (profile?.assignedParkingLot as any)?._id || (profile?.assignedParkingLot as any);
         const sessionRes = await parkingSessionService.findActive({ licensePlate: payload.licensePlate, parkingLotId: lotId });
+        validateSessionLot(sessionRes.data); // extra defense if lotId was undefined
         if (sessionRes.data) {
           setActiveSession(sessionRes.data);
           setSessionFound(true);
@@ -623,6 +653,7 @@ const StaffExitPage = () => {
 
       if (sessionId) {
         const sessionRes = await parkingSessionService.getById(sessionId);
+        validateSessionLot(sessionRes.data); // ← ensure belongs to this lot
         if (sessionRes.data) {
           setActiveSession(sessionRes.data);
           setSessionFound(true);
@@ -919,8 +950,8 @@ const StaffExitPage = () => {
                         <p className={`font-bold text-lg ${sessionFound ? 'text-gray-900' : 'text-gray-300'}`}>
                           {sessionFound ? (
                             activeSession?.monthlyPass ? 'Monthly Pass' :
-                            activeSession?.booking ? 'Pre-booked' :
-                            (activeSession?.user ? 'Registered' : 'Guest')
+                              activeSession?.booking ? 'Pre-booked' :
+                                (activeSession?.user ? 'Registered' : 'Guest')
                           ) : '---'}
                         </p>
                         {sessionFound && activeSession?.user?.fullName && (
@@ -991,9 +1022,8 @@ const StaffExitPage = () => {
                           <span className="w-24 text-xs text-gray-400 shrink-0">{new Date(log.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                           <span className="flex-1 text-sm text-gray-700">{log.message}</span>
                           {log.amount !== 0 && (
-                            <span className={`px-2 py-1 text-[10px] font-bold rounded uppercase tracking-wider ml-2 shrink-0 ${
-                              log.amount > 0 ? 'bg-orange-50 text-orange-600' : 'bg-green-50 text-green-600'
-                            }`}>
+                            <span className={`px-2 py-1 text-[10px] font-bold rounded uppercase tracking-wider ml-2 shrink-0 ${log.amount > 0 ? 'bg-orange-50 text-orange-600' : 'bg-green-50 text-green-600'
+                              }`}>
                               {log.amount > 0 ? '+' : ''}{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(log.amount)}
                             </span>
                           )}
@@ -1070,7 +1100,7 @@ const StaffExitPage = () => {
                       LPR-CAM-EXIT
                     </div>
                   </div>
-                  
+
                   {/* Hidden canvas for capturing camera frame */}
                   <canvas ref={canvasRef} className="hidden" />
 
@@ -1081,29 +1111,29 @@ const StaffExitPage = () => {
                     </div>
                     <div className="relative bg-black aspect-video rounded-xl overflow-hidden border border-gray-200 shadow-sm flex items-center justify-center">
                       {(() => {
-                         const entryImg = sessionFound ? activeSession?.evidenceImages?.find((img: any) => img.type === 'entry') : null;
-                         if (entryImg?.url) {
-                           // Resolve backend local storage URL
-                           let imgUrl = entryImg.url;
-                           if (!imgUrl.startsWith('http')) {
-                             const baseUrl = import.meta.env.VITE_API_BASE_URL?.replace(/\/api\/v1\/?$/, '') || '';
-                             imgUrl = `${baseUrl}${imgUrl.startsWith('/') ? '' : '/'}${imgUrl}`;
-                           }
-                           return <img src={imgUrl} alt="Entry Snapshot" className="w-full h-full object-cover opacity-90" />;
-                         }
-                         return (
-                           <div className="flex flex-col items-center text-gray-500">
-                             <Camera className="w-10 h-10 mb-2 opacity-50" />
-                             <span className="text-xs font-bold tracking-widest uppercase">No Entry Image</span>
-                           </div>
-                         );
+                        const entryImg = sessionFound ? activeSession?.evidenceImages?.find((img: any) => img.type === 'entry') : null;
+                        if (entryImg?.url) {
+                          // Resolve backend local storage URL
+                          let imgUrl = entryImg.url;
+                          if (!imgUrl.startsWith('http')) {
+                            const baseUrl = import.meta.env.VITE_API_BASE_URL?.replace(/\/api\/v1\/?$/, '') || '';
+                            imgUrl = `${baseUrl}${imgUrl.startsWith('/') ? '' : '/'}${imgUrl}`;
+                          }
+                          return <img src={imgUrl} alt="Entry Snapshot" className="w-full h-full object-cover opacity-90" />;
+                        }
+                        return (
+                          <div className="flex flex-col items-center text-gray-500">
+                            <Camera className="w-10 h-10 mb-2 opacity-50" />
+                            <span className="text-xs font-bold tracking-widest uppercase">No Entry Image</span>
+                          </div>
+                        );
                       })()}
                       <div className="absolute top-3 left-3 bg-black/80 text-white text-[10px] font-bold px-2 py-1 rounded flex items-center tracking-wider z-10">
                         ENTRY-CAM-SNAPSHOT
                       </div>
                       {sessionFound && activeSession?.entryTime && (
                         <div className="absolute bottom-3 right-3 bg-black/80 text-white text-[10px] font-bold px-2 py-1 rounded tracking-wider z-10">
-                           {new Date(activeSession.entryTime).toLocaleString()}
+                          {new Date(activeSession.entryTime).toLocaleString()}
                         </div>
                       )}
                     </div>
@@ -1148,7 +1178,7 @@ const StaffExitPage = () => {
                   {sessionFound && activeSession?.paymentStatus !== 'paid' && estimatedFees.totalFee > 0 && (
                     <div className="flex flex-col items-center pt-6 border-t border-gray-100">
                       <p className="text-xs font-bold text-blue-600 uppercase tracking-widest mb-3">Scan to Pay (VietQR)</p>
-                      
+
                       {isLoadingQr ? (
                         <div className="w-48 h-48 flex flex-col items-center justify-center border border-gray-200 border-dashed rounded-xl p-2 bg-gray-50">
                           <RefreshCw className="w-8 h-8 text-blue-500 animate-spin mb-3" />
@@ -1157,9 +1187,9 @@ const StaffExitPage = () => {
                       ) : checkoutQrUrl ? (
                         <>
                           <div className="relative group">
-                            <img 
-                              src={checkoutQrUrl} 
-                              alt="VietQR Payment" 
+                            <img
+                              src={checkoutQrUrl}
+                              alt="VietQR Payment"
                               className="w-48 h-48 object-contain border border-gray-200 rounded-xl p-2 shadow-sm bg-white cursor-pointer hover:scale-105 transition-transform"
                               onClick={() => setShowLargeQr(true)}
                             />
@@ -1202,21 +1232,21 @@ const StaffExitPage = () => {
       {showLargeQr && checkoutQrUrl && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={() => setShowLargeQr(false)}>
           <div className="relative bg-white p-8 rounded-2xl shadow-2xl flex flex-col items-center max-w-lg w-full" onClick={e => e.stopPropagation()}>
-            <button 
+            <button
               onClick={() => setShowLargeQr(false)}
               className="absolute top-4 right-4 text-gray-400 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 rounded-full p-2 transition-colors"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
             </button>
-            
+
             <h3 className="text-xl font-bold text-gray-900 mb-6 uppercase tracking-wider text-center">Scan to Pay</h3>
-            
-            <img 
-              src={checkoutQrUrl} 
-              alt="VietQR Payment Large" 
+
+            <img
+              src={checkoutQrUrl}
+              alt="VietQR Payment Large"
               className="w-full max-w-[400px] h-auto object-contain border border-gray-200 rounded-xl p-4 shadow-sm bg-white"
             />
-            
+
             <div className="flex items-center justify-center mt-6 text-blue-600 bg-blue-50 px-6 py-3 rounded-full border border-blue-100 w-full">
               <RefreshCw className="w-5 h-5 mr-3 animate-spin" />
               <span className="text-sm font-bold uppercase tracking-wider">Waiting for transfer...</span>
