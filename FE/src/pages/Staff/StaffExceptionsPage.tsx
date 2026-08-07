@@ -44,6 +44,7 @@ const StaffExceptionsPage = () => {
   const [incidents, setIncidents] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [filterDate, setFilterDate] = useState<string>('');
 
   // Report Form State
   const [reportData, setReportData] = useState<Partial<IncidentCreateData>>({
@@ -98,6 +99,9 @@ const StaffExceptionsPage = () => {
       if (filterStatus !== 'all') {
         params.status = filterStatus;
       }
+      if (filterDate) {
+        params.date = filterDate;
+      }
       const res = await incidentService.getAll(params);
       setIncidents(res.data?.docs || res.data || []);
     } catch (error) {
@@ -111,7 +115,7 @@ const StaffExceptionsPage = () => {
     fetchIncidents();
     const interval = setInterval(fetchIncidents, 30000);
     return () => clearInterval(interval);
-  }, [filterStatus]);
+  }, [filterStatus, filterDate]);
 
   const showNotification = (message: string, type: 'success' | 'error') => {
     setNotification({ show: true, message, type });
@@ -185,25 +189,72 @@ const StaffExceptionsPage = () => {
     }
     setIsSearchingSession(true);
     try {
-      const res = await parkingSessionService.findActive({ licensePlate: searchPlate.trim(), parkingLotId: lotId });
-      if (res.data) {
-        setFoundSession(res.data);
-        showNotification('Session found.', 'success');
+      const isTheft = resolveModal.incident?.type === 'theft';
+      
+      if (isTheft) {
+        // For theft, the vehicle might have already exited, so we search all sessions (most recent first)
+        const res = await parkingSessionService.getSessions({ licensePlate: searchPlate.trim(), parkingLot: lotId, limit: 1 });
+        const sessions = res.data?.docs || res.data || [];
+        if (sessions.length > 0) {
+          setFoundSession(sessions[0]);
+          showNotification('Session found.', 'success');
+        } else {
+          throw new Error('No session history found for this plate.');
+        }
+      } else {
+        // For lost ticket or mismatch, vehicle must be currently active in the lot
+        const res = await parkingSessionService.findActive({ licensePlate: searchPlate.trim(), parkingLotId: lotId });
+        if (res.data) {
+          setFoundSession(res.data);
+          showNotification('Session found.', 'success');
+        }
       }
     } catch (err: any) {
       setFoundSession(null);
-      showNotification(err?.response?.data?.message || 'No active session found for this plate.', 'error');
+      showNotification(err?.response?.data?.message || err.message || 'No session found for this plate.', 'error');
     } finally {
       setIsSearchingSession(false);
     }
   };
 
-  const handleConfirmLostTicket = async () => {
+  const handleResolveClick = (incident: any) => {
+    setResolveModal({ isOpen: true, incident });
+    setFoundSession(incident.parkingSession || null);
+    if (incident.parkingSession?.vehicleInfo?.licensePlate) {
+      setSearchPlate(incident.parkingSession.vehicleInfo.licensePlate);
+    } else {
+      setSearchPlate('');
+    }
+
+    let parsedIdCard = '';
+    let parsedFullName = '';
+    let parsedPhone = '';
+    let parsedPayment = 'cash';
+    if (incident.resolution?.description) {
+       const lines = incident.resolution.description.split('\n');
+       lines.forEach((line: string) => {
+         if (line.startsWith('Identity Verified: ')) parsedFullName = line.replace('Identity Verified: ', '');
+         if (line.startsWith('ID: ')) parsedIdCard = line.replace('ID: ', '');
+         if (line.startsWith('Phone: ')) parsedPhone = line.replace('Phone: ', '');
+         if (line.startsWith('Payment Method: ')) parsedPayment = line.replace('Payment Method: ', '').toLowerCase();
+       });
+    }
+
+    setIdentityData({ idCard: parsedIdCard, fullName: parsedFullName, phone: parsedPhone, paymentMethod: parsedPayment as 'cash'|'qr', documentFile: null });
+    setResolveCharge(incident.resolution?.extraCharge?.toString() || '');
+    setMismatchData({ actualPlate: '', reason: 'AI misread license plate' });
+  };
+
+  const handleConfirmIncident = async () => {
     if (!resolveModal.incident) return;
     if (!foundSession) {
       showNotification('Please search and confirm the active session first.', 'error');
       return;
     }
+
+    const isTheft = resolveModal.incident.type === 'theft';
+    const isProcessingPhase = isTheft && resolveModal.incident.status !== 'in_progress';
+
     if (!identityData.idCard || !identityData.fullName || !identityData.phone) {
       showNotification('Please fill in all mandatory identity verification fields.', 'error');
       return;
@@ -217,6 +268,11 @@ const StaffExceptionsPage = () => {
       formData.append('description', desc);
       formData.append('extraCharge', String(Number(resolveCharge) || 0));
       formData.append('parkingSession', foundSession._id);
+      
+      if (isProcessingPhase) {
+        formData.append('status', 'in_progress');
+      }
+
       if (identityData.documentFile) {
         formData.append('image', identityData.documentFile);
       }
@@ -224,10 +280,16 @@ const StaffExceptionsPage = () => {
       // Resolve incident
       await incidentService.resolve(resolveModal.incident._id, formData);
 
-      // Attempt checkout automatically
-      await parkingSessionService.checkOut(foundSession._id);
+      // Attempt checkout automatically if still active and not in processing phase
+      if (!isProcessingPhase && foundSession.status === 'active') {
+        try {
+          await parkingSessionService.checkOut(foundSession._id);
+        } catch (e) {
+          console.error('Auto checkout failed:', e);
+        }
+      }
 
-      showNotification('Lost ticket processed and vehicle released.', 'success');
+      showNotification(isProcessingPhase ? 'Incident marked as In Progress.' : 'Incident processed successfully.', 'success');
       setResolveModal({ isOpen: false, incident: null });
       setFoundSession(null);
       setSearchPlate('');
@@ -235,7 +297,7 @@ const StaffExceptionsPage = () => {
       setResolveCharge('');
       fetchIncidents();
     } catch (err: any) {
-      showNotification(err?.response?.data?.message || 'Failed to process lost ticket.', 'error');
+      showNotification(err?.response?.data?.message || 'Failed to process incident.', 'error');
     } finally {
       setIsResolving(false);
     }
@@ -349,15 +411,16 @@ const StaffExceptionsPage = () => {
 
   const renderResolveModal = () => {
     if (!resolveModal.isOpen) return null;
-    const isLostTicket = resolveModal.incident?.type === 'lost_ticket';
+    const isLostTicketOrTheft = resolveModal.incident?.type === 'lost_ticket' || resolveModal.incident?.type === 'theft';
+    const isTheft = resolveModal.incident?.type === 'theft';
 
-    if (isLostTicket) {
+    if (isLostTicketOrTheft) {
       return (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center p-6 border-b border-gray-100 sticky top-0 bg-white z-10">
               <div>
-                <h3 className="text-lg font-bold text-gray-900">Process Lost Ticket</h3>
+                <h3 className="text-lg font-bold text-gray-900">{isTheft ? 'Process Lost Vehicle (Theft)' : 'Process Lost Ticket'}</h3>
                 <p className="text-xs text-gray-500">Ref: {resolveModal.incident?.incidentCode}</p>
               </div>
               <button onClick={() => { setResolveModal({ isOpen: false, incident: null }); setFoundSession(null); }} className="text-gray-400 hover:text-gray-600">
@@ -488,7 +551,7 @@ const StaffExceptionsPage = () => {
                       </span>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="text-gray-500">Lost Ticket Fine (VND):</span>
+                      <span className="text-gray-500">{isTheft ? 'Penalty / Compensation (VND):' : 'Lost Ticket Fine (VND):'}</span>
                       <input
                         type="number"
                         value={resolveCharge}
@@ -580,12 +643,12 @@ const StaffExceptionsPage = () => {
                 Cancel
               </button>
               <button
-                onClick={handleConfirmLostTicket}
+                onClick={handleConfirmIncident}
                 disabled={isResolving}
                 className="flex-1 bg-green-600 text-white py-4 text-sm font-bold flex items-center justify-center hover:bg-green-700 transition-colors uppercase tracking-wider disabled:opacity-50"
               >
                 <CheckCircle2 className="w-5 h-5 mr-2" />
-                {isResolving ? 'Processing...' : 'Confirm Payment & Release'}
+                {isResolving ? 'Processing...' : (isTheft ? (resolveModal.incident?.status === 'in_progress' ? 'Confirm Final Resolution' : 'Submit for Processing') : 'Confirm Payment & Release')}
               </button>
             </div>
           </div>
@@ -1080,51 +1143,7 @@ const StaffExceptionsPage = () => {
                 </section>
               </div>
 
-              {/* Right Column (Lot Topology - kept visual from mockup) */}
-              <div className="flex-1">
-                <section>
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Live Lot Topology: Zone A</h3>
-                    <div className="flex items-center space-x-4 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                      <div className="flex items-center">
-                        <span className="w-2 h-2 rounded-full bg-gray-300 mr-2"></span>
-                        Occupied
-                      </div>
-                      <div className="flex items-center">
-                        <span className="w-2 h-2 rounded-full bg-red-500 mr-2"></span>
-                        Exception
-                      </div>
-                    </div>
-                  </div>
 
-                  <div className="bg-white border border-gray-200 p-8 shadow-sm h-[400px] flex flex-col justify-center">
-                    {/* Top Row */}
-                    <div className="flex justify-between items-end border-b border-gray-200 pb-8 mb-8 relative">
-                      <div className="w-12 h-16 border border-gray-200 flex items-start justify-center pt-2 text-[10px] text-gray-400">A1</div>
-                      <div className="w-12 h-16 border border-gray-200 bg-gray-200 flex items-start justify-center pt-2 text-[10px] text-gray-400">A2</div>
-                      <div className="w-12 h-16 border border-gray-200 flex items-start justify-center pt-2 text-[10px] text-gray-400">A3</div>
-                      <div className="w-14 h-20 border-2 border-red-500 bg-red-50 flex items-start justify-center pt-2 text-[10px] text-red-600 font-bold">EX</div>
-                      <div className="w-12 h-16 border border-gray-200 bg-gray-200 flex items-start justify-center pt-2 text-[10px] text-gray-400">A5</div>
-                      <div className="w-12 h-16 border border-gray-200 flex items-start justify-center pt-2 text-[10px] text-gray-400">A6</div>
-                      <div className="w-12 h-16 border border-gray-200 flex items-start justify-center pt-2 text-[10px] text-gray-400">A7</div>
-                      <div className="w-12 h-16 border border-gray-200 flex items-start justify-center pt-2 text-[10px] text-gray-400">A8</div>
-                      <div className="absolute left-0 right-0 -bottom-4 border-b-2 border-dashed border-gray-300"></div>
-                    </div>
-
-                    {/* Bottom Row */}
-                    <div className="flex justify-between items-start">
-                      <div className="w-12 h-16 border border-gray-200 flex items-end justify-center pb-2 text-[10px] text-gray-400">A9</div>
-                      <div className="w-12 h-16 border border-gray-200 bg-gray-200 flex items-end justify-center pb-2 text-[10px] text-gray-400">A10</div>
-                      <div className="w-14 h-20 border-2 border-gray-800 bg-black flex items-end justify-center pb-2 text-[10px] text-white">A11</div>
-                      <div className="w-12 h-16 border border-gray-200 flex items-end justify-center pb-2 text-[10px] text-gray-400">A12</div>
-                      <div className="w-12 h-16 border border-gray-200 bg-gray-200 flex items-end justify-center pb-2 text-[10px] text-gray-400">A13</div>
-                      <div className="w-12 h-16 border border-gray-200 bg-gray-200 flex items-end justify-center pb-2 text-[10px] text-gray-400">A14</div>
-                      <div className="w-12 h-16 border border-gray-200 bg-gray-200 flex items-end justify-center pb-2 text-[10px] text-gray-400">A15</div>
-                      <div className="w-12 h-16 border border-gray-200 flex items-end justify-center pb-2 text-[10px] text-gray-400">A16</div>
-                    </div>
-                  </div>
-                </section>
-              </div>
             </div>
 
             {/* Bottom Section (Log Table) */}
@@ -1132,6 +1151,12 @@ const StaffExceptionsPage = () => {
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Active Exception Log</h3>
                 <div className="text-xs text-gray-500 flex items-center">
+                  <input
+                    type="date"
+                    value={filterDate}
+                    onChange={(e) => setFilterDate(e.target.value)}
+                    className="mr-4 font-bold text-gray-700 bg-transparent border-b border-gray-300 outline-none py-1"
+                  />
                   Filter by Status:
                   <select
                     value={filterStatus}
@@ -1183,7 +1208,7 @@ const StaffExceptionsPage = () => {
                           <td className="px-6 py-4 text-right">
                             {inc.status !== 'resolved' && inc.status !== 'closed' ? (
                               <button
-                                onClick={() => setResolveModal({ isOpen: true, incident: inc })}
+                                onClick={() => handleResolveClick(inc)}
                                 className="text-xs font-bold text-blue-600 uppercase tracking-wider hover:text-blue-800 transition-colors"
                               >
                                 {inc.type === 'lost_ticket' ? 'Process Lost Ticket' : inc.type === 'wrong_license_plate' ? 'Process Mismatch' : 'Resolve'}

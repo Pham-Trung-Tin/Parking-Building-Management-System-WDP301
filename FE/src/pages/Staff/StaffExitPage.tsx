@@ -39,6 +39,7 @@ const StaffExitPage = () => {
   const [activeSession, setActiveSession] = useState<any>(null);
   const [isManual, setIsManual] = useState(false);
   const [confidence, setConfidence] = useState<number | null>(null);
+  const [capturedImageBase64, setCapturedImageBase64] = useState<string | null>(null);
   const [notification, setNotification] = useState<{ show: boolean, message: string, type: 'success' | 'info' | 'error' } | null>(null);
 
   const [isExitCamActive, setIsExitCamActive] = useState(true);
@@ -114,6 +115,7 @@ const StaffExitPage = () => {
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
       const imageBase64 = canvas.toDataURL('image/jpeg', 0.85);
+      setCapturedImageBase64(imageBase64);
       const response = await lprService.recognizeFromBase64(imageBase64);
       const data = response.data;
 
@@ -636,6 +638,7 @@ const StaffExitPage = () => {
       setActiveSession(null);
       setSessionFound(false);
       setSearchQuery('');
+      setCapturedImageBase64(null);
       showNotification(error?.message || "Invalid or expired QR code.", 'error');
       setTimeout(() => setIsProcessingQR(false), 3000);
       return;
@@ -651,12 +654,49 @@ const StaffExitPage = () => {
       if (!sessionId) {
         throw new Error('Invalid session data: Missing ID');
       }
+
+      let imageToUpload = capturedImageBase64;
+      if (!imageToUpload) {
+        const video = videoRefExit.current;
+        const canvas = canvasRef.current;
+        if (video && canvas && isExitCamActive && video.readyState >= 2 && video.videoWidth > 0) {
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            imageToUpload = canvas.toDataURL('image/jpeg', 0.85);
+          }
+        }
+      }
+
+      if (imageToUpload) {
+        try {
+          const base64Data = imageToUpload.split(',')[1];
+          const byteCharacters = atob(base64Data);
+          const byteNumbers = new Array(byteCharacters.length);
+          for (let i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i);
+          }
+          const byteArray = new Uint8Array(byteNumbers);
+          const blob = new Blob([byteArray], { type: 'image/jpeg' });
+
+          const formData = new FormData();
+          formData.append('images', blob, 'exit.jpg');
+          formData.append('type', 'exit');
+          await parkingSessionService.uploadEvidence(String(sessionId), formData);
+        } catch (uploadErr) {
+          console.error('Failed to upload exit evidence:', uploadErr);
+        }
+      }
+
       await parkingSessionService.checkOut(String(sessionId));
       showNotification('Payment verified. Releasing gate...', 'success');
       setTimeout(() => {
         setSessionFound(false);
         setActiveSession(null);
         setSearchQuery('');
+        setCapturedImageBase64(null);
         showNotification('Gate closed. Session complete.', 'info');
       }, 3500);
     } catch (err: any) {

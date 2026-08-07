@@ -25,6 +25,7 @@ const StaffLiveViewPage = () => {
   const [sessions, setSessions] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('All');
+  const [filterDate, setFilterDate] = useState<string>('');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState('Just now');
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
@@ -40,7 +41,18 @@ const StaffLiveViewPage = () => {
       const lotId = Array.isArray(profile?.assignedParkingLot)
           ? profile?.assignedParkingLot[0]?._id
           : (profile?.assignedParkingLot as any)?._id || profile?.assignedParkingLot;
-      const res = await parkingSessionService.getSessions({ limit: 100, parkingLot: lotId });
+      
+      const params: any = { limit: 100, parkingLot: lotId };
+      if (filterDate) {
+        const start = new Date(filterDate);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(filterDate);
+        end.setHours(23, 59, 59, 999);
+        params.startDate = start.toISOString();
+        params.endDate = end.toISOString();
+      }
+      
+      const res = await parkingSessionService.getSessions(params);
       const allSessions = res.data?.docs || res.data || [];
       setSessions(allSessions);
       setLastUpdated(new Date().toLocaleTimeString());
@@ -65,7 +77,7 @@ const StaffLiveViewPage = () => {
     // Refresh every 30 seconds
     const interval = setInterval(fetchSessions, 30000);
     return () => clearInterval(interval);
-  }, []);
+  }, [filterDate]);
 
   const filteredSessions = sessions.filter(session => {
     const rawPlate = session.vehicleInfo?.licensePlate || '';
@@ -196,6 +208,15 @@ const StaffLiveViewPage = () => {
                 <p className="text-gray-500 text-sm mt-1">Monitor all vehicles currently in active sessions.</p>
               </div>
               <div className="flex gap-3">
+                <div className="bg-white border border-gray-200 px-4 py-2 flex items-center shadow-sm">
+                  <input
+                    type="date"
+                    value={filterDate}
+                    onChange={(e) => setFilterDate(e.target.value)}
+                    className="outline-none text-sm text-gray-700 bg-transparent"
+                  />
+                </div>
+
                 <div className="bg-white border border-gray-200 px-4 py-2 flex items-center shadow-sm">
                   <Search className="w-4 h-4 text-gray-400 mr-2" />
                   <input 
