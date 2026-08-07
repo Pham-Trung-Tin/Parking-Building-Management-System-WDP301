@@ -49,6 +49,7 @@ const StaffExitPage = () => {
   
   const [checkoutQrUrl, setCheckoutQrUrl] = useState<string | null>(null);
   const [isLoadingQr, setIsLoadingQr] = useState(false);
+  const [showLargeQr, setShowLargeQr] = useState(false);
 
   const buildingName = (profile?.assignedParkingLot as any)?.name || 'Main Street Garage';
 
@@ -244,10 +245,14 @@ const StaffExitPage = () => {
       }
 
       if (now > scheduledEnd) {
-        const otHours = (now.getTime() - scheduledEnd.getTime()) / (1000 * 60 * 60);
-        if (otHours > 15 / 60) {
+        const blockMs = 4 * 60 * 60 * 1000;
+        const elapsedIntoBlock = (scheduledEnd.getTime() - scheduledStart.getTime()) % blockMs;
+        const msToNextBoundary = elapsedIntoBlock === 0 ? 0 : (blockMs - elapsedIntoBlock);
+        const nextBlockBoundary = new Date(scheduledEnd.getTime() + msToNextBoundary);
+
+        if (now > nextBlockBoundary) {
           // Overtime: same block logic, no multiplier
-          overtimeFee = countBlockFee(scheduledEnd, now, 'Overtime');
+          overtimeFee = countBlockFee(nextBlockBoundary, now, 'Overtime');
         }
       }
     } else {
@@ -1115,7 +1120,8 @@ const StaffExitPage = () => {
                             <img 
                               src={checkoutQrUrl} 
                               alt="VietQR Payment" 
-                              className="w-48 h-48 object-contain border border-gray-200 rounded-xl p-2 shadow-sm bg-white"
+                              className="w-48 h-48 object-contain border border-gray-200 rounded-xl p-2 shadow-sm bg-white cursor-pointer hover:scale-105 transition-transform"
+                              onClick={() => setShowLargeQr(true)}
                             />
                             <div className="absolute inset-0 border-2 border-blue-400 rounded-xl animate-pulse pointer-events-none opacity-50"></div>
                           </div>
@@ -1151,6 +1157,33 @@ const StaffExitPage = () => {
           </div>
         </main>
       </div>
+
+      {/* Large QR Modal */}
+      {showLargeQr && checkoutQrUrl && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={() => setShowLargeQr(false)}>
+          <div className="relative bg-white p-8 rounded-2xl shadow-2xl flex flex-col items-center max-w-lg w-full" onClick={e => e.stopPropagation()}>
+            <button 
+              onClick={() => setShowLargeQr(false)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 rounded-full p-2 transition-colors"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
+            
+            <h3 className="text-xl font-bold text-gray-900 mb-6 uppercase tracking-wider text-center">Scan to Pay</h3>
+            
+            <img 
+              src={checkoutQrUrl} 
+              alt="VietQR Payment Large" 
+              className="w-full max-w-[400px] h-auto object-contain border border-gray-200 rounded-xl p-4 shadow-sm bg-white"
+            />
+            
+            <div className="flex items-center justify-center mt-6 text-blue-600 bg-blue-50 px-6 py-3 rounded-full border border-blue-100 w-full">
+              <RefreshCw className="w-5 h-5 mr-3 animate-spin" />
+              <span className="text-sm font-bold uppercase tracking-wider">Waiting for transfer...</span>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

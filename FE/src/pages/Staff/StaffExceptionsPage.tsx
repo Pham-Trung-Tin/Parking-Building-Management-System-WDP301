@@ -329,9 +329,13 @@ const StaffExceptionsPage = () => {
       }
 
       if (now > scheduledEnd) {
-        const otHours = (now.getTime() - scheduledEnd.getTime()) / (1000 * 60 * 60);
-        if (otHours > 15 / 60) {
-          overtimeFee = countBlockFee(scheduledEnd, now);
+        const blockMs = 4 * 60 * 60 * 1000;
+        const elapsedIntoBlock = (scheduledEnd.getTime() - scheduledStart.getTime()) % blockMs;
+        const msToNextBoundary = elapsedIntoBlock === 0 ? 0 : (blockMs - elapsedIntoBlock);
+        const nextBlockBoundary = new Date(scheduledEnd.getTime() + msToNextBoundary);
+
+        if (now > nextBlockBoundary) {
+          overtimeFee = countBlockFee(nextBlockBoundary, now);
         }
       }
     } else {
