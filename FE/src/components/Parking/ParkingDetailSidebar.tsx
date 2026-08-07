@@ -123,18 +123,17 @@ const ParkingDetailSidebar: React.FC<ParkingDetailSidebarProps> = ({ selectedPar
         <div 
             className={`absolute top-0 right-0 h-full w-full sm:w-[420px] bg-white shadow-[-8px_0_25px_rgba(0,0,0,0.08)] z-[1000] flex flex-col transform transition-transform duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] overflow-hidden ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}
         >
-            {/* Header / Image */}
-            <div className="relative h-[240px] shrink-0 bg-slate-200">
-                <img src={imageUrl} alt={name} className="w-full h-full object-cover" />
+            {/* Header Actions without Image */}
+            <div className="relative p-4 flex justify-between items-center shrink-0 border-b border-slate-100 bg-white">
                 <button 
                     onClick={onClose}
-                    className="absolute top-4 left-4 bg-white/90 backdrop-blur-md p-2.5 rounded-full text-slate-700 hover:bg-white transition-colors shadow-md"
+                    className="bg-slate-100 p-2.5 rounded-full text-slate-700 hover:bg-slate-200 transition-colors shadow-sm"
                     aria-label="Close details"
                 >
                     <CloseIcon />
                 </button>
                 {isSystem && lotData?.status === 'active' && (
-                    <div className="absolute top-4 right-4 bg-green-500 text-white px-3 py-1.5 rounded-full text-xs font-bold uppercase shadow-sm flex items-center gap-1.5">
+                    <div className="bg-green-500 text-white px-3 py-1.5 rounded-full text-xs font-bold uppercase shadow-sm flex items-center gap-1.5">
                         <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse"></span>
                         Active
                     </div>
