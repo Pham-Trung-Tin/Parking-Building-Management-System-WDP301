@@ -296,7 +296,7 @@ const SessionPage = () => {
         if (scheduledStart.getTime() - sessionStart.current > 15 * 60 * 1000) {
             let tempStart = new Date(sessionStart.current);
             while (tempStart < scheduledStart) {
-                const blockEnd = new Date(tempStart.getTime() + 4 * 60 * 60 * 1000);
+                const blockEnd = new Date(Math.min(scheduledStart.getTime(), tempStart.getTime() + 4 * 60 * 60 * 1000));
                 const effectiveEnd = new Date(blockEnd.getTime() - 1);
                 const startHour = tempStart.getHours();
                 const endHour = effectiveEnd.getHours();
@@ -324,7 +324,7 @@ const SessionPage = () => {
             if (now > nextBlockBoundary) {
                 let tempStart = new Date(nextBlockBoundary.getTime());
                 while (tempStart < now) {
-                    const blockEnd = new Date(tempStart.getTime() + 4 * 60 * 60 * 1000);
+                    const blockEnd = new Date(Math.min(now.getTime(), tempStart.getTime() + 4 * 60 * 60 * 1000));
                     const effectiveEnd = new Date(blockEnd.getTime() - 1);
                     const startHour = tempStart.getHours();
                     const endHour = effectiveEnd.getHours();
@@ -352,7 +352,7 @@ const SessionPage = () => {
             let tempStart = new Date(scheduledEnd.getTime());
             let calculatedOtFee = 0;
             while (tempStart < now) {
-                const blockEnd = new Date(tempStart.getTime() + 4 * 60 * 60 * 1000);
+                const blockEnd = new Date(Math.min(now.getTime(), tempStart.getTime() + 4 * 60 * 60 * 1000));
                 const effectiveEnd = new Date(blockEnd.getTime() - 1);
                 const startHour = tempStart.getHours();
                 const endHour = effectiveEnd.getHours();

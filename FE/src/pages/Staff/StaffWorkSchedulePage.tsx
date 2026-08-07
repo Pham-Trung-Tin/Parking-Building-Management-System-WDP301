@@ -54,6 +54,7 @@ export default function StaffWorkSchedulePage() {
   // Registration State
   const [selectedShifts, setSelectedShifts] = useState<{ [dateStr: string]: string[] }>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [lastInitializedMonth, setLastInitializedMonth] = useState<string | null>(null);
 
   useEffect(() => {
     loadMySchedules();
@@ -123,17 +124,21 @@ export default function StaffWorkSchedulePage() {
 
   // Initialize selectedShifts when scheduleData changes or month changes
   useEffect(() => {
-    if (scheduleData) {
-      const map: { [key: string]: string[] } = {};
-      scheduleData.shifts.forEach((s: any) => {
-        if (!map[s.date]) map[s.date] = [];
-        map[s.date].push(s.shiftType);
-      });
-      setSelectedShifts(map);
-    } else {
-      setSelectedShifts({});
+    const currentMonth = baseDate.format('YYYY-MM');
+    if (activeTab === 'view' || lastInitializedMonth !== currentMonth) {
+      if (scheduleData) {
+        const map: { [key: string]: string[] } = {};
+        scheduleData.shifts.forEach((s: any) => {
+          if (!map[s.date]) map[s.date] = [];
+          map[s.date].push(s.shiftType);
+        });
+        setSelectedShifts(map);
+      } else {
+        setSelectedShifts({});
+      }
+      setLastInitializedMonth(currentMonth);
     }
-  }, [scheduleData, baseDate.format('YYYY-MM')]);
+  }, [scheduleData, baseDate.format('YYYY-MM'), activeTab, lastInitializedMonth]);
 
   useEffect(() => {
     const fetchAvailability = async () => {
@@ -173,6 +178,27 @@ export default function StaffWorkSchedulePage() {
       return { ...prev, [dateStr]: updated };
     });
   };
+
+  const handleToggleDay = (dateStr: string) => {
+    const availableShifts = SHIFTS.filter(s => !isShiftDisabled(dateStr, s.id) || (selectedShifts[dateStr] || []).includes(s.id));
+    if (availableShifts.length === 0) return;
+
+    setSelectedShifts(prev => {
+      const current = prev[dateStr] || [];
+      const allSelected = availableShifts.every(s => current.includes(s.id));
+      
+      let updated = [...current];
+      if (allSelected) {
+        updated = updated.filter(id => !availableShifts.map(as => as.id).includes(id));
+      } else {
+        availableShifts.forEach(s => {
+          if (!updated.includes(s.id)) updated.push(s.id);
+        });
+      }
+      return { ...prev, [dateStr]: updated };
+    });
+  };
+
 
   const handleSave = async () => {
     const raw = profile?.assignedParkingLot;
@@ -484,6 +510,15 @@ export default function StaffWorkSchedulePage() {
                           }`}>
                           {d.date.format('D')}
                         </span>
+                        {activeTab === 'register' && d.isCurrentMonth && !d.isPast && (
+                          <button
+                            onClick={() => handleToggleDay(d.dateStr)}
+                            className="text-[9px] font-bold uppercase tracking-wider text-blue-600 bg-blue-50 hover:bg-blue-100 px-1.5 py-0.5 rounded transition-colors border border-blue-200"
+                            title="Toggle all available shifts"
+                          >
+                            All
+                          </button>
+                        )}
                       </div>
 
                       <div className="flex-1 flex flex-col gap-1.5">
