@@ -183,7 +183,7 @@ export default function RevenueTab({ globalLotId, setGlobalLotId }: { globalLotI
         if (ids.length) ls = ls.filter((l: any) => ids.includes(l._id));
       }
       setLots(ls);
-    }).catch(() => {});
+    }).catch(() => { });
   }, []);
 
   const [allTabDocs, setAllTabDocs] = useState<Record<Tab, TxPayment[]>>({
@@ -203,6 +203,7 @@ export default function RevenueTab({ globalLotId, setGlobalLotId }: { globalLotI
   // Single date picker – default = '' (shows full month)
   const todayStr = new Date().toISOString().slice(0, 10);
   const [selectedDay, setSelectedDay] = useState<string>('');
+  const [methodFilter, setMethodFilter] = useState<string>('');
 
   const fmt = (n: number) =>
     new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(n);
@@ -305,7 +306,7 @@ export default function RevenueTab({ globalLotId, setGlobalLotId }: { globalLotI
 
   // Calculate filtered results & totals based on selectedDay
   const { displayTransactions, displayTabTotals, displayGrandTotal, displayGrandCount } = useMemo(() => {
-    if (!selectedDay) {
+    if (!selectedDay && !methodFilter) {
       return {
         displayTransactions: allTransactions,
         displayTabTotals: tabTotals,
@@ -314,10 +315,16 @@ export default function RevenueTab({ globalLotId, setGlobalLotId }: { globalLotI
       };
     }
 
+    const filter = (docs: TxPayment[]) => docs.filter(tx => {
+      const dateOk = !selectedDay || (tx.paidAt ?? tx.createdAt ?? '').slice(0, 10) === selectedDay;
+      const methodOk = !methodFilter || tx.method === methodFilter;
+      return dateOk && methodOk;
+    });
+
     const filteredDocs: Record<Tab, TxPayment[]> = {
-      session_checkout: (allTabDocs.session_checkout || []).filter(tx => (tx.paidAt ?? tx.createdAt ?? '').slice(0, 10) === selectedDay),
-      booking: (allTabDocs.booking || []).filter(tx => (tx.paidAt ?? tx.createdAt ?? '').slice(0, 10) === selectedDay),
-      monthly_pass: (allTabDocs.monthly_pass || []).filter(tx => (tx.paidAt ?? tx.createdAt ?? '').slice(0, 10) === selectedDay),
+      session_checkout: filter(allTabDocs.session_checkout || []),
+      booking: filter(allTabDocs.booking || []),
+      monthly_pass: filter(allTabDocs.monthly_pass || []),
     };
 
     const totals = {} as Record<Tab, number>;
@@ -336,7 +343,7 @@ export default function RevenueTab({ globalLotId, setGlobalLotId }: { globalLotI
       displayGrandTotal: grand,
       displayGrandCount: count,
     };
-  }, [selectedDay, allTransactions, tabTotals, grandTotal, grandCount, allTabDocs, activeTab]);
+  }, [selectedDay, methodFilter, allTransactions, tabTotals, grandTotal, grandCount, allTabDocs, activeTab]);
 
   const { paginatedTransactions, totalPages } = useMemo(() => {
     const totalPages = Math.ceil(displayTransactions.length / LIMIT) || 1;
@@ -389,9 +396,8 @@ export default function RevenueTab({ globalLotId, setGlobalLotId }: { globalLotI
               value={globalLotId || ''}
               onChange={e => setGlobalLotId?.(e.target.value)}
               disabled={isManager && lots.length <= 1}
-              className={`pl-9 pr-8 py-2.5 bg-white border border-gray-200 rounded-xl text-sm font-medium text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 min-w-[220px] transition-all appearance-none ${
-                isManager && lots.length <= 1 ? 'opacity-70 cursor-not-allowed bg-gray-50' : 'cursor-pointer hover:border-gray-300'
-              }`}
+              className={`pl-9 pr-8 py-2.5 bg-white border border-gray-200 rounded-xl text-sm font-medium text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 min-w-[220px] transition-all appearance-none ${isManager && lots.length <= 1 ? 'opacity-70 cursor-not-allowed bg-gray-50' : 'cursor-pointer hover:border-gray-300'
+                }`}
             >
               {!isManager && <option value="">-- All Buildings --</option>}
               {lots.map(l => <option key={l._id} value={l._id}>{l.name}</option>)}
@@ -414,6 +420,17 @@ export default function RevenueTab({ globalLotId, setGlobalLotId }: { globalLotI
               </button>
             )}
           </div>
+
+          {/* Payment method filter */}
+          <select
+            value={methodFilter}
+            onChange={e => { setMethodFilter(e.target.value); setPage(1); }}
+            className="py-2 px-3 bg-white border border-gray-200 rounded-xl text-sm font-medium text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer hover:border-gray-300 transition-all appearance-none"
+          >
+            <option value="">All Methods</option>
+            <option value="cash">Cash</option>
+            <option value="bank_transfer">Bank Transfer</option>
+          </select>
 
           <button
             onClick={fetchTransactions}
