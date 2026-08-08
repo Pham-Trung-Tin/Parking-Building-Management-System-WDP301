@@ -696,6 +696,23 @@ const StaffPage = () => {
     }
 
     if (qrValue) {
+      // Capture frame from QR scanner video element
+      try {
+        const videoEl = document.querySelector('video');
+        if (videoEl && videoEl.readyState >= 2 && videoEl.videoWidth > 0) {
+          const canvas = document.createElement('canvas');
+          canvas.width = videoEl.videoWidth;
+          canvas.height = videoEl.videoHeight;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+            setCapturedImageBase64(canvas.toDataURL('image/jpeg', 0.85));
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to capture QR frame', err);
+      }
+      
       processQRCode(qrValue);
     }
   };
@@ -720,20 +737,42 @@ const StaffPage = () => {
     console.log('[CheckIn] Sending check-in — monthlyPassCode:', modalData.monthlyPassCode, 'plate:', modalData.plate, 'lotId:', lotId);
 
     try {
+      let checkInRes;
       if (modalData.monthlyPassCode) {
-        await parkingSessionService.checkIn({
+        checkInRes = await parkingSessionService.checkIn({
           monthlyPassCode: modalData.monthlyPassCode,
           licensePlate: modalData.plate,
           parkingLotId: lotId,
           slotId: modalData.assignedSlotId
         });
       } else {
-        await parkingSessionService.checkIn({
+        checkInRes = await parkingSessionService.checkIn({
           bookingId: modalData.bookingId,
           licensePlate: modalData.plate,
           parkingLotId: lotId,
           slotId: modalData.assignedSlotId
         });
+      }
+
+      const sessionId = checkInRes?.data?._id || checkInRes?._id;
+      if (capturedImageBase64 && sessionId) {
+        try {
+          const base64Data = capturedImageBase64.split(',')[1];
+          const byteCharacters = atob(base64Data);
+          const byteNumbers = new Array(byteCharacters.length);
+          for (let i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i);
+          }
+          const byteArray = new Uint8Array(byteNumbers);
+          const blob = new Blob([byteArray], { type: 'image/jpeg' });
+
+          const formData = new FormData();
+          formData.append('images', blob, 'entry.jpg');
+          formData.append('type', 'entry');
+          await parkingSessionService.uploadEvidence(sessionId, formData);
+        } catch (uploadErr) {
+          console.error('Failed to upload evidence for QR checkin:', uploadErr);
+        }
       }
 
       setToastMessageQR(`Check-in successful! Direct vehicle ${modalData?.plate} to their spot.`);
@@ -755,6 +794,7 @@ const StaffPage = () => {
     setShowModal(false);
     setModalData(null);
     setIsProcessingQR(false);
+    setCapturedImageBase64(null);
   };
 
   // --- REASSIGN LOGIC ---

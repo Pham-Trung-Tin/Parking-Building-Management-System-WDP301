@@ -532,6 +532,23 @@ const StaffExitPage = () => {
 
     if (!qrValue) return;
 
+    // Capture frame from QR scanner video element
+    try {
+      const videoEl = document.querySelector('video');
+      if (videoEl && videoEl.readyState >= 2 && videoEl.videoWidth > 0) {
+        const canvas = document.createElement('canvas');
+        canvas.width = videoEl.videoWidth;
+        canvas.height = videoEl.videoHeight;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+          setCapturedImageBase64(canvas.toDataURL('image/jpeg', 0.85));
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to capture QR exit frame', err);
+    }
+
     setIsProcessingQR(true);
     setSearchQuery('SCANNING QR...');
 
