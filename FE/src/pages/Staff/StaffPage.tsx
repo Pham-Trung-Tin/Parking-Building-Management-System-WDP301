@@ -140,8 +140,8 @@ const StaffPage = () => {
     }
   }, [profile]);
 
-  const [plate, setPlate] = useState('ABC-1234');
-  const [confidence, setConfidence] = useState<number | null>(98);
+  const [plate, setPlate] = useState('');
+  const [confidence, setConfidence] = useState<number | null>(null);
   const [isScanningStandard, setIsScanningStandard] = useState(false);
   const [isManualStandard, setIsManualStandard] = useState(false);
   const [gateStatus, setGateStatus] = useState('Closed');
@@ -1237,28 +1237,7 @@ const StaffPage = () => {
                   </div>
                 </section>
 
-                {/* Infrastructure Status */}
-                <section>
-                  <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Device Status</h3>
-                  <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm flex flex-col space-y-4">
-                    <div className="flex justify-between items-center">
-                      <div className="flex items-center text-sm text-gray-700">
-                        <AlertTriangle className="w-4 h-4 mr-3 text-gray-400" />
-                        Gate Barrier 01
-                      </div>
-                      <span className={`text-xs font-bold uppercase ${gateStatus === 'Open' ? 'text-green-600' : 'text-gray-500'}`}>
-                        {gateStatus === 'Open' ? 'Open' : 'Closed'}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <div className="flex items-center text-sm text-gray-700">
-                        <Printer className="w-4 h-4 mr-3 text-gray-400" />
-                        Ticket Printer 01
-                      </div>
-                      <span className="text-xs font-bold text-green-600 uppercase">Ready</span>
-                    </div>
-                  </div>
-                </section>
+
 
               </div>
             </div>
