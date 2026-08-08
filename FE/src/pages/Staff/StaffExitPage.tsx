@@ -29,6 +29,10 @@ import monthlyPassService from '../../services/api/monthlyPassService';
 
 const StaffExitPage = () => {
   const { profile } = useProfile();
+  const profileRef = useRef(profile);
+  useEffect(() => {
+    profileRef.current = profile;
+  }, [profile]);
   const navigate = useNavigate();
   const { socket } = useSocket();
 
@@ -86,9 +90,10 @@ const StaffExitPage = () => {
   // Throws a user-friendly error if lot doesn't match — prevents cross-lot checkout.
   const validateSessionLot = (sessionData: any) => {
     if (!sessionData) throw new Error('Session not found.');
-    const lotId = Array.isArray(profile?.assignedParkingLot)
-      ? profile?.assignedParkingLot[0]?._id
-      : (profile?.assignedParkingLot as any)?._id || (profile?.assignedParkingLot as any);
+    const currentProfile = profileRef.current;
+    const lotId = Array.isArray(currentProfile?.assignedParkingLot)
+      ? currentProfile?.assignedParkingLot[0]?._id
+      : (currentProfile?.assignedParkingLot as any)?._id || (currentProfile?.assignedParkingLot as any);
     if (!lotId) return; // No lot assigned → skip (admin edge case)
     const sessionLotId = typeof sessionData.parkingLot === 'object'
       ? sessionData.parkingLot?._id
@@ -141,7 +146,8 @@ const StaffExitPage = () => {
         setIsManual(false);
 
         try {
-          const lotId = Array.isArray(profile?.assignedParkingLot) ? profile?.assignedParkingLot[0]?._id : (profile?.assignedParkingLot as any)?._id || profile?.assignedParkingLot;
+          const currentProfile = profileRef.current;
+          const lotId = Array.isArray(currentProfile?.assignedParkingLot) ? currentProfile?.assignedParkingLot[0]?._id : (currentProfile?.assignedParkingLot as any)?._id || currentProfile?.assignedParkingLot;
           const sessionRes = await parkingSessionService.findActive({
             licensePlate: data.licensePlate,
             parkingLotId: lotId
@@ -354,7 +360,8 @@ const StaffExitPage = () => {
 
     try {
       const query = searchQuery.trim();
-      const lotId = Array.isArray(profile?.assignedParkingLot) ? profile?.assignedParkingLot[0]?._id : (profile?.assignedParkingLot as any)?._id || (profile?.assignedParkingLot as any);
+      const currentProfile = profileRef.current;
+      const lotId = Array.isArray(currentProfile?.assignedParkingLot) ? currentProfile?.assignedParkingLot[0]?._id : (currentProfile?.assignedParkingLot as any)?._id || (currentProfile?.assignedParkingLot as any);
 
       let cleanQuery = query.trim();
       if (cleanQuery.startsWith('"') && cleanQuery.endsWith('"')) {
@@ -603,7 +610,8 @@ const StaffExitPage = () => {
       }
 
       if (payload.type === 'monthly_pass' || payload.passCode) {
-        const lotId = Array.isArray(profile?.assignedParkingLot) ? profile?.assignedParkingLot[0]?._id : (profile?.assignedParkingLot as any)?._id || (profile?.assignedParkingLot as any);
+        const currentProfile = profileRef.current;
+        const lotId = Array.isArray(currentProfile?.assignedParkingLot) ? currentProfile?.assignedParkingLot[0]?._id : (currentProfile?.assignedParkingLot as any)?._id || (currentProfile?.assignedParkingLot as any);
         const sessionRes = await parkingSessionService.findActive({ licensePlate: payload.licensePlate, parkingLotId: lotId });
         validateSessionLot(sessionRes.data); // extra defense if lotId was undefined
         if (sessionRes.data) {
@@ -620,7 +628,8 @@ const StaffExitPage = () => {
 
       // Trường hợp QR chứa sessionCode thay vì sessionId
       if (payload.sessionCode && !payload.sessionId) {
-        const lotId = Array.isArray(profile?.assignedParkingLot) ? profile?.assignedParkingLot[0]?._id : (profile?.assignedParkingLot as any)?._id || (profile?.assignedParkingLot as any);
+        const currentProfile = profileRef.current;
+        const lotId = Array.isArray(currentProfile?.assignedParkingLot) ? currentProfile?.assignedParkingLot[0]?._id : (currentProfile?.assignedParkingLot as any)?._id || (currentProfile?.assignedParkingLot as any);
         const sessionRes = await parkingSessionService.findActive({ sessionCode: payload.sessionCode, parkingLotId: lotId });
         if (sessionRes.data) {
           setActiveSession(sessionRes.data);

@@ -61,6 +61,10 @@ interface BookingData {
 
 const StaffPage = () => {
   const { profile } = useProfile();
+  const profileRef = useRef(profile);
+  useEffect(() => {
+    profileRef.current = profile;
+  }, [profile]);
   const navigate = useNavigate();
 
   // --- TAB TOGGLE ---
@@ -499,7 +503,10 @@ const StaffPage = () => {
 
         // --- Validate parking lot match ---
         const qrLotId = payload.lotId; // present in new format MP:passCode:lotId
-        const staffLotId = defaultLotId;
+        const currentProfile = profileRef.current;
+        const staffLotId = Array.isArray(currentProfile?.assignedParkingLot)
+          ? currentProfile?.assignedParkingLot[0]?._id
+          : (currentProfile as any)?.assignedParkingLot?._id || (currentProfile as any)?.assignedParkingLot || defaultLotId;
         console.log('[QR] Monthly pass scan — passCode:', passCode, 'qrLotId:', qrLotId, 'staffLotId:', staffLotId);
 
         // Always call verifyPassByCode to get licensePlate (needed for modal + duplicate check)
@@ -574,8 +581,23 @@ const StaffPage = () => {
         const bookingRes = await bookingService.getById(safeBookingId);
         const booking = bookingRes.data || bookingRes;
 
+        if (booking.status === 'cancelled') {
+          throw new Error('This booking has been cancelled.');
+        }
+        if (booking.status === 'completed') {
+          throw new Error('This booking has already been used.');
+        }
+        if (booking.status !== 'approved') {
+          throw new Error(`Booking is currently ${booking.status} and cannot be used.`);
+        }
+
+        const currentProfile = profileRef.current;
+        const staffLotId = Array.isArray(currentProfile?.assignedParkingLot)
+          ? currentProfile?.assignedParkingLot[0]?._id
+          : (currentProfile as any)?.assignedParkingLot?._id || (currentProfile as any)?.assignedParkingLot || defaultLotId;
+
         const bookingLotId = typeof booking.parkingLot === 'object' ? booking.parkingLot._id : booking.parkingLot;
-        if (bookingLotId && defaultLotId && bookingLotId.toString() !== defaultLotId.toString()) {
+        if (bookingLotId && staffLotId && bookingLotId.toString() !== staffLotId.toString()) {
           const lotName = typeof booking.parkingLot === 'object' ? booking.parkingLot.name : 'another location';
           throw new Error(`This booking is valid for ${lotName}, not this building.`);
         }
@@ -691,8 +713,10 @@ const StaffPage = () => {
       return;
     }
 
-    // Use pre-computed defaultLotId (string) to avoid ObjectId type mismatch
-    const lotId = defaultLotId;
+    const currentProfile = profileRef.current;
+    const lotId = Array.isArray(currentProfile?.assignedParkingLot)
+      ? currentProfile?.assignedParkingLot[0]?._id
+      : (currentProfile as any)?.assignedParkingLot?._id || (currentProfile as any)?.assignedParkingLot || defaultLotId;
     console.log('[CheckIn] Sending check-in — monthlyPassCode:', modalData.monthlyPassCode, 'plate:', modalData.plate, 'lotId:', lotId);
 
     try {
